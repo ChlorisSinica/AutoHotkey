@@ -1,0 +1,2 @@
+*.ahk text eol=crlf
+.gitignore text eol=crlf

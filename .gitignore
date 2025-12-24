@@ -1,0 +1,22 @@
+﻿# AutoHotkey compiled scripts
+*.exe
+
+# Logs
+*.log
+
+# Backup files
+*.bak
+*.tmp
+
+# VS Code settings (optional)
+.vscode/
+
+# Zips
+__zip__/
+
+# Generated directories
+helloworld.ahk
+dist/
+out/
+temp/
+
