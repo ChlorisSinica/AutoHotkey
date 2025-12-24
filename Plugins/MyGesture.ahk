@@ -7,6 +7,7 @@ GroupAdd, GestureTargetGroup, ahk_group EditorGroup
 
 global MG_IsActive := false     ; ジェスチャ認識中フラグ
 global MG_CancelMenu := false   ; 右クリックメニュー無効化フラグ
+global cUIA := new UIA_Interface()
 
 MouseIsOverTarget() {
     MouseGetPos, , , WinID
@@ -88,13 +89,10 @@ MG_ExecuteAction(gestureStr, targetID) {
 ; ==========================================================
 MG_ScrollAction(dir) {
     MG_ActivateTargetWindow()
-    boost := 10
-
     if (dir = "Up")
-        Send, {PgUp %boost%}   ; PgUpを5回連打
+        SendInput ^{Home}
     else
-        Send, {PgDn %boost%}   ; PgDnを5回連打
-
+        SendInput ^{End}
     MG_CancelMenu := true
 }
 

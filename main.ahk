@@ -6,7 +6,7 @@ SetWorkingDir %A_ScriptDir%
 CoordMode, Mouse, Screen
 SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\UIA_Interface.ahk
-#Include %A_ScriptDir%\Plugins\UIA_Browser.ahk
+;#Include %A_ScriptDir%\Plugins\UIA_Browser.ahk
 #Include %A_ScriptDir%\Plugins\Application.ahk
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\Browser.ahk
@@ -56,7 +56,7 @@ vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 ^+#F12::Reload
 
 ; ==========================================================
-; ----- Function-Key -----
+; ----- Function-Key (for Mouse) -----
 ; ==========================================================
 F13::XButton1   ; 戻る（手前側）
 F14::XButton2   ; 進む（　奥側）
@@ -75,6 +75,8 @@ F15 & WheelDown::Send, {WheelRight} ; F13 + 下スクロール → 右へ
 ; ==========================================================
 Shift & Backspace::Send,{Del}
 scrolllock::Return
+$sc073::Send, +{sc073}  ; \ → _
+$+sc073::Send, {sc073}  ; _ → \
 
 ; ==========================================================
 ; ----- Power Point -----

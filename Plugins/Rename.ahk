@@ -1,10 +1,4 @@
-﻿;#Include C:\Program Files\AutoHotkey\myhotkey.ahk
-;#Include C:\myApp\AutoHotkey\main.ahk
-;vk1C:Convert-Key
-;vk1D:Non-Convert-Key
-;vkf0:CapsLock
-
-InsertHyphen() {
+﻿InsertHyphen() {
     Send, {F2}
     Sleep, 50
     Send, {Left}
@@ -26,13 +20,13 @@ DeleteUnderBar() {
 }
 
 DeleteTitle() {
-  Send, {Right}+{Home}
+    Send, {Right}+{Home}
     Sleep, 50
     Send, ^+{Right 2}
     Sleep, 50
     Send, +{Left}
     Sleep, 50
-  Send, {Backspace}{Tab}
+    Send, {Backspace}{Tab}
     Sleep, 50
 }
 
