@@ -6,7 +6,9 @@ SetWorkingDir %A_ScriptDir%
 CoordMode, Mouse, Screen
 SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\UIA_Interface.ahk
-;#Include %A_ScriptDir%\Plugins\UIA_Browser.ahk
+#Include %A_ScriptDir%\Plugins\UIA_Browser.ahk
+#Include %A_ScriptDir%\Plugins\UIA_Utils.ahk
+; from [https://github.com/Descolada/UIAutomation]
 #Include %A_ScriptDir%\Plugins\Application.ahk
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\Browser.ahk
@@ -49,8 +51,10 @@ vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 ^#1::MoveWindow("A", 1930,  430, 1380,  980)
 ^#2::MoveWindow("A", 1930,  450, 1550, 1600)
 ^#3::MoveWindow("A",    0,  470, 3840, 1620)
+^#4::MoveWindow("A", 1930,  500, 1750, 1550)
 ^+#1::MoveWindow("A",   10,  430, 1380,  980)
 ^+#2::MoveWindow("A",   10,  450, 1550, 1600)
+^+#4::MoveWindow("A",   10,  500, 1750, 1550)
 ^#F11::OpenMoveExplorer(profilePath . "\Downloads", 700, 0, 1230, 2100)
 ^#F12::OpenVSCode()
 ^+#F12::Reload
@@ -77,6 +81,26 @@ Shift & Backspace::Send,{Del}
 scrolllock::Return
 $sc073::Send, +{sc073}  ; \ → _
 $+sc073::Send, {sc073}  ; _ → \
+
+; ==========================================================
+; ----- Browser -----
+; ==========================================================
+; SetTitleMatchMode, 2
+; #IfWinActive, vClock.jp
+;     F1::vClockFullScreen()
+; ; F2::TestUIA()
+; #IfWinActive
+
+; #IfWinActive ahk_group BrowserGroup
+;     ^sc073::TogglePDFZoom()
+; #IfWinActive
+
+#IfWinActive ahk_group BrowserGroup
+    F1::RunSiteSpecificF1()
+    ^sc073::TogglePDFZoom()
+; F3::ScrollToEdge("Up")
+; F6::ScrollToEdge("Down")
+#IfWinActive
 
 ; ==========================================================
 ; ----- Power Point -----
