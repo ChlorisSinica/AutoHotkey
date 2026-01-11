@@ -36,7 +36,6 @@ FindElementByKeyword(parentEl, keywords, excludeKeywords := "") {
 }
 
 ; 既存のヘルパー関数（もし cBrowser に FindFirstByNameAndType が無い場合の保険）
-; UIA_Browser にこのメソッドがある場合は不要ですが、念のため記載
 if (!IsFunc(UIA_Browser.FindFirstByNameAndType)) {
     UIA_Browser.FindFirstByNameAndType := Func("My_FindFirstByNameAndType")
 }

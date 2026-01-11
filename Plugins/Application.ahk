@@ -58,6 +58,108 @@ MoveWindow(targetTitle, x, y, w, h) {
     WinMove, %targetTitle%,, x, y, w, h
 }
 
+; ==============================================================================
+; 関数: 現在のモニターを基準に比率で移動
+; ==============================================================================
+ShowMonitorInfo() {
+    Output := ""
+
+    ; モニターの総数を取得
+    SysGet, MonCount, MonitorCount
+    ; メインモニターの番号を取得
+    SysGet, PrimMon, MonitorPrimary
+
+    Output .= "検出されたモニター数: " . MonCount . "`n`n"
+
+    Loop, %MonCount% {
+        ; --- 1. モニター全体の解像度を取得 (Monitor) ---
+        SysGet, Mon, Monitor, %A_Index%
+        MonWidth  := MonRight - MonLeft
+        MonHeight := MonBottom - MonTop
+
+        ; --- 2. 作業領域を取得 (MonitorWorkArea) ---
+        ; タスクバーを除いた、ウィンドウを最大化したときのサイズ
+        SysGet, Work, MonitorWorkArea, %A_Index%
+        WorkWidth  := WorkRight - WorkLeft
+        WorkHeight := WorkBottom - WorkTop
+
+        ; メインモニターかどうかの判定
+        IsPrimary := (A_Index = PrimMon) ? " ★メインモニター" : ""
+
+        ; --- 出力テキストの作成 ---
+        Output .= "---------------------------------------`n"
+        Output .= "モニター番号: " . A_Index . IsPrimary . "`n"
+        Output .= "---------------------------------------`n"
+
+        Output .= "[全体解像度]`n"
+        Output .= "  サイズ: " . MonWidth . " x " . MonHeight . "`n"
+        Output .= "  座標  : Left=" . MonLeft . ", Top=" . MonTop . ", Right=" . MonRight . ", Bottom=" . MonBottom . "`n`n"
+
+        Output .= "[作業領域 (WorkArea)]`n"
+        Output .= "  サイズ: " . WorkWidth . " x " . WorkHeight . "`n"
+        Output .= "  座標  : Left=" . WorkLeft . ", Top=" . WorkTop . ", Right=" . WorkRight . ", Bottom=" . WorkBottom . "`n`n"
+    }
+
+    MsgBox, 0, モニター情報一覧, %Output%
+}
+
+MoveWindowRatio(targetTitle, xRatio, yRatio, wRatio, hRatio) {
+    ; 対象ウィンドウのハンドルを取得
+    WinGet, hwnd, ID, %targetTitle%
+    if (!hwnd)
+        return
+
+    ; ウィンドウが最小化されていたら戻す
+    WinRestore, ahk_id %hwnd%
+
+    ; ウィンドウが現在あるモニターの情報を取得
+    hMon := GetMonitorHandleFromWindow(hwnd)
+
+    ; モニターの「作業領域（タスクバーを除いた範囲）」を取得
+    ; VarSetCapacity等を使わず、AHKの標準コマンド SysGet を使用するための準備
+    SysGet, monCount, MonitorCount
+
+    ; モニターハンドルからモニター番号を特定する（AHK v1だと少し泥臭いループが必要）
+    targetMon := 1
+    Loop, %monCount% {
+        SysGet, hTemp, MonitorName, %A_Index%
+        ; ハンドル比較が厳密には難しいので、ここでは
+        ; 「ウィンドウの中心点がどのモニターの範囲内にあるか」で判定するロジックを採用
+        SysGet, m, Monitor, %A_Index%
+
+        WinGetPos, wx, wy, ww, wh, ahk_id %hwnd%
+        cx := wx + (ww / 2)
+        cy := wy + (wh / 2)
+
+        if (cx >= mLeft && cx <= mRight && cy >= mTop && cy <= mBottom) {
+            targetMon := A_Index
+            break
+        }
+    }
+
+    ; 特定したモニターの作業領域(WorkArea)を取得
+    ; mLeft, mTop, mRight, mBottom という変数が作成される
+    SysGet, m, MonitorWorkArea, %targetMon%
+
+    monWidth  := mRight - mLeft
+    monHeight := mBottom - mTop
+
+    ; 比率からピクセルを計算
+    newW := monWidth  * wRatio
+    newH := monHeight * hRatio
+    newX := mLeft + (monWidth  * xRatio)
+    newY := mTop  + (monHeight * yRatio)
+
+    ; 移動実行
+    WinMove, ahk_id %hwnd%,, %newX%, %newY%, %newW%, %newH%
+}
+
+; 補助関数: ウィンドウハンドルからモニターハンドルを取得（今回は簡易ロジックで代用したので未使用でも可）
+GetMonitorHandleFromWindow(hwnd) {
+    ; Windows API: MonitorFromWindow
+    return DllCall("MonitorFromWindow", "Ptr", hwnd, "UInt", 2) ; 2=MONITOR_DEFAULTTONEAREST
+}
+
 OpenMoveExplorer(path, x, y, w, h) {
     Run, explorer.exe "%path%"
     MoveWindow("ahk_class CabinetWClass", x, y, w, h)
