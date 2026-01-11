@@ -24,7 +24,11 @@ EnvGet, profilePath, USERPROFILE
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
 #Include %A_ScriptDir%\Plugins\MyGesture.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
+<<<<<<< HEAD
 #Include %A_ScriptDir%\Plugins\StartupManager.ahk
+=======
+#Include %A_ScriptDir%\Plugins\GetAuth.ahk
+>>>>>>> d42df2c9cab82fe9c9ef7415144eea91c279ef1a
 
 ; ==========================================================
 ; ----- vk1C(Non-Convert) -----
@@ -97,8 +101,10 @@ $+sc073::Send, {sc073}  ; _ → \
 ; ----- Browser -----
 ; ==========================================================
 #IfWinActive ahk_group BrowserGroup
-    F1::RunSiteSpecificF1()
     ^sc073::TogglePDFZoom()
+    F1::RunSiteSpecificKey("{F1}", KeyActions["F1"])
+    F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
+    ; F3::get_auth_debug()
 ; F3::ScrollToEdge("Up")
 ; F6::ScrollToEdge("Down")
 #IfWinActive
