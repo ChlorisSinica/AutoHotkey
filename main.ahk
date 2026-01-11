@@ -16,6 +16,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
 #Include %A_ScriptDir%\Plugins\MyGesture.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
+#Include %A_ScriptDir%\Plugins\GetAuth.ahk
 
 ; ==========================================================
 ; ----- vk1C(Non-Convert) -----
@@ -96,8 +97,10 @@ $+sc073::Send, {sc073}  ; _ → \
 ; #IfWinActive
 
 #IfWinActive ahk_group BrowserGroup
-    F1::RunSiteSpecificF1()
     ^sc073::TogglePDFZoom()
+    F1::RunSiteSpecificKey("{F1}", KeyActions["F1"])
+    F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
+    ; F3::get_auth_debug()
 ; F3::ScrollToEdge("Up")
 ; F6::ScrollToEdge("Down")
 #IfWinActive
