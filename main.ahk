@@ -66,7 +66,7 @@ vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 ^+#1::MoveWindow("A",   10,  430, 1380,  980)
 ^+#2::MoveWindow("A",   10,  450, 1550, 1600)
 ^+#4::MoveWindow("A",   10,  500, 1750, 1550)
-^#F1::OpenvClockFullScreen()
+; ^#F1::OpenvClockFullScreen()
 ^#F11::OpenMoveExplorer(profilePath . "\Downloads", 700, 0, 1230, 2100)
 ^#F12::OpenVSCode()
 ^+#F12::Reload
