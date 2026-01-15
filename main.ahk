@@ -23,7 +23,7 @@ EnvGet, profilePath, USERPROFILE
 #Include %A_ScriptDir%\Plugins\Browser.ahk
 #Include %A_ScriptDir%\Plugins\GestureMap.ahk
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
-#Include %A_ScriptDir%\Plugins\MyGesture.ahk
+#Include %A_ScriptDir%\Plugins\MouseGesture.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
 #Include %A_ScriptDir%\Plugins\StartupManager.ahk
 #Include %A_ScriptDir%\Plugins\GetAuth.ahk
