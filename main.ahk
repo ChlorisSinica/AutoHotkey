@@ -5,6 +5,7 @@ CoordMode, Mouse, Screen
 SetBatchLines, -1
 
 ; --- 初期化処理 ---
+DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
 MsgBox, Reloading Script
 Startup_Init()
 
@@ -26,6 +27,7 @@ EnvGet, profilePath, USERPROFILE
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
 #Include %A_ScriptDir%\Plugins\StartupManager.ahk
 #Include %A_ScriptDir%\Plugins\GetAuth.ahk
+#Include %A_ScriptDir%\Plugins\WindowManager.ahk
 
 ; ==========================================================
 ; ----- vk1C(Non-Convert) -----
@@ -58,16 +60,15 @@ vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #w::Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
 ^#b::GetActiveWindowPos()
 ^#e::GetApplicationName()
-^#1::MoveWindow("A", 1930,  430, 1380,  980)
-^#2::MoveWindow("A", 1930,  450, 1550, 1600)
-^#3::MoveWindow("A",    0,  470, 3840, 1620)
-^#4::MoveWindow("A", 1930,  500, 1750, 1550)
-^#5::ShowMonitorInfo()
-^+#1::MoveWindow("A",   10,  430, 1380,  980)
-^+#2::MoveWindow("A",   10,  450, 1550, 1600)
-^+#4::MoveWindow("A",   10,  500, 1750, 1550)
 ; ^#F1::OpenvClockFullScreen()
-^#F11::OpenMoveExplorer(profilePath . "\Downloads", 700, 0, 1230, 2100)
+^#1::MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
+^#2::MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
+^#3::MoveWindowRatio("A", 0.000, 0.225, 1.000, 0.775)
+^#4::MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
+^+#1::MoveWindowRatio("A", 0.003, 0.206, 0.360, 0.470)
+^+#2::MoveWindowRatio("A", 0.003, 0.216, 0.404, 0.766)
+^+#4::MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
+^#F11::OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
 ^#F12::OpenVSCode()
 ^+#F12::Reload
 
@@ -102,7 +103,8 @@ $+sc073::Send, {sc073}  ; _ → \
     F2::CheckFocus()
     ; F2::InspectElementUnderMouse()
     F1::RunSiteSpecificKey("{F1}", KeyActions["F1"])
-    ; F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
+    ^+c::CopyPlaneURL()
+; F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
 ; F3::get_auth_debug()
 ; F3::ScrollToEdge("Up")
 ; F6::ScrollToEdge("Down")
