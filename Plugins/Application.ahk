@@ -16,9 +16,26 @@ CloseToolTip() {
     ToolTip
 }
 
-; ==========================================================
-; 関数
-; ==========================================================
+CloseAltTabMenu() {
+    if GetKeyState("Alt") {
+        Send, {Alt Up}
+    }
+}
+
+AltTabAction(Dir) {
+    ; まだAltが押されていなければ（メニューが出ていなければ）Altを押す
+    if !GetKeyState("Alt") {
+        Send, {Alt Down}
+    }
+
+    ; タブ移動信号を送る
+    if (Dir = "Next") {
+        Send, {Tab}
+    } else {
+        Send, +{Tab}
+    }
+}
+
 ReplaceEscapeToSlash() {
     KeyWait, Ctrl
     KeyWait, Alt
@@ -62,9 +79,6 @@ MoveWindow(targetTitle, x, y, w, h) {
     WinMove, %targetTitle%,, x, y, w, h
 }
 
-; ==============================================================================
-; 関数: 現在のモニターを基準に比率で移動
-; ==============================================================================
 ShowMonitorInfo() {
     Output := ""
 
@@ -127,10 +141,6 @@ GetActiveWindowPos() {
     ;Clipboard := "title:" . title . "X=" . x . " Y=" . y . " W=" . w . " H=" . h
 }
 
-; ========================================================
-; 関数: 見た目通りのウィンドウ座標・サイズを取得する
-; 引数: Output変数を4つ、最後にWinTitle（省略可）
-; ========================================================
 GetVisibleWindowPos(ByRef X, ByRef Y, ByRef Width, ByRef Height, WinTitle := "A") {
     ; 対象ウィンドウのハンドル(ID)を取得
     WinGet, hwnd, ID, %WinTitle%

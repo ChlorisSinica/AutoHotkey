@@ -19,13 +19,13 @@ EnvGet, profilePath, USERPROFILE
 ; --- Pluginsファイルの読み込み ---
 #Include %A_ScriptDir%\Plugins\UIA_Utils.ahk
 #Include %A_ScriptDir%\Plugins\Application.ahk
-#Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\Browser.ahk
 #Include %A_ScriptDir%\Plugins\GestureMap.ahk
-#Include %A_ScriptDir%\Plugins\PowerPoint.ahk
-#Include %A_ScriptDir%\Plugins\MouseGesture.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
+#Include %A_ScriptDir%\Plugins\MouseGesture.ahk
+#Include %A_ScriptDir%\Plugins\PowerPoint.ahk
 #Include %A_ScriptDir%\Plugins\StartupManager.ahk
+#Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\GetAuth.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 
@@ -75,17 +75,22 @@ vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 ; ==========================================================
 ; ----- Function-Key (for Mouse) -----
 ; ==========================================================
-F13::XButton1   ; 戻る（手前側）
-F14::XButton2   ; 進む（　奥側）
+XButton1::XButton1   ; 戻る（手前側）
+XButton2::XButton2   ; 進む（　奥側）
 F15::Send ^v    ; 　　（手前側）
 F16::Send ^c    ; 　　（　奥側）
 F17::Send ^w
-F13 & F17::SendInput {Media_Play_Pause}
-F15 & F17::Send !{F4}
-F15 & WheelUp::Send, {WheelLeft}        ; F13 + 上スクロール → 左へ
-F15 & WheelDown::Send, {WheelRight}     ; F13 + 下スクロール → 右へ
-F16 & WheelUp::Send, {Volume_Up}        ; 音量アップ
-F16 & WheelDown::Send, {Volume_Down}    ; 音量ダウン
+F15 & F17::SendInput {Media_Play_Pause}
+XButton2 & F17::Send !{F4}
+XButton1 & WheelUp::Send, {WheelLeft}        ; F13 + 上スクロール → 左へ
+XButton1 & WheelDown::Send, {WheelRight}     ; F13 + 下スクロール → 右へ
+XButton2 & WheelUp::Send ^{NumpadAdd}
+XButton2 & WheelDown::Send ^{NumpadSub}
+F15 & WheelUp::Send, {Volume_Up}        ; 音量アップ
+F15 & WheelDown::Send, {Volume_Down}    ; 音量ダウン
+F16 & WheelDown::AltTabAction("Next")
+F16 & WheelUp::AltTabAction("Prev")
+*F16 Up::CloseAltTabMenu()
 
 ; ==========================================================
 ; ----- Others -----
@@ -94,6 +99,8 @@ Shift & Backspace::Send,{Del}
 scrolllock::Return
 $sc073::Send, +{sc073}  ; \ → _
 $+sc073::Send, {sc073}  ; _ → \
+vk1C & z::Manage_N_Hold("Toggle")
+vk1C & x::Manage_N_Hold("Off")
 
 ; ==========================================================
 ; ----- Browser -----
@@ -103,7 +110,7 @@ $+sc073::Send, {sc073}  ; _ → \
     F2::CheckFocus()
     ; F2::InspectElementUnderMouse()
     F1::RunSiteSpecificKey("{F1}", KeyActions["F1"])
-    ^+c::CopyPlaneURL()
+    !c::CopyPlaneURL()
 ; F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
 ; F3::get_auth_debug()
 ; F3::ScrollToEdge("Up")
