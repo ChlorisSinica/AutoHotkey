@@ -27,6 +27,7 @@ Manage_N_Hold(Command) {
         if (g_HoldN_Active) {
             Send, {n down}
             ToolTip, [自動] N長押し中... (vk1C+n+F2で停止)
+            SetTimer, CloseToolTip, -1000
         } else {
             Send, {n up}
             ToolTip, [解除] Nキーを離しました
