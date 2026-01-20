@@ -4,6 +4,7 @@
 GroupAdd, GestureTargetGroup, ahk_group BrowserGroup
 GroupAdd, GestureTargetGroup, ahk_group ExplorerGroup
 GroupAdd, GestureTargetGroup, ahk_group EditorGroup
+GroupAdd, GestureTargetGroup, ahk_group OfficeGroup
 
 global MG_IsActive := false     ; ジェスチャ認識中フラグ
 global MG_CancelMenu := false   ; 右クリックメニュー無効化フラグ

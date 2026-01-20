@@ -2,6 +2,8 @@
 ; 1. グループ定義 (ShortcutMap.ahkで使用するグループ名と合わせる)
 ; ==========================================================
 SetTitleMatchMode, 2
+GroupAdd, OfficeGroup, ahk_exe POWERPNT.EXE
+GroupAdd, OfficeGroup, ahk_exe EXCEL.EXE
 GroupAdd, EditorGroup, Notepads
 GroupAdd, EditorGroup, ahk_exe Code.exe
 GroupAdd, EditorGroup, ahk_exe notepad.exe
