@@ -107,9 +107,10 @@ vk1C & x::Manage_N_Hold("Off")
 ; ==========================================================
 #IfWinActive ahk_group BrowserGroup
     ^sc073::TogglePDFZoom()
-    F2::CheckFocus()
+    ; F2::CheckFocus()
     ; F2::InspectElementUnderMouse()
     F1::RunSiteSpecificKey("{F1}", KeyActions["F1"])
+    F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
     !c::CopyPlaneURL()
 ; F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
 ; F3::get_auth_debug()
