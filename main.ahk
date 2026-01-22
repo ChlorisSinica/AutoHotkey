@@ -161,3 +161,12 @@ vk1C & x::Manage_N_Hold("Off")
     WheelDown::MG_ScrollAction("Down")
 #If
 #If
+
+vk1C & w::StartCursorMove()
+vk1C & a::StartCursorMove()
+vk1C & s::StartCursorMove()
+vk1C & d::StartCursorMove()
+vk1D & q::Click, Down
+vk1D & e::Click, Right, Down
+vk1D & q Up::Click, Up
+vk1D & e Up::Click, Right, Up
