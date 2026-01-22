@@ -3,6 +3,7 @@ global MaxSpeed := 50
 global Acceleration := 1.25
 global TimerInterval := 10
 global CurrentSpeed := BaseSpeed
+global CursorKey := "vk1C"
 
 ; --- 1. 開始関数 ---
 StartCursorMove() {
@@ -20,7 +21,7 @@ MoveCursor() {
     global BaseSpeed, MaxSpeed, Acceleration, CurrentSpeed
 
     ; 【重要】モディファイアキー(vk1D)が離されたら停止
-    if !GetKeyState("vk1D", "P") {
+    if !GetKeyState(CursorKey, "P") {
         StopCursor()
         return
     }

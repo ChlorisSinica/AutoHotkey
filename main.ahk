@@ -22,6 +22,7 @@ EnvGet, profilePath, USERPROFILE
 #Include %A_ScriptDir%\Plugins\Browser.ahk
 #Include %A_ScriptDir%\Plugins\GestureMap.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
+#Include %A_ScriptDir%\Plugins\MouseCursor.ahk
 #Include %A_ScriptDir%\Plugins\MouseGesture.ahk
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
 #Include %A_ScriptDir%\Plugins\StartupManager.ahk
@@ -162,11 +163,11 @@ vk1C & x::Manage_N_Hold("Off")
 #If
 #If
 
-vk1C & w::StartCursorMove()
-vk1C & a::StartCursorMove()
+vk1C & e::StartCursorMove()
 vk1C & s::StartCursorMove()
 vk1C & d::StartCursorMove()
-vk1D & q::Click, Down
-vk1D & e::Click, Right, Down
-vk1D & q Up::Click, Up
-vk1D & e Up::Click, Right, Up
+vk1C & f::StartCursorMove()
+vk1C & w::Click, Down
+vk1C & r::Click, Right, Down
+vk1C & w Up::Click, Up
+vk1C & r Up::Click, Right, Up
