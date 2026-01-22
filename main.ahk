@@ -76,7 +76,7 @@ vk1C & F1::Settings_Open()
 !w::Send, !{F4}
 ^!c::ReplaceEscapeToSlash()
 ^!n::OpenWithMspaint()
-^!m::OpenWithNotePad()
+^!m::OpenWithNotePad(SettingsUI.EditorType)
 
 ; ==========================================================
 ; ----- Window-key -----

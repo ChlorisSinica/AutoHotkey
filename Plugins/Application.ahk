@@ -58,17 +58,12 @@ OpenWithMspaint() {
     Run, mspaint.exe %Clipboard%
 }
 
-OpenWithNotePad() {
-    KeyWait, Ctrl
-    KeyWait, Alt
-    Clipboard := ""
-    Send, +^c
-    ClipWait, 2
-    ;Run, %LOCALAPPDATA%\Microsoft\WindowsApps\Notepads.exe %Clipboard%
-    ;Run, Notepads.exe %Clipboard%
-    Run, Notepads %Clipboard%
-    ;Run, notepad.exe %Clipboard%
-    ;Run, shell:AppsFolder\9nhl4nsc67wm!App "%Clipboard%"
+OpenWithNotePad(editorType) { 
+    if (editorType = 1) {
+        Run, Notepads.exe "%TargetFile%"
+    } else {
+        Run, notepad.exe "%TargetFile%"
+    }
 }
 
 MoveWindow(targetTitle, x, y, w, h) {
