@@ -30,13 +30,13 @@ MoveCursor() {
     yMove := 0
 
     ; WASDの入力状態をチェック
-    if GetKeyState("w", "P")
+    if GetKeyState("e", "P")
         yMove -= 1
-    if GetKeyState("s", "P")
-        yMove += 1
-    if GetKeyState("a", "P")
-        xMove -= 1
     if GetKeyState("d", "P")
+        yMove += 1
+    if GetKeyState("s", "P")
+        xMove -= 1
+    if GetKeyState("f", "P")
         xMove += 1
 
     ; 移動キーがすべて離されたら停止
