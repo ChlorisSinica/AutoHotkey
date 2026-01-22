@@ -49,20 +49,39 @@ ReplaceEscapeToSlash() {
     Clipboard := text
 }
 
-OpenWithMspaint() {
-    KeyWait, Ctrl
-    KeyWait, Alt
-    Clipboard := ""
-    Send, +^c
-    ClipWait, 2
-    Run, mspaint.exe %Clipboard%
+OpenWithMspaint(withFile = 1) {
+    TargetArgs := ""
+    if (withFile = 1) {
+        KeyWait, Ctrl
+        KeyWait, Alt
+        Clipboard := ""
+        Send, +^c
+        ClipWait, 2
+        if (ErrorLevel = 0) {
+            TargetArgs := Clipboard
+        }
+    }
+
+    Run, mspaint.exe "%TargetArgs%"
 }
 
-OpenWithNotePad(editorType) { 
+OpenWithNotePad(withFile = 1, editorType = 1) {
+    TargetArgs := ""
+    if (withFile = 1) {
+        KeyWait, Ctrl
+        KeyWait, Alt
+        Clipboard := ""
+        Send, +^c
+        ClipWait, 2
+        if (ErrorLevel = 0) {
+            TargetArgs := Clipboard
+        }
+    }
+
     if (editorType = 1) {
-        Run, Notepads.exe "%TargetFile%"
+        Run, Notepads %TargetArgs%
     } else {
-        Run, notepad.exe "%TargetFile%"
+        Run, notepad.exe %TargetArgs%
     }
 }
 

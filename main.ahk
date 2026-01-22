@@ -26,7 +26,7 @@ DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
 EnvGet, profilePath, USERPROFILE
 
 Indicator_Init()
-TrayTip, AutoHotkey, Script Reloaded, 2 ; 
+TrayTip, AutoHotkey, Script Reloaded, 2 ;
 
 ; ==========================================================
 ; ----- Indicator用変数 -----
@@ -55,8 +55,8 @@ vk1C & F1::Settings_Open()
     vk1C & p::Send,{Blind}{F2}
     vk1C & 1::Send,{Blind}^+6
     vk1C & 2::Send,{Blind}^+2
-    vk1C & n::Run, mspaint.exe
-    vk1C & m::Run, Notepads
+    vk1C & n::OpenWithMspaint(0)
+    vk1C & m::OpenWithNotePad(0, SettingsUI.EditorType)
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #If
 #If (EnableMouseEmu)
@@ -75,8 +75,8 @@ vk1C & F1::Settings_Open()
 ; ==========================================================
 !w::Send, !{F4}
 ^!c::ReplaceEscapeToSlash()
-^!n::OpenWithMspaint()
-^!m::OpenWithNotePad(SettingsUI.EditorType)
+^!n::OpenWithMspaint(1)
+^!m::OpenWithNotePad(1, SettingsUI.EditorType)
 
 ; ==========================================================
 ; ----- Window-key -----
@@ -108,8 +108,8 @@ vk1C & F1::Settings_Open()
     F15::Send ^v        ; 　　（手前側）
     F16::Send ^c        ; 　　（　奥側）
     F17::Send ^w        ; タブを閉じる
-    F15 & F17::SendInput {Media_Play_Pause}     ; 
-    XButton2 & F17::Send !{F4}                  ; 
+    F15 & F17::SendInput {Media_Play_Pause}     ;
+    XButton2 & F17::Send !{F4}                  ;
     XButton1 & WheelUp::Send, {WheelLeft}       ; F13 + 上スクロール → 左へ
     XButton1 & WheelDown::Send, {WheelRight}    ; F13 + 下スクロール → 右へ
     XButton2 & WheelUp::Send ^{NumpadAdd}       ; ウィンドウ拡大
@@ -187,6 +187,6 @@ vk1C & x::Manage_N_Hold("Off")
 #If
 
 #If (EnableGestures && MG_IsActive && MouseIsOverTarget())
-        WheelUp::MG_ScrollAction("Up")
-        WheelDown::MG_ScrollAction("Down")
+    WheelUp::MG_ScrollAction("Up")
+    WheelDown::MG_ScrollAction("Down")
 #If
