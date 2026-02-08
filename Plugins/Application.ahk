@@ -7,6 +7,7 @@ GroupAdd, OfficeGroup, ahk_exe EXCEL.EXE
 GroupAdd, EditorGroup, Notepads
 GroupAdd, EditorGroup, ahk_exe Code.exe
 GroupAdd, EditorGroup, ahk_exe notepad.exe
+GroupAdd, EditorGroup, ahk_exe pycharm64.exe
 GroupAdd, BrowserGroup, ahk_exe msedge.exe
 GroupAdd, BrowserGroup, ahk_exe chrome.exe
 GroupAdd, BrowserGroup, ahk_exe firefox.exe
