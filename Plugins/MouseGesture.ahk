@@ -5,6 +5,7 @@ GroupAdd, GestureTargetGroup, ahk_group BrowserGroup
 GroupAdd, GestureTargetGroup, ahk_group ExplorerGroup
 GroupAdd, GestureTargetGroup, ahk_group EditorGroup
 GroupAdd, GestureTargetGroup, ahk_group OfficeGroup
+GroupAdd, GestureTargetGroup, ahk_exe pycharm64.exe
 
 global MG_IsActive := false     ; ジェスチャ認識中フラグ
 global MG_CancelMenu := false   ; 右クリックメニュー無効化フラグ
@@ -22,9 +23,14 @@ MG_RecognizeGesture() {
     static Threshold := 30
     static Interval  := 10
 
+    ; 既存の論理的な押しっぱなし状態をリセットするために物理的な状態をチェック
+    if !GetKeyState("RButton", "P") {
+        MG_IsActive := false
+        return ""
+    }
+
     CoordMode, Mouse, Screen
     MouseGetPos, startX, startY
-
     lastX := startX
     lastY := startY
 
@@ -34,6 +40,9 @@ MG_RecognizeGesture() {
 
     While GetKeyState("RButton", "P")
     {
+        ; 処理の隙間を作り、他のホットキー(ホイール)の割り込みを許容する
+        Sleep, 15
+
         MouseGetPos, curX, curY
         distance := Sqrt((curX - lastX)**2 + (curY - lastY)**2)
 
@@ -50,13 +59,13 @@ MG_RecognizeGesture() {
             lastY := curY
         }
 
-        ToolTip, % "ジェスチャ: " . gestureStr
-        Sleep, %Interval%
+        if (gestureStr != "") {
+            ToolTip, % "ジェスチャ: " . gestureStr
+        }
     }
 
     ToolTip
-    MG_IsActive := false
-
+    MG_IsActive := false ; ここで確実にfalseに戻す
     return gestureStr
 }
 
@@ -67,7 +76,8 @@ MG_ExecuteAction(gestureStr, targetID) {
     ; --- 共通: キャンセル処理 ---
     if (gestureStr = "") {
         if (MG_CancelMenu = false)
-            Click, Right
+            ; Click, Right
+            Send, {RButton}
         return
     }
 
@@ -81,6 +91,8 @@ MG_ExecuteAction(gestureStr, targetID) {
         return Map_Explorer(gestureStr)
     else if (WinActive("ahk_group EditorGroup"))
         return Map_Editor(gestureStr)
+    else if (WinActive("ahk_exe pycharm64.exe"))
+        return Map_Pycharm(gestureStr)
     else
         return Map_Default(gestureStr)
 }

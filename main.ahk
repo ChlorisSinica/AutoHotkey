@@ -178,7 +178,7 @@ vk1C & x::Manage_N_Hold("Off")
 ; ==========================================================
 ; ----- Mouse Gesture -----
 ; ==========================================================
-#If (EnableGestures&& MouseIsOverTarget())
+#If (EnableGestures && MouseIsOverTarget())
     RButton::
         MouseGetPos, , , startWinID
         gesture := MG_RecognizeGesture()

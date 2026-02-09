@@ -40,6 +40,18 @@ Map_Editor(g) {
     }
 }
 
+; ■ Pycharm用マップ
+Map_Pycharm(g) {
+    Switch g
+    {
+    Case "→": Send, !{Right}
+    Case "←": Send, !{Left}
+    Case "↓": Send, ^{F4}
+    Case "↑": Send, ^!{Insert}
+    Default: Map_Default(g)
+    }
+}
+
 ; ■ 共通設定 (デフォルト)
 Map_Default(g) {
     Switch g
