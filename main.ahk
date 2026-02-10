@@ -38,6 +38,7 @@ global EnableAppSpec    := 1
 global EnableMouseEmu   := 1
 global EnableGestures   := 1
 vk1C & F1::Settings_Open()
+vk1C & F2::debug_right_click_problem()
 #If WinActive("機能のON/OFF設定")
     Escape::Settings_Close()
 #If
@@ -179,7 +180,7 @@ vk1C & x::Manage_N_Hold("Off")
 ; ----- Mouse Gesture -----
 ; ==========================================================
 #If (EnableGestures && MouseIsOverTarget())
-    RButton::
+    $RButton::
         MouseGetPos, , , startWinID
         gesture := MG_RecognizeGesture()
         MG_ExecuteAction(gesture, startWinID)
