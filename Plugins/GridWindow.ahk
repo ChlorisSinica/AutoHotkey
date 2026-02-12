@@ -5,6 +5,7 @@
 ; ==============================================================================
 
 global GridModes := []
+GridModes.Push({Cols: 2, Rows: 2, Name: "2x2 (2列 x 2行)"})
 GridModes.Push({Cols: 4, Rows: 2, Name: "2x4 (4列 x 2行)"})
 GridModes.Push({Cols: 3, Rows: 2, Name: "2x3 (3列 x 2行)"})
 GridModes.Push({Cols: 2, Rows: 3, Name: "3x2 (2列 x 3行)"})
