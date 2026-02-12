@@ -20,6 +20,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\GetAuth.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
+#Include %A_ScriptDir%\Plugins\GridWindow.ahk
 
 ; --- 初期化処理 ---
 DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
@@ -38,7 +39,6 @@ global EnableAppSpec    := 1
 global EnableMouseEmu   := 1
 global EnableGestures   := 1
 vk1C & F1::Settings_Open()
-vk1C & F2::debug_right_click_problem()
 #If WinActive("機能のON/OFF設定")
     Escape::Settings_Close()
 #If
@@ -85,8 +85,8 @@ vk1C & F2::debug_right_click_problem()
 #If (EnableWinMgr)
     #q::Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
     #w::Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
-    ^#b::GetActiveWindowPos()
-    ^#e::GetApplicationName()
+    ^#b::GetActiveWindowInfo()
+    +#k::Run, ms-settings:bluetooth
     ; ^#F1::OpenvClockFullScreen()
     ^#1::MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
     ^#2::MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
@@ -98,6 +98,21 @@ vk1C & F2::debug_right_click_problem()
     ^#F11::OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
     ^#F12::OpenVSCode()
     ^+#F12::Reload
+
+    ; --- モード切替 (Ctrl + Win + G) ---
+    ^#g::Grid_ToggleMode()
+
+    ; --- 移動 (Ctrl + Win + IJKL) ---
+    ^#j::Grid_Move(-1,  0) ; Left
+    ^#l::Grid_Move( 1,  0) ; Right
+    ^#i::Grid_Move( 0, -1) ; Up
+    ^#k::Grid_Move( 0,  1) ; Down
+
+    ; --- リサイズ (Ctrl + Shift + Win + IJKL) ---
+    ^+#j::Grid_Resize("Width",  -1) ; 幅縮小
+    ^+#l::Grid_Resize("Width",   1) ; 幅拡大
+    ^+#i::Grid_Resize("Height", -1) ; 高さ縮小
+    ^+#k::Grid_Resize("Height",  1) ; 高さ拡大
 #If
 
 ; ==========================================================

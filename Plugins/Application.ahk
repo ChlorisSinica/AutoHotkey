@@ -86,131 +86,28 @@ OpenWithNotePad(withFile = 1, editorType = 1) {
     }
 }
 
-MoveWindow(targetTitle, x, y, w, h) {
-    if (targetTitle != "A") {
-        WinWaitActive, %targetTitle%, , 2
-        if (ErrorLevel) {
-            return
-        }
-    }
-    WinMove, %targetTitle%,, x, y, w, h
+; アプリケーション起動ヘルパー
+OpenMoveExplorer(path, xr, yr, wr, hr) {
+    Run, explorer.exe "%path%"
+    WinWaitActive, ahk_class CabinetWClass, , 3
+    MoveWindowRatio("A", xr, yr, wr, hr)
 }
 
-ShowMonitorInfo() {
-    Output := ""
-
-    ; モニターの総数を取得
-    SysGet, MonCount, MonitorCount
-    ; メインモニターの番号を取得
-    SysGet, PrimMon, MonitorPrimary
-
-    Output .= "検出されたモニター数: " . MonCount . "`n`n"
-
-    Loop, %MonCount% {
-        ; --- 1. モニター全体の解像度を取得 (Monitor) ---
-        SysGet, Mon, Monitor, %A_Index%
-        MonWidth  := MonRight - MonLeft
-        MonHeight := MonBottom - MonTop
-
-        ; --- 2. 作業領域を取得 (MonitorWorkArea) ---
-        ; タスクバーを除いた、ウィンドウを最大化したときのサイズ
-        SysGet, Work, MonitorWorkArea, %A_Index%
-        WorkWidth  := WorkRight - WorkLeft
-        WorkHeight := WorkBottom - WorkTop
-
-        ; メインモニターかどうかの判定
-        IsPrimary := (A_Index = PrimMon) ? " ★メインモニター" : ""
-
-        ; --- 出力テキストの作成 ---
-        Output .= "---------------------------------------`n"
-        Output .= "モニター番号: " . A_Index . IsPrimary . "`n"
-        Output .= "---------------------------------------`n"
-
-        Output .= "[全体解像度]`n"
-        Output .= "  サイズ: " . MonWidth . " x " . MonHeight . "`n"
-        Output .= "  座標  : Left=" . MonLeft . ", Top=" . MonTop . ", Right=" . MonRight . ", Bottom=" . MonBottom . "`n`n"
-
-        Output .= "[作業領域 (WorkArea)]`n"
-        Output .= "  サイズ: " . WorkWidth . " x " . WorkHeight . "`n"
-        Output .= "  座標  : Left=" . WorkLeft . ", Top=" . WorkTop . ", Right=" . WorkRight . ", Bottom=" . WorkBottom . "`n`n"
-    }
-
-    MsgBox, 0, モニター情報一覧, %Output%
-}
-
-; 補助関数: ウィンドウハンドルからモニターハンドルを取得（今回は簡易ロジックで代用したので未使用でも可）
-GetMonitorHandleFromWindow(hwnd) {
-    ; Windows API: MonitorFromWindow
-    return DllCall("MonitorFromWindow", "Ptr", hwnd, "UInt", 2) ; 2=MONITOR_DEFAULTTONEAREST
-}
-
-; OpenMoveExplorer(path, x, y, w, h) {
-;     Run, explorer.exe "%path%"
-;     MoveWindow("ahk_class CabinetWClass", x, y, w, h)
-; }
-
-GetActiveWindowPos() {
-    ; WinGetPos, x, y, w, h, A
-    GetVisibleWindowPos(x,y, w, h, "A") ; "A"はアクティブウィンドウ
-
-    WinGetTitle, title, A
-    MsgBox, タイトル: %title%`nX=%x% Y=%y% W=%w% H=%h%
-    ;Clipboard := "title:" . title . "X=" . x . " Y=" . y . " W=" . w . " H=" . h
-}
-
-GetVisibleWindowPos(ByRef X, ByRef Y, ByRef Width, ByRef Height, WinTitle := "A") {
-    ; 対象ウィンドウのハンドル(ID)を取得
-    WinGet, hwnd, ID, %WinTitle%
-    if !hwnd
-        return
-
-    ; RECT構造体のためのメモリ確保 (4バイト整数 x 4 = 16バイト)
-    VarSetCapacity(rect, 16, 0)
-
-    ; DWMWA_EXTENDED_FRAME_BOUNDS = 9
-    ; 成功すると 0 (S_OK) が返る
-    hr := DllCall("dwmapi\DwmGetWindowAttribute"
-        , "Ptr",  hwnd
-        , "UInt", 9
-        , "Ptr",  &rect
-        , "UInt", 16)
-
-    if (hr = 0) {
-        ; --- 成功時: DWMから取得した「見た目の座標」を使用 ---
-        X := NumGet(rect, 0, "Int")      ; Left
-        Y := NumGet(rect, 4, "Int")      ; Top
-        R := NumGet(rect, 8, "Int")      ; Right
-        B := NumGet(rect, 12, "Int")     ; Bottom
-
-        Width  := R - X
-        Height := B - Y
+OpenVSCode() {
+    TargetID := WinExist("ahk_exe Code.exe")
+    if TargetID {
+        WinActivate, ahk_id %TargetID%
     } else {
-        ; --- 失敗時（DWM非対応など）: 通常のWinGetPosで代用 ---
-        WinGetPos, X, Y, Width, Height, ahk_id %hwnd%
+        try {
+            Run, code "%A_ScriptDir%"
+        } catch {
+            Run, "%A_AppData%\..\Local\Programs\Microsoft VS Code\Code.exe" "%A_ScriptDir%"
+        }
+        WinWaitActive, ahk_exe Code.exe, , 5
+        TargetID := WinExist("A")
     }
-}
-
-; OpenVSCode() {
-;     if WinExist("ahk_exe Code.exe")
-;         WinActivate, %TargetID%
-;     else
-;     {
-;         ; 開いていない場合、現在のスクリプトの場所(%A_ScriptDir%)をVSCodeで開く
-;         ; ※ インストール時にPATHを通していれば "code" だけで起動
-;         try {
-;             Run, code "%A_ScriptDir%"
-;         } catch {
-;             ; PATHが通っていない場合のフォールバック（一般的なインストールパス）
-;             Run, "%A_AppData%\..\Local\Programs\Microsoft VS Code\Code.exe" "%A_ScriptDir%"
-;         }
-;     }
-;     MoveWindow(TargetID, 1930, 450, 1550, 1600)
-; }
-
-GetApplicationName() {
-    WinGet, processName, ProcessName, A
-    MsgBox, このアプリのexe名は: %processName%`n(クリップボードにコピーしました)
-    ;Clipboard := processName
+    ; VSCodeも正規化比率で配置 (例: 右側メイン配置に近い設定)
+    MoveWindowRatio("ahk_id " . TargetID, 0.503, 0.216, 0.404, 0.766)
 }
 
 ; --- メディア操作の実行サブルーチン ---
