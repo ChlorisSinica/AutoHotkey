@@ -13,6 +13,7 @@
 
 # Zips
 __zip__/
+__old__/
 
 # Generated directories
 helloworld.ahk
