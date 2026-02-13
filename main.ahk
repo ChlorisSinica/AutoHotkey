@@ -20,7 +20,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\GetAuth.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
-#Include %A_ScriptDir%\Plugins\GridWindow.ahk
+#Include %A_ScriptDir%\Plugins\WindowGrid.ahk
 
 ; --- 初期化処理 ---
 DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
