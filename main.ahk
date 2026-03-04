@@ -4,10 +4,15 @@ SetWorkingDir %A_ScriptDir%
 CoordMode, Mouse, Screen
 SetBatchLines, -1
 
-; from [https://github.com/Descolada/UIAutomation]
+; ==========================================================
+; --- https://github.com/Descolada/UIAutomation ---
+; ==========================================================
 #Include %A_ScriptDir%\Plugins\UIA_Interface.ahk
 #Include %A_ScriptDir%\Plugins\UIA_Browser.ahk
+
+; ==========================================================
 ; --- Pluginsファイルの読み込み ---
+; ==========================================================
 #Include %A_ScriptDir%\Plugins\UIA_Utils.ahk
 #Include %A_ScriptDir%\Plugins\Application.ahk
 #Include %A_ScriptDir%\Plugins\Browser.ahk
@@ -22,7 +27,9 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
 
+; ==========================================================
 ; --- 初期化処理 ---
+; ==========================================================
 DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
 EnvGet, profilePath, USERPROFILE
 
@@ -74,95 +81,87 @@ vk1C & F1::Settings_Open()
 ; ==========================================================
 ; ----- Alt -----
 ; ==========================================================
-!w::Send, !{F4}
-^!c::ReplaceEscapeToSlash()
-^!n::OpenWithMspaint(1)
-^!m::OpenWithNotePad(1, SettingsUI.EditorType)
+!w::    Send, !{F4}
+^!c::   ReplaceEscapeToSlash()
+^!n::   OpenWithMspaint(1)
+^!m::   OpenWithNotePad(1, SettingsUI.EditorType)
 
 ; ==========================================================
 ; ----- Window-key -----
 ; ==========================================================
 #If (EnableWinMgr)
-    #q::Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
-    #w::Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
-    ^#b::GetActiveWindowInfo()
-    +#k::Run, ms-settings:bluetooth
-    ; ^#F1::OpenvClockFullScreen()
-    ^#1::MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
-    ^#2::MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
-    ^#3::MoveWindowRatio("A", 0.000, 0.030, 1.000, 0.970)
-    ^#4::MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
-    ^+#1::MoveWindowRatio("A", 0.003, 0.206, 0.360, 0.470)
-    ^+#2::MoveWindowRatio("A", 0.003, 0.216, 0.404, 0.766)
-    ^+#4::MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
-    ^#F11::OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
-    ^#F12::OpenVSCode()
+    #q::    Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
+    #w::    Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
+    ^#b::   GetActiveWindowInfo()
+    +#k::   Run, ms-settings:bluetooth
+    ^#1::   MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
+    ^#2::   MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
+    ^#3::   MoveWindowRatio("A", 0.000, 0.030, 1.000, 0.970)
+    ^#4::   MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
+    ^+#1::  MoveWindowRatio("A", 0.003, 0.206, 0.360, 0.470)
+    ^+#2::  MoveWindowRatio("A", 0.003, 0.216, 0.404, 0.766)
+    ^+#4::  MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
+    ^#F11:: OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
+    ^#F12:: OpenVSCode()
     ^+#F12::Reload
 
-    ; --- モード切替 (Ctrl + Win + G) ---
-    ^#g::Grid_ToggleMode()
-
-    ; --- 移動 (Ctrl + Win + IJKL) ---
-    ^#j::Grid_Move(-1,  0) ; Left
-    ^#l::Grid_Move( 1,  0) ; Right
-    ^#i::Grid_Move( 0, -1) ; Up
-    ^#k::Grid_Move( 0,  1) ; Down
-
-    ; --- リサイズ (Ctrl + Shift + Win + IJKL) ---
-    ^+#j::Grid_Resize("Width",  -1) ; 幅縮小
-    ^+#l::Grid_Resize("Width",   1) ; 幅拡大
-    ^+#i::Grid_Resize("Height", -1) ; 高さ縮小
-    ^+#k::Grid_Resize("Height",  1) ; 高さ拡大
+    ^#g::   Grid_ToggleMode()
+    ^#j::   Grid_Move(-1,  0) ; Left
+    ^#l::   Grid_Move( 1,  0) ; Right
+    ^#i::   Grid_Move( 0, -1) ; Up
+    ^#k::   Grid_Move( 0,  1) ; Down
+    ^+#j::  Grid_Resize("Width",  -1) ; 幅縮小
+    ^+#l::  Grid_Resize("Width",   1) ; 幅拡大
+    ^+#i::  Grid_Resize("Height", -1) ; 高さ縮小
+    ^+#k::  Grid_Resize("Height",  1) ; 高さ拡大
 #If
 
 ; ==========================================================
 ; ----- Function-Key (for Mouse) -----
 ; ==========================================================
 #If (EnableMouseExt)
-    XButton1::XButton1  ; 戻る（手前側）
-    XButton2::XButton2  ; 進む（　奥側）
-    F15::Send ^v        ; 　　（手前側）
-    F16::Send ^c        ; 　　（　奥側）
-    F17::Send ^w        ; タブを閉じる
-    F15 & F17::SendInput {Media_Play_Pause}     ;
-    XButton2 & F17::Send !{F4}                  ;
-    XButton1 & WheelUp::Send, {WheelLeft}       ; F13 + 上スクロール → 左へ
-    XButton1 & WheelDown::Send, {WheelRight}    ; F13 + 下スクロール → 右へ
-    XButton2 & WheelUp::Send ^{NumpadAdd}       ; ウィンドウ拡大
-    XButton2 & WheelDown::Send ^{NumpadSub}     ; ウィンドウ縮小
-    F15 & WheelUp::Send, {Volume_Up}            ; 音量アップ
-    F15 & WheelDown::Send, {Volume_Down}        ; 音量ダウン
-    F16 & WheelDown::AltTabAction("Next")
-    F16 & WheelUp::AltTabAction("Prev")
-    *F16 Up::CloseAltTabMenu()
+    XButton1::              XButton1                        ; 戻る（手前側）
+    XButton2::              XButton2                        ; 進む（　奥側）
+    F15::                   Send ^v                         ; 　　（手前側）
+    F16::                   Send ^c                         ; 　　（　奥側）
+    F17::                   Send ^w                         ; タブを閉じる
+    F15 & F17::             SendInput {Media_Play_Pause}    ;
+    XButton2 & F17::        Send !{F4}                      ;
+    XButton1 & WheelUp::    Send, {WheelLeft}               ; F13 + 上スクロール → 左へ
+    XButton1 & WheelDown::  Send, {WheelRight}              ; F13 + 下スクロール → 右へ
+    XButton2 & WheelUp::    Send ^{NumpadAdd}               ; ウィンドウ拡大
+    XButton2 & WheelDown::  Send ^{NumpadSub}               ; ウィンドウ縮小
+    F15 & WheelUp::         Send, {Volume_Up}               ; 音量アップ
+    F15 & WheelDown::       Send, {Volume_Down}             ; 音量ダウン
+    F16 & WheelDown::       AltTabAction("Next")
+    F16 & WheelUp::         AltTabAction("Prev")
+    *F16 Up::               CloseAltTabMenu()
 #If
 
 ; ==========================================================
 ; ----- Others -----
 ; ==========================================================
-Shift & Backspace::Send,{Del}
-scrolllock::Return
-$sc073::Send, +{sc073}  ; \ → _
-$+sc073::Send, {sc073}  ; _ → \
-vk1C & z::Manage_N_Hold("Toggle")
-vk1C & x::Manage_N_Hold("Off")
+Alt & Backspace::   Send,{Del}
+scrolllock::        Return
+$sc073::            Send, +{sc073}  ; \ → _
+$+sc073::           Send, {sc073}  ; _ → \
+vk1C & z::          Manage_N_Hold("Toggle")
+vk1C & x::          Manage_N_Hold("Off")
 
 ; ==========================================================
 ; ----- Browser -----
-; 「アプリ設定がON」かつ「ブラウザグループがアクティブ」
 ; ==========================================================
 #If (EnableAppSpec && WinActive("ahk_group BrowserGroup"))
-    ^sc073::TogglePDFZoom()
-    ; F2::CheckFocus()
-    ; F2::InspectElementUnderMouse()
-    F1::RunSiteSpecificKey("{F1}", KeyActions["F1"])
-    F2::RunSiteSpecificKey("{F2}", KeyActions["F2"])
-    !c::CopyPlaneURL()
+    ^sc073::    TogglePDFZoom()
+    F1::        RunSiteSpecificKey("{F1}", KeyActions["F1"])
+    F2::        RunSiteSpecificKey("{F2}", KeyActions["F2"])
+    ^+c::       CopyPlaneURL()
+    F8::        GetAllEdgeURLs(false)
+    ; F8::        Debug_GetAllEdgeURLs()
 #If
 
 ; ==========================================================
 ; ----- Power Point -----
-; 「アプリ設定がON」かつ「パワポがアクティブ」
 ; ==========================================================
 #If (EnableAppSpec && WinActive("ahk_exe POWERPNT.EXE"))
     ^!l::SetRight()
@@ -184,7 +183,6 @@ vk1C & x::Manage_N_Hold("Off")
 
 ; ==========================================================
 ; ----- Excel -----
-; 「アプリ設定がON」かつ「エクセルがアクティブ」
 ; ==========================================================
 #If (EnableAppSpec && WinActive("ahk_exe EXCEL.EXE"))
     ^Tab::Send ^{PgDn}

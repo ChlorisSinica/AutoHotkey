@@ -30,11 +30,27 @@ DeleteTitle() {
     Sleep, 50
 }
 
+CopyURL() {
+    Send, {Alt}{Tab}
+    Sleep, 50
+    
+    Send, ^l
+    Sleep, 50
+
+    Send, ^c
+    Send, ^w
+    Sleep, 50
+
+    Send, {Alt}{Tab}
+    Send, Enter
+    Sleep, 50
+}
+
 ; ----- OneTime -----
 vk1C & ,::
     Loop, 20
     {
-        DeleteTitle()
+        CopyURL()
     }
 return
 
