@@ -45,7 +45,9 @@ global EnableMouseExt   := 1
 global EnableAppSpec    := 1
 global EnableMouseEmu   := 1
 global EnableGestures   := 1
+MG_DebugInit()
 vk1C & F1::Settings_Open()
+vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 #If WinActive("機能のON/OFF設定")
     Escape::Settings_Close()
 #If
@@ -201,7 +203,9 @@ vk1C & x::          Manage_N_Hold("Off")
 #If (EnableGestures && MouseIsOverTarget())
     $RButton::
         MouseGetPos, , , startWinID
+        MG_DebugLog("RButton_hotkey_start", "startWinID=" . startWinID)
         gesture := MG_RecognizeGesture()
+        MG_DebugLog("RButton_hotkey_end", "startWinID=" . startWinID . " gesture=" . gesture)
         MG_ExecuteAction(gesture, startWinID)
     return
 #If

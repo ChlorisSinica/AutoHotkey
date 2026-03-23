@@ -10,6 +10,7 @@
 
 # VS Code settings (optional)
 .vscode/
+.claude/
 
 # Zips
 __zip__/

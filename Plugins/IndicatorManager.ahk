@@ -38,6 +38,8 @@ class SettingsUI {
         Menu, Tray, Add
         Menu, Tray, Add, スタートアップで実行する, Startup_Toggle
         Menu, Tray, Add, 機能設定 (Settings), Settings_Open
+        Menu, Tray, Add, 右クリック状態を記録, MG_DebugSnapshotMenu
+        Menu, Tray, Add, 右クリックログを開く, MG_DebugOpenLog
 
         IfExist, %StartupShortcutPath%
             Menu, Tray, Check, スタートアップで実行する
