@@ -370,9 +370,16 @@ PPT_InsertImagesWithMetadata(pathArray) {
                 shp := sld.Shapes.AddPicture(filePath
                     , 0, -1, offsetX, offsetY, -1, -1)
             }
+            SplitPath, filePath, srcFileName
             FormatTime, insertTime,, yyyy/MM/dd HH:mm:ss
+            FormatTime, idTime,, yyyyMMdd-HHmmss
+            Random, idRand, 0x100000, 0xFFFFFF
+            mediaId := idTime . "-" . Format("{:06x}", idRand)
+            shp.Tags.Add("MEDIA_ID", mediaId)
             shp.Tags.Add("SOURCE_PATH", filePath)
+            shp.Tags.Add("SOURCE_NAME", srcFileName)
             shp.Tags.Add("INSERT_DATE", insertTime)
+            shp.Tags.Add("INSERTED_BY", A_UserName . "@" . A_ComputerName)
             shp.AlternativeText := "[source] " . filePath
             offsetX += 20
             offsetY += 20
@@ -416,10 +423,18 @@ PPT_ShowSourcePath() {
             return
         }
         shp     := sel.ShapeRange(1)
+        mediaId := shp.Tags("MEDIA_ID")
         srcPath := shp.Tags("SOURCE_PATH")
+        srcName := shp.Tags("SOURCE_NAME")
         insDate := shp.Tags("INSERT_DATE")
+        insBy   := shp.Tags("INSERTED_BY")
         if (srcPath != "") {
-            MsgBox, 64, 図のソース情報, Source: %srcPath%`nDate:   %insDate%
+            info := "ID:       " . mediaId
+                . "`nFile:     " . srcName
+                . "`nSource: " . srcPath
+                . "`nDate:    " . insDate
+                . "`nBy:       " . insBy
+            MsgBox, 64, 図のソース情報, %info%
         } else {
             MsgBox, 48, , このマクロ経由で挿入されていない図です。
         }
@@ -453,76 +468,129 @@ PPT_ExportSources() {
     if !FileExist(destDir)
         FileCreateDir, %destDir%
 
-    jsonEntries := []
-    missingCount := 0
+    ; 既存 sources_list.json からエクスポート済み MEDIA_ID を取得
+    manifestPath := destDir . "\sources_list.json"
+    exportedIds := {}
+    if FileExist(manifestPath) {
+        FileRead, existingJson, %manifestPath%
+        pos := 1
+        while (pos := RegExMatch(existingJson, """media_id"":\s*""([^""]+)""", m, pos)) {
+            exportedIds[m1] := true
+            pos += StrLen(m)
+        }
+    }
+
+    jsonEntries  := []
     copyCount    := 0
+    skipCount    := 0
+    missingCount := 0
     slideIdx     := 0
 
-    ; For each で走査（prs.Slides(n) の直接アクセスを回避）
     For sld in prs.Slides {
         slideIdx++
-        slideNum  := Format("{:02d}", slideIdx)
-        shapeIdx  := 0
+        shapeIdx := 0
 
         For shp in sld.Shapes {
             shapeIdx++
+            mediaId := ""
+            try {
+                mediaId := shp.Tags("MEDIA_ID")
+            } catch {
+            }
+            if (mediaId = "")
+                continue
+
+            ; エクスポート済みならスキップ
+            if (exportedIds.HasKey(mediaId)) {
+                skipCount++
+                continue
+            }
+
             srcPath := ""
             try {
                 srcPath := shp.Tags("SOURCE_PATH")
             } catch {
             }
-            if (srcPath = "")
-                continue
+            srcName := ""
+            try {
+                srcName := shp.Tags("SOURCE_NAME")
+            } catch {
+            }
+            if (srcName = "")
+                SplitPath, srcPath, srcName
 
-            SplitPath, srcPath, srcFileName
-            shapeNum := Format("{:02d}", shapeIdx)
-            destName := "slide" . slideNum . "_shape" . shapeNum . "_" . srcFileName
+            destName := mediaId . "_" . srcName
             destPath := destDir . "\" . destName
 
             if FileExist(srcPath) {
                 FileCopy, %srcPath%, %destPath%, 1
-                shp.Tags.Add("SOURCE_PATH", destPath)
-                shp.AlternativeText := "[source] " . destPath
-                jsonEntries.Push(PPT_JsonEntry(slideIdx, shapeIdx, srcFileName, srcPath, destPath, "copied"))
+                jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, srcPath, destPath, "copied"))
                 copyCount++
             } else {
                 MsgBox, 52, ファイルが見つかりません
-                    , Slide %slideIdx% / Shape %shapeIdx%`n`n記録されているパス:`n%srcPath%`n`nファイルを手動で指定しますか？
+                    , Slide %slideIdx% / Shape %shapeIdx%`nID: %mediaId%`n`n記録されているパス:`n%srcPath%`n`nファイルを手動で指定しますか？
                 IfMsgBox, Yes
                 {
                     FileSelectFile, manualPath, 3, , ファイルを選択
                         , メディアファイル (*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff;*.gif;*.mp4;*.avi;*.wmv;*.mov;*.mkv;*.mp3;*.wav;*.wma;*.m4a;*.m4v;*.webm)
                     if (manualPath != "") {
                         FileCopy, %manualPath%, %destPath%, 1
-                        shp.Tags.Add("SOURCE_PATH", destPath)
-                        shp.AlternativeText := "[source] " . destPath
-                        jsonEntries.Push(PPT_JsonEntry(slideIdx, shapeIdx, srcFileName, manualPath, destPath, "manual"))
+                        jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, manualPath, destPath, "manual"))
                         copyCount++
                     } else {
-                        jsonEntries.Push(PPT_JsonEntry(slideIdx, shapeIdx, srcFileName, srcPath, "", "skipped"))
+                        jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, srcPath, "", "skipped"))
                         missingCount++
                     }
                 } else {
-                    jsonEntries.Push(PPT_JsonEntry(slideIdx, shapeIdx, srcFileName, srcPath, "", "skipped"))
+                    jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, srcPath, "", "skipped"))
                     missingCount++
                 }
             }
         }
     }
 
-    ; sources_list.json 生成
-    manifestPath := destDir . "\sources_list.json"
-    FileDelete, %manifestPath%
-    json := "{`n"
-        . "  ""generated"": """ . A_YYYY "-" A_MM "-" A_DD . """,`n"
-        . "  ""pptx"": """ . PPT_JsonEscape(pptPath) . """,`n"
-        . "  ""sources"": [`n"
-    for idx, entry in jsonEntries {
-        json .= "    " . entry
-        json .= (idx < jsonEntries.MaxIndex()) ? ",`n" : "`n"
+    ; sources_list.json 生成（既存エントリ + 新規エントリをマージ）
+    FormatTime, genTime,, yyyy/MM/dd HH:mm:ss
+    if FileExist(manifestPath) && (jsonEntries.MaxIndex() != "") {
+        ; 既存JSONの末尾 ] } の前に新規エントリを追記
+        FileRead, existingJson, %manifestPath%
+        ; "generated" と閉じ括弧を更新するため、全体を再構築
+        existingJson := RegExReplace(existingJson, """generated"":\s*""[^""]*""", """generated"": """ . genTime . """")
+        ; 既存の sources 配列の末尾に追加
+        insertPos := InStr(existingJson, "]", false, 0)
+        if (insertPos > 0) {
+            before := SubStr(existingJson, 1, insertPos - 1)
+            after  := SubStr(existingJson, insertPos)
+            ; 既存エントリがあるかチェック（カンマ要否）
+            needComma := RegExMatch(RTrim(before), "\}$")
+            newLines := ""
+            for idx, entry in jsonEntries {
+                if (idx = 1 && needComma)
+                    newLines .= ",`n"
+                else if (idx > 1)
+                    newLines .= ",`n"
+                newLines .= "    " . entry
+            }
+            newLines .= "`n"
+            existingJson := before . newLines . after
+        }
+        FileDelete, %manifestPath%
+        FileAppend, %existingJson%, %manifestPath%, UTF-8
+    } else if (jsonEntries.MaxIndex() != "") {
+        ; 新規作成
+        FileDelete, %manifestPath%
+        json := "{`n"
+            . "  ""generated"": """ . genTime . """,`n"
+            . "  ""pptx"": """ . PPT_JsonEscape(pptPath) . """,`n"
+            . "  ""exported_by"": """ . A_UserName . "@" . A_ComputerName . """,`n"
+            . "  ""sources"": [`n"
+        for idx, entry in jsonEntries {
+            json .= "    " . entry
+            json .= (idx < jsonEntries.MaxIndex()) ? ",`n" : "`n"
+        }
+        json .= "  ]`n}`n"
+        FileAppend, %json%, %manifestPath%, UTF-8
     }
-    json .= "  ]`n}`n"
-    FileAppend, %json%, %manifestPath%, UTF-8
 
     ; pptx 上書き保存
     try {
@@ -532,8 +600,12 @@ PPT_ExportSources() {
     }
 
     msg := copyCount . " 枚をコピーしました。"
+    if (skipCount > 0)
+        msg .= "`n" . skipCount . " 枚はエクスポート済みのためスキップ。"
     if (missingCount > 0)
-        msg .= "`n※ " . missingCount . " 枚はスキップされました（sources_list.jsonを確認）。"
+        msg .= "`n※ " . missingCount . " 枚はファイル未発見（sources_list.jsonを確認）。"
+    if (copyCount = 0 && skipCount > 0 && missingCount = 0)
+        msg := "新規エクスポート対象はありません。`n(" . skipCount . " 枚はエクスポート済み)"
     MsgBox, 64, 整理完了, %msg%`n`n%destDir%
 }
 
@@ -546,8 +618,9 @@ PPT_JsonEscape(str) {
     return str
 }
 
-PPT_JsonEntry(slide, shape, file, source, dest, status) {
-    return "{""slide"": " . slide
+PPT_JsonEntry(mediaId, slide, shape, file, source, dest, status) {
+    return "{""media_id"": """ . mediaId . """"
+        . ", ""slide"": " . slide
         . ", ""shape"": " . shape
         . ", ""file"": """ . PPT_JsonEscape(file) . """"
         . ", ""source"": """ . PPT_JsonEscape(source) . """"
