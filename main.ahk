@@ -119,10 +119,11 @@ vk1C & F1::Settings_Open()
 ; ==========================================================
 ; ----- Function-Key (for Mouse) -----
 ; ==========================================================
+#If (EnableMouseExt && !WinActive("ahk_exe POWERPNT.EXE"))
+    F15::                   Send ^v                         ; 　　（手前側）
 #If (EnableMouseExt)
     XButton1::              XButton1                        ; 戻る（手前側）
     XButton2::              XButton2                        ; 進む（　奥側）
-    F15::                   Send ^v                         ; 　　（手前側）
     F16::                   Send ^c                         ; 　　（　奥側）
     F17::                   Send ^w                         ; タブを閉じる
     F15 & F17::             SendInput {Media_Play_Pause}    ;
@@ -164,22 +165,26 @@ vk1C & x::          Manage_N_Hold("Off")
 ; ----- Power Point -----
 ; ==========================================================
 #If (EnableAppSpec && WinActive("ahk_exe POWERPNT.EXE"))
-    ^!l::SetRight()
-    ^!j::SetLeft()
-    ^!i::SetTop()
-    ^!k::SetBottom()
-    ^!g::GroupSet()
-    ^!h::GroupRelease()
-    ^!u::SetHorizontalCenter()
-    ^!o::SetVerticalCenter()
-    ^!m::SetHorizontalSpacer()
-    ^!.::SetVerticalSpace()
-    ^+!g::SetFront()
-    ^+!h::SetBack()
-    !1::PasteTextOnly()
-    !2::SetFrameLine()
-    !3::SetFrameSize()
-    !4::OpenFormatObject()
+    ^!l::   SetRight()
+    ^!j::   SetLeft()
+    ^!i::   SetTop()
+    ^!k::   SetBottom()
+    ^!g::   GroupSet()
+    ^!h::   GroupRelease()
+    ^!u::   SetHorizontalCenter()
+    ^!o::   SetVerticalCenter()
+    ^!m::   SetHorizontalSpacer()
+    ^!.::   SetVerticalSpace()
+    ^+!g::  SetFront()
+    ^+!h::  SetBack()
+    !1::    PasteTextOnly()
+    !2::    SetFrameLine()
+    !3::    SetFrameSize()
+    !4::    OpenFormatObject()
+    ^v::    PasteImageWithMetadata()
+    F15::   PasteImageWithMetadata()
+    ^!e::   PPT_ExportSources()
+    ^!q::   PPT_ShowSourcePath()
 #If
 
 ; ==========================================================
