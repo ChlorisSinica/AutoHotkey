@@ -443,6 +443,34 @@ PPT_ShowSourcePath() {
 }
 
 ; ----------------------------------------------------------------------------
+;  Phase 5 helpers: エクスポート判定 / 実行ユーザ判定
+; ----------------------------------------------------------------------------
+PPT_GetCurrentUserKey() {
+    return A_UserName . "@" . A_ComputerName
+}
+
+PPT_IsExportedStatus(status) {
+    return (status = "copied" || status = "manual")
+}
+
+PPT_LoadExportedIds(manifestPath) {
+    exportedIds := {}
+    if !FileExist(manifestPath)
+        return exportedIds
+
+    FileRead, existingJson, %manifestPath%
+    pos := 1
+    while (pos := RegExMatch(existingJson
+        , "\{[^{}]*""media_id"":\s*""([^""]+)""[^{}]*""status"":\s*""([^""]+)""[^{}]*\}"
+        , m, pos)) {
+        if PPT_IsExportedStatus(m2)
+            exportedIds[m1] := true
+        pos += StrLen(m)
+    }
+    return exportedIds
+}
+
+; ----------------------------------------------------------------------------
 ;  Phase 5: 一括整理コマンド（For each ループ修正版）
 ; ----------------------------------------------------------------------------
 PPT_ExportSources() {
@@ -468,23 +496,16 @@ PPT_ExportSources() {
     if !FileExist(destDir)
         FileCreateDir, %destDir%
 
-    ; 既存 sources_list.json からエクスポート済み MEDIA_ID を取得
     manifestPath := destDir . "\sources_list.json"
-    exportedIds := {}
-    if FileExist(manifestPath) {
-        FileRead, existingJson, %manifestPath%
-        pos := 1
-        while (pos := RegExMatch(existingJson, """media_id"":\s*""([^""]+)""", m, pos)) {
-            exportedIds[m1] := true
-            pos += StrLen(m)
-        }
-    }
+    exportedIds := PPT_LoadExportedIds(manifestPath)
+    currentUserKey := PPT_GetCurrentUserKey()
 
-    jsonEntries  := []
-    copyCount    := 0
-    skipCount    := 0
-    missingCount := 0
-    slideIdx     := 0
+    jsonEntries       := []
+    copyCount         := 0
+    exportedSkipCount := 0
+    missingCount      := 0
+    foreignSkipCount  := 0
+    slideIdx          := 0
 
     For sld in prs.Slides {
         slideIdx++
@@ -502,7 +523,7 @@ PPT_ExportSources() {
 
             ; エクスポート済みならスキップ
             if (exportedIds.HasKey(mediaId)) {
-                skipCount++
+                exportedSkipCount++
                 continue
             }
 
@@ -519,6 +540,12 @@ PPT_ExportSources() {
             if (srcName = "")
                 SplitPath, srcPath, srcName
 
+            insertedBy := ""
+            try {
+                insertedBy := shp.Tags("INSERTED_BY")
+            } catch {
+            }
+
             destName := mediaId . "_" . srcName
             destPath := destDir . "\" . destName
 
@@ -527,6 +554,13 @@ PPT_ExportSources() {
                 jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, srcPath, destPath, "copied"))
                 copyCount++
             } else {
+                isForeignSource := (insertedBy != "" && insertedBy != currentUserKey)
+                if (isForeignSource) {
+                    jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, srcPath, "", "skipped_foreign"))
+                    foreignSkipCount++
+                    continue
+                }
+
                 MsgBox, 52, ファイルが見つかりません
                     , Slide %slideIdx% / Shape %shapeIdx%`nID: %mediaId%`n`n記録されているパス:`n%srcPath%`n`nファイルを手動で指定しますか？
                 IfMsgBox, Yes
@@ -600,12 +634,14 @@ PPT_ExportSources() {
     }
 
     msg := copyCount . " 枚をコピーしました。"
-    if (skipCount > 0)
-        msg .= "`n" . skipCount . " 枚はエクスポート済みのためスキップ。"
+    if (exportedSkipCount > 0)
+        msg .= "`n" . exportedSkipCount . " 枚はエクスポート済みのためスキップ。"
+    if (foreignSkipCount > 0)
+        msg .= "`n" . foreignSkipCount . " 枚は別ユーザ/別PCのソースのため手動指定せずスキップ。"
     if (missingCount > 0)
         msg .= "`n※ " . missingCount . " 枚はファイル未発見（sources_list.jsonを確認）。"
-    if (copyCount = 0 && skipCount > 0 && missingCount = 0)
-        msg := "新規エクスポート対象はありません。`n(" . skipCount . " 枚はエクスポート済み)"
+    if (copyCount = 0 && exportedSkipCount > 0 && missingCount = 0 && foreignSkipCount = 0)
+        msg := "新規エクスポート対象はありません。`n(" . exportedSkipCount . " 枚はエクスポート済み)"
     MsgBox, 64, 整理完了, %msg%`n`n%destDir%
 }
 
