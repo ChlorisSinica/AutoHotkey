@@ -46,6 +46,7 @@ global EnableAppSpec    := 1
 global EnableMouseEmu   := 1
 global EnableGestures   := 1
 MG_DebugInit()
+Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
 vk1C & F1::Settings_Open()
 vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 #If WinActive("機能のON/OFF設定")
@@ -70,15 +71,17 @@ vk1C & F2::MG_DebugSnapshot("manual-hotkey")
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #If
 #If (EnableMouseEmu)
-    vk1C & e::StartCursorMove()
-    vk1C & s::StartCursorMove()
-    vk1C & d::StartCursorMove()
-    vk1C & f::StartCursorMove()
     vk1C & w::Click, Down
     vk1C & r::Click, Right, Down
     vk1C & w Up::Click, Up
     vk1C & r Up::Click, Right, Up
 #If
+
+Cursor_GetHotkeyConfig() {
+    return {Modifier: "F12"
+        , Move: {o: "Up", k: "Left", l: "Down", sc027: "Right"}
+        , Grid: {o: "Up", k: "Left", l: "Down", sc027: "Right"}}
+}
 
 ; ==========================================================
 ; ----- Alt -----

@@ -181,32 +181,37 @@ GetMonitorHandleFromWindow(hwnd) {
     return DllCall("MonitorFromWindow", "Ptr", hwnd, "UInt", 2) ; 2=MONITOR_DEFAULTTONEAREST
 }
 
+GetMonitorWorkAreaFromPoint(x, y, ByRef Left, ByRef Top, ByRef Width, ByRef Height) {
+    SysGet, MonCount, MonitorCount
+
+    ; 見つからなかった場合はプライマリモニターを使う
+    SysGet, Mon, MonitorWorkArea, 1
+    targetLeft := MonLeft
+    targetRight := MonRight
+    targetTop := MonTop
+    targetBottom := MonBottom
+
+    Loop, %MonCount% {
+        SysGet, tmp, MonitorWorkArea, %A_Index%
+        if (x >= tmpLeft && x <= tmpRight && y >= tmpTop && y <= tmpBottom) {
+            targetLeft := tmpLeft
+            targetRight := tmpRight
+            targetTop := tmpTop
+            targetBottom := tmpBottom
+            break
+        }
+    }
+
+    Left := targetLeft
+    Top := targetTop
+    Width := targetRight - targetLeft
+    Height := targetBottom - targetTop
+}
+
 ; 指定ウィンドウが含まれるモニターの作業領域を取得
 GetMonitorWorkAreaFromWindow(hwnd, ByRef Left, ByRef Top, ByRef Width, ByRef Height) {
     WinGetPos, x, y, w, h, ahk_id %hwnd%
     cx := x + (w / 2)
     cy := y + (h / 2)
-
-    SysGet, MonCount, MonitorCount
-
-    ; 見つからなかった場合のデフォルト（プライマリ）
-    SysGet, Mon, MonitorWorkArea, 1
-    MonLeft := MonLeft, MonRight := MonRight, MonTop := MonTop, MonBottom := MonBottom
-
-    Loop, %MonCount% {
-        SysGet, tmp, MonitorWorkArea, %A_Index%
-        ; ウィンドウの中心点がそのモニター内にあるか判定
-        if (cx >= tmpLeft && cx <= tmpRight && cy >= tmpTop && cy <= tmpBottom) {
-            MonLeft := tmpLeft
-            MonRight := tmpRight
-            MonTop := tmpTop
-            MonBottom := tmpBottom
-            break
-        }
-    }
-
-    Left := MonLeft
-    Top := MonTop
-    Width := MonRight - MonLeft
-    Height := MonBottom - MonTop
+    GetMonitorWorkAreaFromPoint(cx, cy, Left, Top, Width, Height)
 }

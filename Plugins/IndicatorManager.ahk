@@ -25,7 +25,7 @@ class SettingsUI {
         , "EnableWinMgr":   "Window操作 (Win+矢印など)"
         , "EnableMouseExt": "マウスボタン拡張 (F13-F24)"
         , "EnableAppSpec":  "アプリ固有設定 (Excel/PPT/Browser)"
-        , "EnableMouseEmu": "キーボードマウス (vk1C+WASD)"
+        , "EnableMouseEmu": "キーボードマウス (F12+OKL; / Ctrl+F12+OKL;)"
         , "EnableGestures": "マウスジェスチャー"}
 
     ; --- 初期化 ---
