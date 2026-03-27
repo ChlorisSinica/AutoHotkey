@@ -16,15 +16,15 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\UIA_Utils.ahk
 #Include %A_ScriptDir%\Plugins\Application.ahk
 #Include %A_ScriptDir%\Plugins\Browser.ahk
-#Include %A_ScriptDir%\Plugins\GestureMap.ahk
+#Include %A_ScriptDir%\Plugins\GetAuth.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
+#Include %A_ScriptDir%\Plugins\IndicatorManager.ahk
 #Include %A_ScriptDir%\Plugins\MouseCursor.ahk
 #Include %A_ScriptDir%\Plugins\MouseWheel.ahk
 #Include %A_ScriptDir%\Plugins\MouseGesture.ahk
+#Include %A_ScriptDir%\Plugins\MouseGestureMap.ahk
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
-#Include %A_ScriptDir%\Plugins\IndicatorManager.ahk
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
-#Include %A_ScriptDir%\Plugins\GetAuth.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
 
@@ -47,12 +47,18 @@ global EnableVDesk      := 1
 global EnableMouseEmu   := 1
 global EnableMouseBtn   := 1
 global EnableGestures   := 1
+global EnableAlt        := 1
+global EnableOthers     := 1
 global EnableBrowser    := 1
 global EnablePPT        := 1
 global EnableExcel      := 1
+
+SUI_LoadConfig()
+
 MG_DebugInit()
-PPT_SpacingLog("startup", "script=" . A_ScriptFullPath)
 Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
+PPT_SpacingLog("startup", "script=" . A_ScriptFullPath)
+PPT_CaptionInit()
 vk1C & F1::Settings_Open()
 vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 #If WinActive("機能設定")
@@ -63,8 +69,10 @@ vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 ; ----- vk1C(Non-Convert) -----
 ; ==========================================================
 #If (EnableNavLayer)
-    vk1C & q::IME_ToEnglish()
-    vk1C & w::IME_ToJapanese()
+    vk1C & 1::IME_ToEnglish()
+    vk1C & 2::IME_ToJapanese()
+    vk1C & 3::Send,{Blind}^+6
+    vk1C & 4::Send,{Blind}^+2
     vk1C & j::Send,{Blind}{Left}
     vk1C & k::Send,{Blind}{Down}
     vk1C & i::Send,{Blind}{Up}
@@ -72,8 +80,6 @@ vk1C & F2::MG_DebugSnapshot("manual-hotkey")
     vk1C & u::Send,{Blind}{Home}
     vk1C & o::Send,{Blind}{End}
     vk1C & p::Send,{Blind}{F2}
-    vk1C & 1::Send,{Blind}^+6
-    vk1C & 2::Send,{Blind}^+2
     vk1C & n::OpenWithMspaint(0)
     vk1C & m::OpenWithNotePad(0, SettingsUI.EditorType)
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
@@ -129,50 +135,56 @@ Cursor_GetHotkeyConfig() {
 ; ----- Window Placement -----
 ; ==========================================================
 #If (EnableWinPlace)
-    ^#b::   GetActiveWindowInfo()
-    +#k::   Run, ms-settings:bluetooth
-    ^#1::   MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
-    ^#2::   MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
-    ^#3::   MoveWindowRatio("A", 0.000, 0.030, 1.000, 0.970)
-    ^#4::   MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
-    ^#8::   MoveWindowMaxHeightKeepWidth("A", "Top")
-    ^+#1::  MoveWindowRatio("A", 0.003, 0.206, 0.360, 0.470)
-    ^+#2::  MoveWindowRatio("A", 0.003, 0.216, 0.404, 0.766)
-    ^+#4::  MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
-    ^+#8::  MoveWindowMaxHeightKeepWidth("A", "Bottom")
-    ^#F11:: OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
-    ^#F12:: OpenVSCode()
-    ^+#F12::Reload
+    ^#b::       GetActiveWindowInfo()
+    +#k::       Run, ms-settings:bluetooth
+    ^#1::       MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
+    ^#2::       MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
+    ^#3::       MoveWindowRatio("A", 0.000, 0.030, 1.000, 0.970)
+    ^#4::       MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
+    ^#8::       MoveWindowMaxHeightKeepWidth("A", "Top")
+    ^+#1::      MoveWindowRatio("A", 0.003, 0.206, 0.360, 0.470)
+    ^+#2::      MoveWindowRatio("A", 0.003, 0.216, 0.404, 0.766)
+    ^+#4::      MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
+    ^+#8::      MoveWindowMaxHeightKeepWidth("A", "Bottom")
+    ^#F11::     OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
+    ^#F12::     OpenVSCode()
+    ^+#F12::    Reload
 
-    ^#g::   Grid_ToggleMode()
-    ^+#g::  WindowIsland_Toggle()
-    ^#j::   Grid_Move(-1,  0) ; Left
-    ^#l::   Grid_Move( 1,  0) ; Right
-    ^#i::   Grid_Move( 0, -1) ; Up
-    ^#k::   Grid_Move( 0,  1) ; Down
-    ^+#j::  Grid_Resize("Width",  -1) ; 幅縮小
-    ^+#l::  Grid_Resize("Width",   1) ; 幅拡大
-    ^+#i::  Grid_Resize("Height", -1) ; 高さ縮小
-    ^+#k::  Grid_Resize("Height",  1) ; 高さ拡大
+    ^#g::       Grid_ToggleMode()
+    ^+#g::      WindowIsland_Toggle()
+    ^#j::       Grid_Move(-1,  0) ; Left
+    ^#l::       Grid_Move( 1,  0) ; Right
+    ^#i::       Grid_Move( 0, -1) ; Up
+    ^#k::       Grid_Move( 0,  1) ; Down
+    ^+#j::      Grid_Resize("Width",  -1) ; 幅縮小
+    ^+#l::      Grid_Resize("Width",   1) ; 幅拡大
+    ^+#i::      Grid_Resize("Height", -1) ; 高さ縮小
+    ^+#k::      Grid_Resize("Height",  1) ; 高さ拡大
 #If
 
 ; ==========================================================
 ; ----- Alt -----
 ; ==========================================================
-!w::    Send, !{F4}
-^!c::   ReplaceEscapeToSlash()
-^!n::   OpenWithMspaint(1)
-^!m::   OpenWithNotePad(1, SettingsUI.EditorType)
+#If (EnableAlt)
+    !Backspace::    Send,{Del}
+    !w::            Send, !{F4}
+    ^!c::           ReplaceEscapeToSlash()
+    ^!n::           OpenWithMspaint(1)
+#If
+#If (EnableAlt && !WinActive("ahk_exe POWERPNT.EXE"))
+    ^!m::           OpenWithNotePad(1, SettingsUI.EditorType)
+#If
 
 ; ==========================================================
 ; ----- Others -----
 ; ==========================================================
-Alt & Backspace::   Send,{Del}
-scrolllock::        Return
-$sc073::            Send, +{sc073}  ; \ → _
-$+sc073::           Send, {sc073}  ; _ → \
-vk1C & z::          Manage_N_Hold("Toggle")
-vk1C & x::          Manage_N_Hold("Off")
+#If (EnableOthers)
+    scrolllock::        Return
+    $sc073::            Send, +{sc073}  ; \ → _
+    $+sc073::           Send, {sc073}  ; _ → \
+    vk1C & z::          Manage_N_Hold("Toggle")
+    vk1C & x::          Manage_N_Hold("Off")
+#If
 
 ; ==========================================================
 ; ----- Browser -----
@@ -210,10 +222,21 @@ vk1C & x::          Manage_N_Hold("Off")
     ^+!o::  PPT_AlignCenterToSmallest("V")
     ^+!m::  PPT_GridRepeatStart("H", "m")
     ^+!.::  PPT_GridRepeatStart("V", ".")
+    ^!1::   PPT_AddEdgeCaption("Top")
+    ^!2::   PPT_AddEdgeCaption("Bottom")
+    ^!3::   PPT_AddEdgeCaption("Left")
+    ^!4::   PPT_AddEdgeCaption("Right")
+    ^!5::   PPT_CaptionAdjustGap("H", -0.25)
+    ^!6::   PPT_CaptionAdjustGap("H",  0.25)
+    ^!7::   PPT_CaptionAdjustGap("V", -0.25)
+    ^!8::   PPT_CaptionAdjustGap("V",  0.25)
+    ^+!5::  PPT_CaptionPromptGap("H")
+    ^+!7::  PPT_CaptionPromptGap("V")
     !1::    PasteTextOnly()
     !2::    PPT_CycleBlackBorder()
     !3::    SetFrameSize()
     !4::    OpenFormatObject()
+    +!4::   CloseFormatObject()
     ^v::    PasteImageWithMetadata()
     F15::   PasteImageWithMetadata()
     ^!e::   PPT_ExportSources()

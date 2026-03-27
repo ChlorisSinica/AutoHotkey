@@ -11,10 +11,14 @@ global SettingsItemsLV := ""
 global SettingsLV := ""
 global RadioNotepads := 0
 global RadioStandard := 0
+global SUI_IsInitializing := false
+global _SUI_PendingCheckItemID := 0
+global _SUI_PendingCheckSource := ""
 global SUI_DebugEnabled := true
 global SUI_DebugLogDir := A_ScriptDir . "\.claude"
 global SUI_DebugLogPath := SUI_DebugLogDir . "\indicator_manager_debug.log"
 global SUI_DebugMaxBytes := 262144
+global SUI_ConfigPath := A_ScriptDir . "\Plugins\indicator_settings.ini"
 
 Indicator_Init() {
     SUI_DebugInit()
@@ -80,7 +84,7 @@ SUI_DebugSanitize(text) {
 SUI_DebugFlagsText() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
-    global EnableBrowser, EnablePPT, EnableExcel
+    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
 
     return "EnableNavLayer=" . EnableNavLayer
         . " EnableWinPlace=" . EnableWinPlace
@@ -89,6 +93,8 @@ SUI_DebugFlagsText() {
         . " EnableMouseEmu=" . EnableMouseEmu
         . " EnableMouseBtn=" . EnableMouseBtn
         . " EnableGestures=" . EnableGestures
+        . " EnableAlt=" . EnableAlt
+        . " EnableOthers=" . EnableOthers
         . " EnableBrowser=" . EnableBrowser
         . " EnablePPT=" . EnablePPT
         . " EnableExcel=" . EnableExcel
@@ -137,6 +143,85 @@ SUI_DebugOpenLog() {
     Run, notepad.exe "%SUI_DebugLogPath%"
 }
 
+SUI_NormalizeBool(value, defaultValue := 0) {
+    value := Trim(value)
+    if (value = "")
+        return defaultValue ? 1 : 0
+    if (value ~= "i)^(1|true|on|yes)$")
+        return 1
+    if (value ~= "i)^(0|false|off|no)$")
+        return 0
+    return defaultValue ? 1 : 0
+}
+
+SUI_NormalizeEditorType(value, defaultValue := 1) {
+    value := Trim(value)
+    if (value = "1" || value = "2")
+        return value + 0
+    return (defaultValue = 2) ? 2 : 1
+}
+
+SUI_LoadConfig() {
+    global SUI_ConfigPath
+    global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
+    global EnableMouseEmu, EnableMouseBtn, EnableGestures
+    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+
+    IniRead, navLayerRaw, %SUI_ConfigPath%, Indicators, EnableNavLayer, %EnableNavLayer%
+    IniRead, winPlaceRaw, %SUI_ConfigPath%, Indicators, EnableWinPlace, %EnableWinPlace%
+    IniRead, winIslandRaw, %SUI_ConfigPath%, Indicators, EnableWinIsland, %EnableWinIsland%
+    IniRead, vdeskRaw, %SUI_ConfigPath%, Indicators, EnableVDesk, %EnableVDesk%
+    IniRead, mouseEmuRaw, %SUI_ConfigPath%, Indicators, EnableMouseEmu, %EnableMouseEmu%
+    IniRead, mouseBtnRaw, %SUI_ConfigPath%, Indicators, EnableMouseBtn, %EnableMouseBtn%
+    IniRead, gesturesRaw, %SUI_ConfigPath%, Indicators, EnableGestures, %EnableGestures%
+    IniRead, altRaw, %SUI_ConfigPath%, Indicators, EnableAlt, %EnableAlt%
+    IniRead, othersRaw, %SUI_ConfigPath%, Indicators, EnableOthers, %EnableOthers%
+    IniRead, browserRaw, %SUI_ConfigPath%, Indicators, EnableBrowser, %EnableBrowser%
+    IniRead, pptRaw, %SUI_ConfigPath%, Indicators, EnablePPT, %EnablePPT%
+    IniRead, excelRaw, %SUI_ConfigPath%, Indicators, EnableExcel, %EnableExcel%
+
+    EnableNavLayer := SUI_NormalizeBool(navLayerRaw, EnableNavLayer)
+    EnableWinPlace := SUI_NormalizeBool(winPlaceRaw, EnableWinPlace)
+    EnableWinIsland := SUI_NormalizeBool(winIslandRaw, EnableWinIsland)
+    EnableVDesk := SUI_NormalizeBool(vdeskRaw, EnableVDesk)
+    EnableMouseEmu := SUI_NormalizeBool(mouseEmuRaw, EnableMouseEmu)
+    EnableMouseBtn := SUI_NormalizeBool(mouseBtnRaw, EnableMouseBtn)
+    EnableGestures := SUI_NormalizeBool(gesturesRaw, EnableGestures)
+    EnableAlt := SUI_NormalizeBool(altRaw, EnableAlt)
+    EnableOthers := SUI_NormalizeBool(othersRaw, EnableOthers)
+    EnableBrowser := SUI_NormalizeBool(browserRaw, EnableBrowser)
+    EnablePPT := SUI_NormalizeBool(pptRaw, EnablePPT)
+    EnableExcel := SUI_NormalizeBool(excelRaw, EnableExcel)
+
+    IniRead, editorTypeRaw, %SUI_ConfigPath%, SettingsUI, EditorType, % SettingsUI.EditorType
+    SettingsUI.EditorType := SUI_NormalizeEditorType(editorTypeRaw, SettingsUI.EditorType)
+
+    SUI_DebugLog("config_load", "path=" . SUI_ConfigPath)
+}
+
+SUI_SaveConfig() {
+    global SUI_ConfigPath
+    global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
+    global EnableMouseEmu, EnableMouseBtn, EnableGestures
+    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+
+    IniWrite, % EnableNavLayer ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableNavLayer
+    IniWrite, % EnableWinPlace ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinPlace
+    IniWrite, % EnableWinIsland ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinIsland
+    IniWrite, % EnableVDesk ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableVDesk
+    IniWrite, % EnableMouseEmu ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseEmu
+    IniWrite, % EnableMouseBtn ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseBtn
+    IniWrite, % EnableGestures ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableGestures
+    IniWrite, % EnableAlt ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableAlt
+    IniWrite, % EnableOthers ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableOthers
+    IniWrite, % EnableBrowser ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
+    IniWrite, % EnablePPT ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
+    IniWrite, % EnableExcel ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
+    IniWrite, % SettingsUI.EditorType, %SUI_ConfigPath%, SettingsUI, EditorType
+
+    SUI_DebugLog("config_save", "path=" . SUI_ConfigPath)
+}
+
 SUI_RegisterMessageHandlers() {
     static isRegistered := false
 
@@ -175,6 +260,7 @@ class SettingsUI {
         Menu, Tray, Add, 機能設定 (Settings), Settings_Open
         Menu, Tray, Add, 設定ログを開く, SUI_DebugOpenLog
         Menu, Tray, Add, PPT 間隔ログを開く, PPT_SpacingOpenLog
+        Menu, Tray, Add, PPT キャプションログを開く, PPT_CaptionOpenLog
         Menu, Tray, Add
         Menu, Tray, Add, 右クリック状態を記録, MG_DebugSnapshotMenu
         Menu, Tray, Add, 右クリックログを開く, MG_DebugOpenLog
@@ -186,14 +272,15 @@ class SettingsUI {
     }
 
     Show() {
-        Global SUI_SettingsGuiHwnd, SettingsItemsLV, SettingsLV
+        Global SUI_SettingsGuiHwnd, SettingsItemsLV, SettingsLV, SUI_IsInitializing
+        SUI_IsInitializing := true
         Gui, Settings:Destroy
         Gui, Settings:New, +AlwaysOnTop +HwndhSettingsGui, 機能設定
         SUI_SettingsGuiHwnd := hSettingsGui
         Gui, Settings:Font, s9, Segoe UI
 
         Gui, Settings:Add, ListView, x10 y10 w190 h360 vSettingsItemsLV gSUI_ItemsHandler Checked AltSubmit -Multi -Hdr +LV0x20, |機能
-        Gui, Settings:Add, ListView, x210 y10 w400 h360 vSettingsLV Grid NoSortHdr, ホットキー|説明
+        Gui, Settings:Add, ListView, x210 y10 w400 h360 vSettingsLV gSUI_HelpHandler Grid NoSortHdr -Multi -TabStop, ホットキー|説明
 
         SUI_BuildItemList()
         Gui, Settings:ListView, SettingsItemsLV
@@ -215,6 +302,7 @@ class SettingsUI {
         fnDetail := ObjBindMethod(this, "ShowDetailWindow")
         Gui, Settings:Add, Button, x10 y380 w190 g%fnDetail%, エディタ設定...
         Gui, Settings:Show, w630 h420 xCenter yCenter
+        SUI_IsInitializing := false
         SUI_DebugLog("settings_show")
     }
 
@@ -242,6 +330,7 @@ class SettingsUI {
             this.EditorType := 1
         else
             this.EditorType := 2
+        SUI_SaveConfig()
     }
 }
 
@@ -259,7 +348,7 @@ SUI_InitHelpData() {
     h.Push({Key: "無変換 + 2", Desc: "Ctrl+Shift+2"})
     h.Push({Key: "無変換 + N", Desc: "ペイント起動"})
     h.Push({Key: "無変換 + M", Desc: "テキストエディタ起動"})
-    h.Push({Key: "無変換 + T", Desc: "日時挿入"})
+    h.Push({Key: "無変換 + T", Desc: "日時挿入 (yyyy/MM/dd (ddd) HH:mm)"})
     d["EnableNavLayer"] := h
 
     h := []
@@ -305,10 +394,64 @@ SUI_InitHelpData() {
     d["EnableMouseBtn"] := h
 
     h := []
-    h.Push({Key: "右ドラッグ", Desc: "ジェスチャー認識 (8方向)"})
+    h.Push({Key: "【基本】", Desc: ""})
+    h.Push({Key: "右ドラッグ", Desc: "8 方向ジェスチャー"})
     h.Push({Key: "右 + WheelUp", Desc: "Ctrl+Home (先頭へ)"})
     h.Push({Key: "右 + WheelDown", Desc: "Ctrl+End (末尾へ)"})
+    h.Push({Key: "", Desc: ""})
+    h.Push({Key: "【Browser】", Desc: ""})
+    h.Push({Key: "↗", Desc: "WinMinimize, A"})
+    h.Push({Key: "↙", Desc: "Send, ^+t"})
+    h.Push({Key: "↖", Desc: "Send, ^1"})
+    h.Push({Key: "↘", Desc: "Send, ^9"})
+    h.Push({Key: "→", Desc: "Send, ^{Tab}"})
+    h.Push({Key: "←", Desc: "Send, ^+{Tab}"})
+    h.Push({Key: "↓", Desc: "Send, ^w"})
+    h.Push({Key: "↑", Desc: "Send, ^t"})
+    h.Push({Key: "", Desc: ""})
+    h.Push({Key: "【Explorer】", Desc: ""})
+    h.Push({Key: "↗", Desc: "WinMinimize, A"})
+    h.Push({Key: "↙", Desc: "Send, ^z"})
+    h.Push({Key: "↖", Desc: "Send, ^1"})
+    h.Push({Key: "↘", Desc: "Send, ^1^+{Tab}"})
+    h.Push({Key: "→", Desc: "Send, ^{Tab}"})
+    h.Push({Key: "←", Desc: "Send, ^+{Tab}"})
+    h.Push({Key: "↓", Desc: "Send, ^w"})
+    h.Push({Key: "↑", Desc: "Send, ^t"})
+    h.Push({Key: "", Desc: ""})
+    h.Push({Key: "【Editor】", Desc: ""})
+    h.Push({Key: "→", Desc: "Send, ^{Tab}"})
+    h.Push({Key: "←", Desc: "Send, ^+{Tab}"})
+    h.Push({Key: "↓", Desc: "Send, ^w"})
+    h.Push({Key: "↑", Desc: "Send, ^t"})
+    h.Push({Key: "other", Desc: "Map_Default"})
+    h.Push({Key: "", Desc: ""})
+    h.Push({Key: "【Pycharm】", Desc: ""})
+    h.Push({Key: "→", Desc: "Send, !{Right}"})
+    h.Push({Key: "←", Desc: "Send, !{Left}"})
+    h.Push({Key: "↓", Desc: "Send, ^{F4}"})
+    h.Push({Key: "↑", Desc: "Send, ^!{Insert}"})
+    h.Push({Key: "other", Desc: "Map_Default"})
+    h.Push({Key: "", Desc: ""})
+    h.Push({Key: "【Default】", Desc: ""})
+    h.Push({Key: "↗", Desc: "WinMinimize, A"})
     d["EnableGestures"] := h
+
+    h := []
+    h.Push({Key: "Alt+W", Desc: "ウィンドウを閉じる"})
+    h.Push({Key: "Ctrl+Alt+C", Desc: "選択内の \\ を / に置換"})
+    h.Push({Key: "Ctrl+Alt+N", Desc: "選択ファイルをペイントで開く"})
+    h.Push({Key: "Ctrl+Alt+M", Desc: "選択ファイルをエディタで開く"})
+    h.Push({Key: "Alt+Backspace", Desc: "Delete"})
+    d["EnableAlt"] := h
+
+    h := []
+    h.Push({Key: "ScrollLock", Desc: "無効化"})
+    h.Push({Key: "\", Desc: "_ を入力"})
+    h.Push({Key: "Shift+\", Desc: "\ を入力"})
+    h.Push({Key: "無変換 + Z", Desc: "N 長押しトグル"})
+    h.Push({Key: "無変換 + X", Desc: "N 長押し解除"})
+    d["EnableOthers"] := h
 
     h := []
     h.Push({Key: "Ctrl+\", Desc: "PDFズーム切替"})
@@ -325,10 +468,15 @@ SUI_InitHelpData() {
     h.Push({Key: "Ctrl+Alt+.", Desc: "垂直等間隔"})
     h.Push({Key: "Ctrl+Alt+G/H", Desc: "グループ化/解除"})
     h.Push({Key: "Ctrl+Shift+Alt+G/H", Desc: "前面/背面"})
+    h.Push({Key: "Ctrl+Alt+1/2/3/4", Desc: "上/下/左/右キャプションの設置/削除"})
+    h.Push({Key: "Ctrl+Alt+5/6", Desc: "上下キャプション gap 微調整"})
+    h.Push({Key: "Ctrl+Alt+7/8", Desc: "左右キャプション gap 微調整"})
+    h.Push({Key: "Ctrl+Shift+Alt+5/7", Desc: "キャプション gap 直接設定"})
     h.Push({Key: "Alt+1", Desc: "テキストのみ貼り付け"})
     h.Push({Key: "Alt+2", Desc: "枠線色"})
     h.Push({Key: "Alt+3", Desc: "枠線太さ"})
-    h.Push({Key: "Alt+4", Desc: "書式設定パネル"})
+    h.Push({Key: "Alt+4", Desc: "書式設定パネル開閉"})
+    h.Push({Key: "Shift+Alt+4", Desc: "書式設定パネルを閉じる"})
     h.Push({Key: "Ctrl+V / F15", Desc: "画像メタデータ付き貼付け"})
     h.Push({Key: "Ctrl+Alt+E", Desc: "ソースエクスポート"})
     h.Push({Key: "Ctrl+Alt+Q", Desc: "ソース情報表示"})
@@ -355,6 +503,8 @@ SUI_BuildItemList() {
     SUI_AddLeaf("キーボードマウス", "EnableMouseEmu")
     SUI_AddLeaf("ボタン・ホイール", "EnableMouseBtn")
     SUI_AddLeaf("マウスジェスチャー", "EnableGestures")
+    SUI_AddLeaf("Alt", "EnableAlt")
+    SUI_AddLeaf("その他", "EnableOthers")
     SUI_AddLeaf("ブラウザ", "EnableBrowser")
     SUI_AddLeaf("PowerPoint", "EnablePPT")
     SUI_AddLeaf("Excel", "EnableExcel")
@@ -395,7 +545,56 @@ SUI_GetSelectedItemID() {
     return itemID
 }
 
+SUI_QueueCheckSync(itemID, source := "manual") {
+    global _SUI_ItemMap, _SUI_PendingCheckItemID, _SUI_PendingCheckSource
+    static applyPendingCheckFn := Func("SUI_ApplyPendingCheckChange")
+
+    if (!itemID || !_SUI_ItemMap.HasKey(itemID))
+        return
+
+    _SUI_PendingCheckItemID := itemID
+    _SUI_PendingCheckSource := source
+    SUI_DebugLog("item_check_queue"
+        , "source=" . source . " " . SUI_DebugDescribeItem(itemID))
+    ; In included files, a top-level label + bare return can terminate auto-execute.
+    SetTimer, % applyPendingCheckFn, -10
+}
+
+SUI_ApplyPendingCheckChange() {
+    global _SUI_PendingCheckItemID, _SUI_PendingCheckSource
+
+    itemID := _SUI_PendingCheckItemID
+    source := _SUI_PendingCheckSource
+    _SUI_PendingCheckItemID := 0
+    _SUI_PendingCheckSource := ""
+
+    if (!itemID)
+        return
+
+    SUI_ProcessItemCheckChange(itemID, source)
+}
+
+SUI_QueueHelpSelectionClear() {
+    static clearHelpSelectionFn := Func("SUI_ClearHelpSelection")
+    SetTimer, % clearHelpSelectionFn, -10
+}
+
+SUI_ClearHelpSelection() {
+    global SettingsLV
+
+    Gui, Settings:Default
+    Gui, Settings:ListView, SettingsLV
+    LV_Modify(0, "-Select -Focus")
+}
+
 SUI_ItemsHandler() {
+    global SUI_IsInitializing
+
+    if (SUI_IsInitializing) {
+        SUI_DebugLog("list_event_ignored_init")
+        return
+    }
+
     evt := A_GuiEvent
     info := A_EventInfo
     flags := ErrorLevel
@@ -407,8 +606,10 @@ SUI_ItemsHandler() {
     else if (targetID)
         SUI_RefreshLV(targetID)
 
-    if (evt = "I" && info && (InStr(flags, "C") || InStr(flags, "c"))) {
-        SUI_ProcessItemCheckChange(info, "item")
+    if ((evt = "I" && info && (InStr(flags, "C") || InStr(flags, "c")))
+    ||  (evt = "C" && targetID)) {
+        changedID := info ? info : targetID
+        SUI_QueueCheckSync(changedID, "evt=" . evt)
     }
 
     SUI_DebugLog("list_event"
@@ -418,6 +619,15 @@ SUI_ItemsHandler() {
         . " selID=" . selectedID
         . " targetID=" . targetID
         . " " . SUI_DebugDescribeItem(targetID))
+}
+
+SUI_HelpHandler() {
+    global SUI_IsInitializing
+
+    if (SUI_IsInitializing)
+        return
+
+    SUI_QueueHelpSelectionClear()
 }
 
 SUI_ProcessItemCheckChange(clickedID, source := "manual") {
@@ -436,6 +646,7 @@ SUI_ProcessItemCheckChange(clickedID, source := "manual") {
         , "source=" . source . " " . SUI_DebugDescribeItem(clickedID))
 
     SUI_SyncVars()
+    SUI_SaveConfig()
     SUI_SnapshotCheckStates()
     SUI_DebugLog("item_check_done"
         , "source=" . source . " " . SUI_DebugDescribeItem(clickedID))
@@ -449,6 +660,7 @@ SUI_FlushPendingChange(reason := "manual") {
         return
 
     SUI_SyncVars()
+    SUI_SaveConfig()
     SUI_SnapshotCheckStates()
     SUI_DebugLog("flush_done", "reason=" . reason)
 }
@@ -484,7 +696,7 @@ SUI_SyncVars() {
     global _SUI_ItemMap
     global EnableNavLayer, EnableWinPlace, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
-    global EnableBrowser, EnablePPT, EnableExcel
+    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
     Gui, Settings:Default
 
     for itemID, item in _SUI_ItemMap {
@@ -504,6 +716,10 @@ SUI_SyncVars() {
             EnableMouseBtn := v
         else if (item.Var = "EnableGestures")
             EnableGestures := v
+        else if (item.Var = "EnableAlt")
+            EnableAlt := v
+        else if (item.Var = "EnableOthers")
+            EnableOthers := v
         else if (item.Var = "EnableBrowser")
             EnableBrowser := v
         else if (item.Var = "EnablePPT")
@@ -518,7 +734,7 @@ SUI_SyncVars() {
 SUI_GetFlagValue(varName) {
     global EnableNavLayer, EnableWinPlace, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
-    global EnableBrowser, EnablePPT, EnableExcel
+    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
 
     if (varName = "EnableNavLayer")
         return EnableNavLayer
@@ -532,6 +748,10 @@ SUI_GetFlagValue(varName) {
         return EnableMouseBtn
     if (varName = "EnableGestures")
         return EnableGestures
+    if (varName = "EnableAlt")
+        return EnableAlt
+    if (varName = "EnableOthers")
+        return EnableOthers
     if (varName = "EnableBrowser")
         return EnableBrowser
     if (varName = "EnablePPT")

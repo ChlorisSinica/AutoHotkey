@@ -8,6 +8,12 @@ global PPT_SpacingLogEnabled := true
 global PPT_SpacingLogDir := A_ScriptDir . "\.claude"
 global PPT_SpacingLogPath := PPT_SpacingLogDir . "\powerpoint_spacing_debug.log"
 global PPT_SpacingLogMaxBytes := 262144
+global PPT_CaptionLogEnabled := true
+global PPT_CaptionLogPath := PPT_SpacingLogDir . "\powerpoint_caption_debug.log"
+global PPT_CaptionLogMaxBytes := 262144
+global PPT_CaptionConfigPath := PPT_SpacingLogDir . "\powerpoint_caption.ini"
+global PPT_CaptionVisualGapHorizontal := 0.5
+global PPT_CaptionVisualGapVertical := 2.5
 global PPT_SpacingEpsilon := 0.05
 
 ; ============================================================================
@@ -225,32 +231,48 @@ PPT_SetBorder(shp, visible, rgb, weight) {
 ;  書式設定パネルを開く / テキストのみ貼り付け
 ; ============================================================================
 OpenFormatObject() {
-    ; パネルが開いているか UIA で検出 (FindElementByKeyword を使わない)
-    panel := PPT_DetectFormatPanel()
+    panelHwnd := ""
+    panel := PPT_DetectFormatPanel(panelHwnd)
     if (panel) {
-        ; 開いている → 閉じる
-        PPT_CloseFormatPanel(panel)
+        if !PPT_CloseFormatPanel(panel, panelHwnd) {
+            ToolTip, 図形の書式設定: 閉じられません
+            SetTimer, CloseToolTip, -1500
+        }
         return
     }
-    ; 閉じている → 開く
     PPT_TryExecuteMso(["ObjectSizeAndPositionDialog"])
 }
 
-PPT_DetectFormatPanel() {
-    hwnd := WinExist("ahk_exe POWERPNT.EXE")
-    if !hwnd
-        return ""
-    uia := UIA_Interface()
-    if !uia
-        return ""
-    try {
-        rootEl := uia.ElementFromHandle(hwnd)
-    } catch {
-        return ""
+CloseFormatObject() {
+    panelHwnd := ""
+    panel := PPT_DetectFormatPanel(panelHwnd)
+    if !panel {
+        ToolTip, 図形の書式設定: 開いていません
+        SetTimer, CloseToolTip, -1500
+        return false
     }
-    if !rootEl
-        return ""
 
+    closed := PPT_CloseFormatPanel(panel, panelHwnd)
+    if (closed)
+        ToolTip, 図形の書式設定: 閉じました
+    else
+        ToolTip, 図形の書式設定: 閉じられません
+    SetTimer, CloseToolTip, -1500
+    return closed
+}
+
+PPT_GetWindowHandles() {
+    handles := []
+    WinGet, hwndList, List, ahk_exe POWERPNT.EXE
+    Loop % hwndList {
+        hwnd := hwndList%A_Index%
+        if hwnd
+            handles.Push(hwnd)
+    }
+    return handles
+}
+
+PPT_FindFormatPanelInRoot(rootEl, uia) {
     panelNames := ["Format Shape", "Format Picture", "Size and Properties"
         , "図形の書式設定", "図の書式設定", "サイズとプロパティ"]
     for _, n in panelNames {
@@ -262,38 +284,280 @@ PPT_DetectFormatPanel() {
         } catch {
         }
     }
+    try {
+        return FindElementByKeyword(rootEl, panelNames)
+    } catch {
+    }
     return ""
 }
 
-PPT_CloseFormatPanel(panel) {
-    ; パネルの親要素から Close ボタンを探す
-    try {
-        uia := UIA_Interface()
-        walker := uia.TreeWalkerTrue
-        parent := walker.GetParentElement(panel)
-        target := parent ? parent : panel
+PPT_GetElementRect(el) {
+    try br := el.CurrentBoundingRectangle
+    catch
+        return ""
+    if !IsObject(br)
+        return ""
+    return {l: br.l + 0
+        , t: br.t + 0
+        , r: br.r + 0
+        , b: br.b + 0
+        , w: (br.r - br.l) + 0
+        , h: (br.b - br.t) + 0}
+}
 
-        btnCond := uia.CreatePropertyCondition(30003, 50000)  ; ControlType=Button
-        buttons := target.FindAll(btnCond, 0x4)  ; Descendants
-        if buttons {
+PPT_IsElementRectValid(rect, minSize := 1) {
+    return IsObject(rect) && (rect.w >= minSize) && (rect.h >= minSize)
+}
+
+PPT_DescribeUiElement(el) {
+    rectText := "rect=NA"
+    name := ""
+    aid := ""
+    hwnd := ""
+    rect := PPT_GetElementRect(el)
+    if PPT_IsElementRectValid(rect)
+        rectText := "rect=(" . Round(rect.l, 1) . "," . Round(rect.t, 1) . "," . Round(rect.w, 1) . "," . Round(rect.h, 1) . ")"
+    try name := el.CurrentName
+    try aid := el.CurrentAutomationId
+    try hwnd := el.CurrentNativeWindowHandle
+    return "name=" . PPT_SpacingSanitize(name)
+        . ",aid=" . PPT_SpacingSanitize(aid)
+        . ",hwnd=" . hwnd
+        . "," . rectText
+}
+
+PPT_FindFormatCloseButton(panel, panelHwnd := "") {
+    uia := UIA_Interface()
+    if !uia
+        return ""
+
+    panelRect := PPT_GetElementRect(panel)
+    if !PPT_IsElementRectValid(panelRect, 10)
+        return ""
+
+    roots := [panel]
+    try {
+        parent := uia.TreeWalkerTrue.GetParentElement(panel)
+        if parent
+            roots.Push(parent)
+    } catch {
+    }
+    if panelHwnd {
+        try {
+            rootEl := uia.ElementFromHandle(panelHwnd)
+            if rootEl
+                roots.Push(rootEl)
+        } catch {
+        }
+    }
+
+    bestButton := ""
+    bestScore := -1000000
+    for _, root in roots {
+        try {
+            btnCond := uia.CreatePropertyCondition(uia.ControlTypePropertyId, uia.ButtonControlTypeId)
+            buttons := root.FindAll(btnCond, 0x4)
+            if !buttons
+                continue
+
             Loop % buttons.MaxIndex() {
                 btn := buttons[A_Index]
-                bName := btn.CurrentName
-                if (InStr(bName, "Close") || InStr(bName, "閉じる")) {
-                    try btn.Invoke()
-                    return
+                rect := PPT_GetElementRect(btn)
+                if !PPT_IsElementRectValid(rect, 8)
+                    continue
+
+                centerX := rect.l + (rect.w / 2)
+                centerY := rect.t + (rect.h / 2)
+                if (centerX < panelRect.r - 180)
+                    continue
+                if (centerX > panelRect.r + 60)
+                    continue
+                if (centerY < panelRect.t - 40)
+                    continue
+                if (centerY > panelRect.t + 90)
+                    continue
+
+                name := ""
+                aid := ""
+                try name := btn.CurrentName
+                try aid := btn.CurrentAutomationId
+
+                score := 0
+                if (InStr(name, "Close") || InStr(name, "閉じる"))
+                    score += 10000
+                if (InStr(aid, "Close") || InStr(aid, "close"))
+                    score += 5000
+                score -= Abs(centerX - panelRect.r)
+                score -= Abs(centerY - panelRect.t)
+                score -= Abs(rect.w - 24)
+                score -= Abs(rect.h - 24)
+
+                if (score > bestScore) {
+                    bestScore := score
+                    bestButton := btn
+                }
+            }
+        } catch {
+        }
+    }
+
+    if bestButton
+        PPT_SpacingLog("format_close_button_candidate"
+            , "panel=" . PPT_DescribeUiElement(panel)
+            . " button=" . PPT_DescribeUiElement(bestButton)
+            . " score=" . Round(bestScore, 1))
+    return bestButton
+}
+
+PPT_TryActivateCloseButton(btn) {
+    try {
+        btn.Invoke()
+        return true
+    } catch {
+    }
+    try {
+        btn.Click("left")
+        return true
+    } catch {
+    }
+    try {
+        btn.GetCurrentPatternAs("LegacyIAccessible").DoDefaultAction()
+        return true
+    } catch {
+    }
+    return false
+}
+
+PPT_TryCloseFormatPanelWindow(panel, panelHwnd := "") {
+    uia := UIA_Interface()
+    if !uia || !panel
+        return false
+
+    appW := 0, appH := 0
+    if panelHwnd
+        WinGetPos, , , appW, appH, ahk_id %panelHwnd%
+
+    current := panel
+    Loop 3 {
+        if !current
+            break
+
+        rect := PPT_GetElementRect(current)
+        tooLarge := false
+        if (panelHwnd && PPT_IsElementRectValid(rect, 10))
+            tooLarge := (rect.w >= appW * 0.9) && (rect.h >= appH * 0.9)
+
+        if !tooLarge {
+            try {
+                windowPattern := current.GetCurrentPatternAs("Window")
+                if IsObject(windowPattern) {
+                    windowPattern.Close()
+                    Sleep, 150
+                    if !PPT_DetectFormatPanel() {
+                        PPT_SpacingLog("format_close_window_pattern", "target=" . PPT_DescribeUiElement(current))
+                        return true
+                    }
+                }
+            } catch {
+            }
+
+            nativeHwnd := ""
+            try nativeHwnd := current.CurrentNativeWindowHandle
+            catch {
+            }
+            if (nativeHwnd && nativeHwnd != panelHwnd) {
+                WinClose, ahk_id %nativeHwnd%
+                Sleep, 150
+                if !PPT_DetectFormatPanel() {
+                    PPT_SpacingLog("format_close_native_hwnd", "target=" . PPT_DescribeUiElement(current))
+                    return true
                 }
             }
         }
-    } catch {
+
+        nextCurrent := ""
+        try nextCurrent := uia.TreeWalkerTrue.GetParentElement(current)
+        catch {
+        }
+        current := nextCurrent
     }
-    ; フォールバック: パネルにフォーカスしてCtrl+Shift+F1で閉じる
+    return false
+}
+
+PPT_DetectFormatPanel(ByRef panelHwnd := "") {
+    panelHwnd := ""
+    handles := PPT_GetWindowHandles()
+    if !IsObject(handles) || (handles.MaxIndex() = "")
+        return ""
+    uia := UIA_Interface()
+    if !uia
+        return ""
+
+    for _, hwnd in handles {
+        try {
+            rootEl := uia.ElementFromHandle(hwnd)
+            if !rootEl
+                continue
+            found := PPT_FindFormatPanelInRoot(rootEl, uia)
+            if found
+            {
+                panelHwnd := hwnd
+                return found
+            }
+        } catch {
+        }
+    }
+    return ""
+}
+
+PPT_CloseFormatPanel(panel := "", panelHwnd := "") {
+    if !panel {
+        panel := PPT_DetectFormatPanel(panelHwnd)
+        if !panel
+            return false
+    }
+
+    activeHwnd := panelHwnd
+    if !activeHwnd
+        activeHwnd := WinExist("ahk_exe POWERPNT.EXE")
+    if activeHwnd {
+        WinActivate, ahk_id %activeHwnd%
+        WinWaitActive, ahk_id %activeHwnd%,, 1
+    }
+
+    PPT_SpacingLog("format_close_start", "panel=" . PPT_DescribeUiElement(panel))
+
+    ; 1) パネル右上の Close ボタン
+    btn := PPT_FindFormatCloseButton(panel, panelHwnd)
+    if btn {
+        if PPT_TryActivateCloseButton(btn) {
+            Sleep, 150
+            if !PPT_DetectFormatPanel() {
+                PPT_SpacingLog("format_close_button_ok", "button=" . PPT_DescribeUiElement(btn))
+                return true
+            }
+        }
+        PPT_SpacingLog("format_close_button_failed", "button=" . PPT_DescribeUiElement(btn))
+    }
+
+    ; 2) WindowPattern / child window close
+    if PPT_TryCloseFormatPanelWindow(panel, panelHwnd)
+        return true
+
+    ; 3) パネルにフォーカスして Esc
     try {
         panel.SetFocus()
         Sleep, 50
     } catch {
     }
-    Send, ^+{F1}
+    Send, {Esc}
+    Sleep, 150
+    if !PPT_DetectFormatPanel() {
+        PPT_SpacingLog("format_close_esc_ok", "panel=" . PPT_DescribeUiElement(panel))
+        return true
+    }
+    PPT_SpacingLog("format_close_fail", "panel=" . PPT_DescribeUiElement(panel))
+    return false
 }
 
 PasteTextOnly() {
@@ -406,7 +670,21 @@ PPT_CollectShapes(shapeRange) {
     try {
         Loop % shapeRange.Count {
             s := shapeRange.Item(A_Index)
-            arr.Push({ref: s, id: s.Id, name: s.Name, left: s.Left, top: s.Top, w: s.Width, h: s.Height})
+            left := s.Left
+            top := s.Top
+            w := s.Width
+            h := s.Height
+            arr.Push({ref: s
+                , id: s.Id
+                , name: s.Name
+                , left: left
+                , top: top
+                , w: w
+                , h: h
+                , right: left + w
+                , bottom: top + h
+                , centerX: left + (w / 2)
+                , centerY: top + (h / 2)})
         }
     } catch e {
         PPT_SpacingLog("collect_shapes_error", "error=" . e.Message)
@@ -500,6 +778,259 @@ PPT_SpacingOpenLog() {
     if !FileExist(PPT_SpacingLogPath)
         FileAppend,, %PPT_SpacingLogPath%, UTF-8
     Run, notepad.exe "%PPT_SpacingLogPath%"
+}
+
+PPT_CaptionRotateLogIfNeeded() {
+    global PPT_CaptionLogPath, PPT_CaptionLogMaxBytes
+
+    if !FileExist(PPT_CaptionLogPath)
+        return
+    FileGetSize, size, %PPT_CaptionLogPath%
+    if (size < PPT_CaptionLogMaxBytes)
+        return
+
+    backupPath := PPT_CaptionLogPath . ".1"
+    if FileExist(backupPath)
+        FileDelete, %backupPath%
+    FileMove, %PPT_CaptionLogPath%, %backupPath%, 1
+}
+
+PPT_CaptionLog(event, extra := "") {
+    global PPT_CaptionLogEnabled, PPT_CaptionLogPath
+
+    if (!PPT_CaptionLogEnabled)
+        return
+
+    PPT_SpacingEnsureLogDir()
+    PPT_CaptionRotateLogIfNeeded()
+    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
+    line := stamp . "." . A_MSec . " event=" . event
+    if (extra != "")
+        line .= " extra=" . PPT_SpacingSanitize(extra)
+    FileAppend, % line . "`n", %PPT_CaptionLogPath%, UTF-8
+}
+
+PPT_CaptionOpenLog() {
+    global PPT_CaptionLogPath
+
+    PPT_SpacingEnsureLogDir()
+    if !FileExist(PPT_CaptionLogPath)
+        FileAppend,, %PPT_CaptionLogPath%, UTF-8
+    Run, notepad.exe "%PPT_CaptionLogPath%"
+}
+
+PPT_CaptionFormatSettingValue(value) {
+    if (value = "")
+        return ""
+    return RegExReplace(RTrim(RTrim(Format("{:.2f}", value), "0"), "."), "\.$", "")
+}
+
+PPT_CaptionTryParseGapValue(value, ByRef parsedValue) {
+    value := Trim(value)
+    if (value = "")
+        return false
+    if !RegExMatch(value, "^-?\d+(\.\d+)?$")
+        return false
+    parsedValue := value + 0
+    return true
+}
+
+PPT_CaptionNormalizeGapValue(value) {
+    value := Round(value + 0, 2)
+    if (value < 0)
+        value := 0
+    if (value > 20)
+        value := 20
+    return value
+}
+
+PPT_CaptionSaveConfig() {
+    global PPT_CaptionConfigPath, PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+
+    PPT_SpacingEnsureLogDir()
+    IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapHorizontal), %PPT_CaptionConfigPath%, Caption, HorizontalGap
+    IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapVertical), %PPT_CaptionConfigPath%, Caption, VerticalGap
+}
+
+PPT_CaptionInit() {
+    global PPT_CaptionConfigPath, PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+
+    PPT_SpacingEnsureLogDir()
+
+    IniRead, horizontalGapRaw, %PPT_CaptionConfigPath%, Caption, HorizontalGap, % PPT_CaptionVisualGapHorizontal
+    IniRead, verticalGapRaw, %PPT_CaptionConfigPath%, Caption, VerticalGap, % PPT_CaptionVisualGapVertical
+
+    if PPT_CaptionTryParseGapValue(horizontalGapRaw, horizontalGap)
+        PPT_CaptionVisualGapHorizontal := PPT_CaptionNormalizeGapValue(horizontalGap)
+    if PPT_CaptionTryParseGapValue(verticalGapRaw, verticalGap)
+        PPT_CaptionVisualGapVertical := PPT_CaptionNormalizeGapValue(verticalGap)
+}
+
+PPT_CaptionShowGapStatus(prefix := "Caption gap") {
+    global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+
+    ToolTip, % prefix . " H=" . PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapHorizontal) . " V=" . PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapVertical)
+    SetTimer, CloseToolTip, -1500
+}
+
+PPT_CaptionAdjustGap(axis, delta) {
+    global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+
+    if (axis = "H")
+        PPT_CaptionVisualGapHorizontal := PPT_CaptionNormalizeGapValue(PPT_CaptionVisualGapHorizontal + delta)
+    else
+        PPT_CaptionVisualGapVertical := PPT_CaptionNormalizeGapValue(PPT_CaptionVisualGapVertical + delta)
+
+    PPT_CaptionSaveConfig()
+    PPT_CaptionShowGapStatus("Caption gap")
+}
+
+PPT_CaptionPromptGap(axis) {
+    global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+
+    if (axis = "H") {
+        currentValue := PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapHorizontal)
+        axisLabel := "上下"
+    } else {
+        currentValue := PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapVertical)
+        axisLabel := "左右"
+    }
+
+    InputBox, userInput, Caption Gap, % axisLabel . " キャプションの gap(pt) を入力してください。", , 320, 140,,,,, %currentValue%
+    if ErrorLevel
+        return
+
+    if !PPT_CaptionTryParseGapValue(userInput, parsedValue) {
+        MsgBox, 48, Caption Gap, 数値を入力してください。
+        return
+    }
+
+    parsedValue := PPT_CaptionNormalizeGapValue(parsedValue)
+    if (axis = "H")
+        PPT_CaptionVisualGapHorizontal := parsedValue
+    else
+        PPT_CaptionVisualGapVertical := parsedValue
+
+    PPT_CaptionSaveConfig()
+    PPT_CaptionShowGapStatus("Caption gap set")
+}
+
+PPT_CaptionFormatNumber(value) {
+    if (value = "")
+        return ""
+    return Round(value, 3)
+}
+
+PPT_CaptionDescribeRect(rect) {
+    if !IsObject(rect)
+        return "rect=0"
+
+    return "target=("
+        . PPT_CaptionFormatNumber(rect.x) . ","
+        . PPT_CaptionFormatNumber(rect.y) . ","
+        . PPT_CaptionFormatNumber(rect.w) . ","
+        . PPT_CaptionFormatNumber(rect.h) . ")"
+        . ",create=("
+        . PPT_CaptionFormatNumber(rect.createX) . ","
+        . PPT_CaptionFormatNumber(rect.createY) . ","
+        . PPT_CaptionFormatNumber(rect.createW) . ","
+        . PPT_CaptionFormatNumber(rect.createH) . ")"
+        . ",rotation=" . PPT_CaptionFormatNumber(rect.rotation)
+        . ",orientation=" . rect.orientation
+}
+
+PPT_CaptionDescribeTarget(shape) {
+    if !IsObject(shape)
+        return "shape=0"
+
+    return "id=" . shape.id
+        . ",name=" . PPT_SpacingSanitize(shape.name)
+        . ",left=" . PPT_CaptionFormatNumber(shape.left)
+        . ",top=" . PPT_CaptionFormatNumber(shape.top)
+        . ",right=" . PPT_CaptionFormatNumber(shape.right)
+        . ",bottom=" . PPT_CaptionFormatNumber(shape.bottom)
+        . ",w=" . PPT_CaptionFormatNumber(shape.w)
+        . ",h=" . PPT_CaptionFormatNumber(shape.h)
+}
+
+PPT_CaptionDescribeTextBox(shapeRef) {
+    textValue := ""
+    shapeId := ""
+    shapeName := ""
+    left := ""
+    top := ""
+    width := ""
+    height := ""
+    rotation := ""
+    orientation := ""
+    marginLeft := ""
+    marginTop := ""
+    marginRight := ""
+    marginBottom := ""
+    anchor := ""
+    wordWrap := ""
+    boundLeft := ""
+    boundTop := ""
+    boundWidth := ""
+    boundHeight := ""
+
+    try shapeId := shapeRef.Id
+    try shapeName := shapeRef.Name
+    try left := shapeRef.Left
+    try top := shapeRef.Top
+    try width := shapeRef.Width
+    try height := shapeRef.Height
+    try rotation := shapeRef.Rotation
+    try textValue := shapeRef.TextFrame.TextRange.Text
+    try orientation := shapeRef.TextFrame.Orientation
+    try marginLeft := shapeRef.TextFrame.MarginLeft
+    try marginTop := shapeRef.TextFrame.MarginTop
+    try marginRight := shapeRef.TextFrame.MarginRight
+    try marginBottom := shapeRef.TextFrame.MarginBottom
+    try anchor := shapeRef.TextFrame.VerticalAnchor
+    try wordWrap := shapeRef.TextFrame.WordWrap
+    try {
+        textRange := shapeRef.TextFrame.TextRange
+        boundLeft := textRange.BoundLeft
+        boundTop := textRange.BoundTop
+        boundWidth := textRange.BoundWidth
+        boundHeight := textRange.BoundHeight
+    } catch {
+    }
+
+    return "id=" . shapeId
+        . ",name=" . PPT_SpacingSanitize(shapeName)
+        . ",left=" . PPT_CaptionFormatNumber(left)
+        . ",top=" . PPT_CaptionFormatNumber(top)
+        . ",w=" . PPT_CaptionFormatNumber(width)
+        . ",h=" . PPT_CaptionFormatNumber(height)
+        . ",rotation=" . PPT_CaptionFormatNumber(rotation)
+        . ",orientation=" . orientation
+        . ",anchor=" . anchor
+        . ",wordWrap=" . wordWrap
+        . ",margins=("
+        . PPT_CaptionFormatNumber(marginLeft) . ","
+        . PPT_CaptionFormatNumber(marginTop) . ","
+        . PPT_CaptionFormatNumber(marginRight) . ","
+        . PPT_CaptionFormatNumber(marginBottom) . ")"
+        . ",textBounds=("
+        . PPT_CaptionFormatNumber(boundLeft) . ","
+        . PPT_CaptionFormatNumber(boundTop) . ","
+        . PPT_CaptionFormatNumber(boundWidth) . ","
+        . PPT_CaptionFormatNumber(boundHeight) . ")"
+        . ",text=" . PPT_SpacingSanitize(textValue)
+}
+
+PPT_GetCaptionTextBounds(shapeRef) {
+    try {
+        textRange := shapeRef.TextFrame.TextRange
+        return {left: textRange.BoundLeft
+            , top: textRange.BoundTop
+            , w: textRange.BoundWidth
+            , h: textRange.BoundHeight}
+    } catch {
+    }
+    return ""
 }
 
 PPT_SpacingDescribeSelection() {
@@ -729,17 +1260,21 @@ PPT_GridDistributeV() {
 }
 
 ; --- 間隔微調整 ---
-global PPT_SpacingState := {IsRunning: false
-    , Axis: ""
-    , Direction: 0
-    , StepSize: 2.0
-    , MaxStep: 10.0
-    , Acceleration: 1.06
-    , CurrentStep: 2.0
-    , InitialDelay: 240
-    , TimerInterval: 30
-    , DelayPending: false
-    , KeyToWatch: ""}
+global PPT_SpacingState := PPT_CreateSpacingState()
+
+PPT_CreateSpacingState() {
+    return {IsRunning: false
+        , Axis: ""
+        , Direction: 0
+        , StepSize: 2.0
+        , MaxStep: 10.0
+        , Acceleration: 1.06
+        , CurrentStep: 2.0
+        , InitialDelay: 240
+        , TimerInterval: 30
+        , DelayPending: false
+        , KeyToWatch: ""}
+}
 
 ; 1ステップ分の間隔調整 (クランプ付き)
 ; debugLevel: 0=なし, 1=到達確認のみ, 2=詳細
@@ -963,6 +1498,549 @@ PPT_GridRepeatStop() {
 
     SetTimer, %TickFn%, Off
     PPT_SpacingState.IsRunning := false
+}
+
+; ============================================================================
+;  Edge caption text boxes
+; ============================================================================
+PPT_GetActiveSlide() {
+    app := PPT_GetApp()
+    if !app
+        return ""
+
+    try {
+        return app.ActiveWindow.View.Slide
+    } catch {
+    }
+    return ""
+}
+
+PPT_CopyShapeList(shapes) {
+    copied := []
+    if !IsObject(shapes)
+        return copied
+
+    for _, s in shapes
+        copied.Push(s)
+    return copied
+}
+
+PPT_GetSelectionLayout(shapes) {
+    count := IsObject(shapes) ? shapes.MaxIndex() : 0
+    if (count <= 1)
+        return "single"
+
+    minCenterX := shapes[1].centerX
+    maxCenterX := shapes[1].centerX
+    minCenterY := shapes[1].centerY
+    maxCenterY := shapes[1].centerY
+
+    for _, s in shapes {
+        if (s.centerX < minCenterX)
+            minCenterX := s.centerX
+        if (s.centerX > maxCenterX)
+            maxCenterX := s.centerX
+        if (s.centerY < minCenterY)
+            minCenterY := s.centerY
+        if (s.centerY > maxCenterY)
+            maxCenterY := s.centerY
+    }
+
+    spanX := maxCenterX - minCenterX
+    spanY := maxCenterY - minCenterY
+
+    if (spanX >= spanY * 1.5)
+        return "horizontal"
+    if (spanY >= spanX * 1.5)
+        return "vertical"
+    return "mixed"
+}
+
+PPT_GetEdgeCaptionTargets(shapes, edge) {
+    layout := PPT_GetSelectionLayout(shapes)
+    targets := []
+
+    if (layout = "single" || layout = "mixed") {
+        ordered := PPT_CopyShapeList(shapes)
+        if (edge = "Top" || edge = "Bottom")
+            PPT_SortShapesByKey(ordered, "left")
+        else
+            PPT_SortShapesByKey(ordered, "top")
+        return ordered
+    }
+
+    if (layout = "horizontal") {
+        if (edge = "Top" || edge = "Bottom") {
+            ordered := PPT_CopyShapeList(shapes)
+            PPT_SortShapesByKey(ordered, "left")
+            return ordered
+        }
+
+        chosen := shapes[1]
+        for _, s in shapes {
+            if (edge = "Left" && s.left < chosen.left)
+                chosen := s
+            else if (edge = "Right" && s.right > chosen.right)
+                chosen := s
+        }
+        targets.Push(chosen)
+        return targets
+    }
+
+    if (layout = "vertical") {
+        if (edge = "Left" || edge = "Right") {
+            ordered := PPT_CopyShapeList(shapes)
+            PPT_SortShapesByKey(ordered, "top")
+            return ordered
+        }
+
+        chosen := shapes[1]
+        for _, s in shapes {
+            if (edge = "Top" && s.top < chosen.top)
+                chosen := s
+            else if (edge = "Bottom" && s.bottom > chosen.bottom)
+                chosen := s
+        }
+        targets.Push(chosen)
+        return targets
+    }
+
+    return PPT_CopyShapeList(shapes)
+}
+
+PPT_GetCaptionRect(shape, edge, slideSize) {
+    gap := 0
+    lineH := 20
+    x := 0
+    y := 0
+    w := 0
+    h := 0
+    createX := 0
+    createY := 0
+    createW := 0
+    createH := 0
+    rotation := 0
+    orientation := PPT_GetCaptionOrientation(edge)
+
+    if (edge = "Top") {
+        x := shape.left
+        y := shape.top - gap - lineH
+        w := shape.w
+        h := lineH
+        createX := x
+        createY := y
+        createW := w
+        createH := h
+    } else if (edge = "Bottom") {
+        x := shape.left
+        y := shape.bottom + gap
+        w := shape.w
+        h := lineH
+        createX := x
+        createY := y
+        createW := w
+        createH := h
+    } else if (edge = "Left") {
+        x := shape.left - gap - lineH
+        y := shape.top
+        w := lineH
+        h := shape.h
+        createX := x
+        createY := y
+        createW := w
+        createH := h
+    } else {
+        x := shape.right + gap
+        y := shape.top
+        w := lineH
+        h := shape.h
+        createX := x
+        createY := y
+        createW := w
+        createH := h
+    }
+
+    x := PPT_ClampPosition(x, w, slideSize.w)
+    y := PPT_ClampPosition(y, h, slideSize.h)
+    createX := x
+    createY := y
+    createW := w
+    createH := h
+
+    return {x: x
+        , y: y
+        , w: w
+        , h: h
+        , createX: createX
+        , createY: createY
+        , createW: createW
+        , createH: createH
+        , orientation: orientation
+        , rotation: rotation}
+}
+
+PPT_GetCaptionVerticalAnchor(edge) {
+    if (edge = "Top")
+        return 4
+    if (edge = "Bottom")
+        return 1
+    return 3
+}
+
+PPT_GetCaptionOrientation(edge) {
+    if (edge = "Left")
+        return 2
+    if (edge = "Right")
+        return 3
+    return 1
+}
+
+PPT_GetShapeTagValue(shapeRef, tagName) {
+    value := ""
+    try value := shapeRef.Tags(tagName)
+    return value
+}
+
+PPT_IsManagedCaption(shapeRef, edge := "", targetId := "") {
+    if (PPT_GetShapeTagValue(shapeRef, "AHK_KIND") != "EDGE_CAPTION")
+        return false
+    if (edge != "" && PPT_GetShapeTagValue(shapeRef, "AHK_EDGE") != edge)
+        return false
+    if (targetId != "" && PPT_GetShapeTagValue(shapeRef, "AHK_TARGET_ID") != targetId)
+        return false
+    return true
+}
+
+PPT_FindManagedCaptions(slide, edge, targetId) {
+    matches := []
+    if !slide
+        return matches
+
+    for shp in slide.Shapes {
+        if PPT_IsManagedCaption(shp, edge, targetId)
+            matches.Push(shp)
+    }
+    return matches
+}
+
+PPT_GetShapeTextOrientation(shapeRef) {
+    orientation := ""
+    try orientation := shapeRef.TextFrame.Orientation
+    if (orientation = "") {
+        try orientation := shapeRef.TextFrame2.Orientation
+    }
+    return orientation
+}
+
+PPT_IsLegacyCaptionCandidate(shapeRef, rect, edge, epsilon := 0.75) {
+    expectedOrientation := PPT_GetCaptionOrientation(edge)
+    legacyOrientation := ""
+    expectedRotation := rect.rotation
+    rotation := 0
+
+    if PPT_IsManagedCaption(shapeRef)
+        return false
+
+    try {
+        textValue := shapeRef.TextFrame.TextRange.Text
+    } catch {
+        return false
+    }
+
+    if !PPT_SpacingNearlyEqual(shapeRef.Left, rect.x, epsilon)
+        return false
+    if !PPT_SpacingNearlyEqual(shapeRef.Top, rect.y, epsilon)
+        return false
+    if !PPT_SpacingNearlyEqual(shapeRef.Width, rect.w, epsilon)
+        return false
+    if !PPT_SpacingNearlyEqual(shapeRef.Height, rect.h, epsilon)
+        return false
+
+    orientation := PPT_GetShapeTextOrientation(shapeRef)
+    try rotation := shapeRef.Rotation
+
+    if (edge = "Left")
+        legacyOrientation := 2
+    else if (edge = "Right")
+        legacyOrientation := 3
+
+    if (edge = "Left" || edge = "Right") {
+        orientationMatch := (orientation = "" || orientation = expectedOrientation || orientation = legacyOrientation)
+        rotationMatch := PPT_SpacingNearlyEqual(rotation, expectedRotation, epsilon)
+        legacyRotationMatch := PPT_SpacingNearlyEqual(rotation, 0, epsilon)
+        if !(orientationMatch && (rotationMatch || legacyRotationMatch))
+            return false
+    } else {
+        if (orientation != "" && orientation != expectedOrientation)
+            return false
+        if !PPT_SpacingNearlyEqual(rotation, 0, epsilon)
+            return false
+    }
+
+    return true
+}
+
+PPT_FindLegacyCaptions(slide, rect, edge) {
+    matches := []
+    if !slide
+        return matches
+
+    for shp in slide.Shapes {
+        if PPT_IsLegacyCaptionCandidate(shp, rect, edge)
+            matches.Push(shp)
+    }
+    return matches
+}
+
+PPT_FindExistingCaptions(slide, target, edge, rect := "") {
+    matches := PPT_FindManagedCaptions(slide, edge, target.id)
+    if (matches.MaxIndex())
+        return matches
+
+    if !IsObject(rect)
+        return matches
+
+    matches := PPT_FindLegacyCaptions(slide, rect, edge)
+    if (matches.MaxIndex()) {
+        PPT_CaptionLog("caption_legacy_match"
+            , "edge=" . edge
+            . " target=" . PPT_CaptionDescribeTarget(target)
+            . " rect=" . PPT_CaptionDescribeRect(rect)
+            . " count=" . matches.MaxIndex())
+        for _, shp in matches
+            PPT_TagCaption(shp, edge, target.id)
+    }
+    return matches
+}
+
+PPT_DeleteShapes(shapeList) {
+    deleted := 0
+    if !IsObject(shapeList)
+        return deleted
+
+    for _, shp in shapeList {
+        try {
+            shp.Delete()
+            deleted++
+        }
+    }
+    return deleted
+}
+
+PPT_TagCaption(textBox, edge, targetId) {
+    try textBox.Tags.Add("AHK_KIND", "EDGE_CAPTION")
+    try textBox.Tags.Add("AHK_EDGE", edge)
+    try textBox.Tags.Add("AHK_TARGET_ID", targetId)
+}
+
+PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := false) {
+    anchor := PPT_GetCaptionVerticalAnchor(edge)
+    orientation := PPT_GetCaptionOrientation(edge)
+    currentText := ""
+
+    if (preserveText) {
+        try currentText := textBox.TextFrame.TextRange.Text
+        if (currentText != "")
+            labelText := currentText
+    }
+
+    try textBox.Line.Visible := 0
+    try textBox.Fill.Visible := 0
+
+    try textBox.TextFrame.AutoSize := 0
+    try textBox.TextFrame.Orientation := orientation
+    try textBox.TextFrame.MarginLeft := 0
+    try textBox.TextFrame.MarginRight := 0
+    try textBox.TextFrame.MarginTop := 0
+    try textBox.TextFrame.MarginBottom := 0
+    try textBox.TextFrame.WordWrap := 0
+    try textBox.TextFrame.VerticalAnchor := anchor
+    try textBox.TextFrame.TextRange.Text := labelText
+    try textBox.TextFrame.TextRange.Font.Size := 12
+    try textBox.TextFrame.TextRange.Font.Name := "Arial"
+    try textBox.TextFrame.TextRange.ParagraphFormat.Alignment := 2
+
+    try {
+        textBox.TextFrame2.AutoSize := 0
+        textBox.TextFrame2.Orientation := orientation
+        textBox.TextFrame2.MarginLeft := 0
+        textBox.TextFrame2.MarginRight := 0
+        textBox.TextFrame2.MarginTop := 0
+        textBox.TextFrame2.MarginBottom := 0
+        textBox.TextFrame2.WordWrap := 0
+        textBox.TextFrame2.VerticalAnchor := anchor
+        font2 := textBox.TextFrame2.TextRange.Font
+        font2.Size := 12
+        font2.NameAscii := "Arial"
+        font2.NameFarEast := "Meiryo"
+    } catch {
+    }
+}
+
+PPT_ApplyCaptionGeometry(textBox, rect) {
+    try textBox.Rotation := rect.rotation
+    try textBox.Left := rect.x
+    try textBox.Top := rect.y
+    try textBox.Width := rect.w
+    try textBox.Height := rect.h
+}
+
+PPT_GetCaptionVisualGap(edge) {
+    global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+
+    if (edge = "Top" || edge = "Bottom")
+        return PPT_CaptionVisualGapHorizontal
+    return PPT_CaptionVisualGapVertical
+}
+
+PPT_AlignCaptionToShape(textBox, shape, edge, gap := "", slideSize := "") {
+
+    if (gap = "")
+        gap := PPT_GetCaptionVisualGap(edge)
+
+    bounds := PPT_GetCaptionTextBounds(textBox)
+    if !IsObject(bounds)
+        return false
+
+    dx := 0
+    dy := 0
+
+    if (edge = "Top")
+        dy := (shape.top - gap) - (bounds.top + bounds.h)
+    else if (edge = "Bottom")
+        dy := (shape.bottom + gap) - bounds.top
+    else if (edge = "Left")
+        dx := (shape.left - gap) - (bounds.left + bounds.w)
+    else if (edge = "Right")
+        dx := (shape.right + gap) - bounds.left
+
+    if (dx = 0 && dy = 0)
+        return true
+
+    try textBox.Left := textBox.Left + dx
+    try textBox.Top := textBox.Top + dy
+
+    if IsObject(slideSize) {
+        try textBox.Left := PPT_ClampPosition(textBox.Left, textBox.Width, slideSize.w)
+        try textBox.Top := PPT_ClampPosition(textBox.Top, textBox.Height, slideSize.h)
+    }
+    return true
+}
+
+PPT_AddEdgeCaption(edge) {
+    slide := PPT_GetActiveSlide()
+    if !slide
+        return
+
+    shapeRange := PPT_GetSelectedShapes()
+    if !shapeRange {
+        ToolTip, 図形を選択してください
+        SetTimer, CloseToolTip, -1500
+        return
+    }
+
+    shapes := PPT_CollectShapes(shapeRange)
+    if !IsObject(shapes) || !shapes.MaxIndex()
+        return
+
+    slideSize := PPT_GetSlideSize()
+    if !IsObject(slideSize)
+        return
+
+    targets := PPT_GetEdgeCaptionTargets(shapes, edge)
+    layout := PPT_GetSelectionLayout(shapes)
+    allExist := true
+    affectedCount := 0
+
+    PPT_CaptionLog("caption_start"
+        , "edge=" . edge
+        . " layout=" . layout
+        . " slide=(" . PPT_CaptionFormatNumber(slideSize.w) . "," . PPT_CaptionFormatNumber(slideSize.h) . ") "
+        . PPT_SpacingDescribeSelection())
+
+    for _, target in targets {
+        rect := PPT_GetCaptionRect(target, edge, slideSize)
+        captions := PPT_FindExistingCaptions(slide, target, edge, rect)
+        PPT_CaptionLog("caption_probe"
+            , "edge=" . edge
+            . " target=" . PPT_CaptionDescribeTarget(target)
+            . " rect=" . PPT_CaptionDescribeRect(rect)
+            . " existing=" . captions.MaxIndex())
+        if !(captions.MaxIndex())
+            allExist := false
+    }
+
+    if (allExist) {
+        deletedCount := 0
+        for _, target in targets {
+            rect := PPT_GetCaptionRect(target, edge, slideSize)
+            captions := PPT_FindExistingCaptions(slide, target, edge, rect)
+            deletedCount += PPT_DeleteShapes(captions)
+            PPT_CaptionLog("caption_delete"
+                , "edge=" . edge
+                . " target=" . PPT_CaptionDescribeTarget(target)
+                . " rect=" . PPT_CaptionDescribeRect(rect)
+                . " deleted=" . captions.MaxIndex())
+        }
+
+        if (deletedCount > 0) {
+            ToolTip, % edge . " caption removed: " . deletedCount
+            SetTimer, CloseToolTip, -1500
+        }
+        return
+    }
+
+    for _, target in targets {
+        rect := PPT_GetCaptionRect(target, edge, slideSize)
+        captions := PPT_FindExistingCaptions(slide, target, edge, rect)
+        textBox := ""
+        preserveText := 0
+
+        if (captions.MaxIndex()) {
+            textBox := captions[1]
+            preserveText := 1
+            if (captions.MaxIndex() > 1) {
+                extras := []
+                Loop % captions.MaxIndex() - 1
+                    extras.Push(captions[A_Index + 1])
+                PPT_DeleteShapes(extras)
+            }
+        }
+
+        try {
+            if !textBox {
+                textBox := slide.Shapes.AddTextbox(rect.orientation, rect.createX, rect.createY, rect.createW, rect.createH)
+                PPT_TagCaption(textBox, edge, target.id)
+                PPT_CaptionLog("caption_created"
+                    , "edge=" . edge
+                    . " target=" . PPT_CaptionDescribeTarget(target)
+                    . " rect=" . PPT_CaptionDescribeRect(rect)
+                    . " actual=" . PPT_CaptionDescribeTextBox(textBox))
+            }
+            PPT_StyleCaptionTextBox(textBox, edge, "Caption", preserveText)
+            PPT_ApplyCaptionGeometry(textBox, rect)
+            PPT_AlignCaptionToShape(textBox, target, edge, "", slideSize)
+            PPT_CaptionLog("caption_applied"
+                , "edge=" . edge
+                . " target=" . PPT_CaptionDescribeTarget(target)
+                . " rect=" . PPT_CaptionDescribeRect(rect)
+                . " preserveText=" . preserveText
+                . " visualGap=" . PPT_CaptionFormatNumber(PPT_GetCaptionVisualGap(edge))
+                . " actual=" . PPT_CaptionDescribeTextBox(textBox))
+            affectedCount++
+        } catch e {
+            PPT_CaptionLog("caption_apply_error"
+                , "edge=" . edge
+                . " target=" . PPT_CaptionDescribeTarget(target)
+                . " rect=" . PPT_CaptionDescribeRect(rect)
+                . " error=" . e.Message)
+        }
+    }
+
+    if (affectedCount > 0) {
+        ToolTip, % edge . " caption: " . affectedCount
+        SetTimer, CloseToolTip, -1500
+    }
 }
 
 ; ============================================================================

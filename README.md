@@ -1,6 +1,6 @@
 # AutoHotkey
 
-個人用の AutoHotkey v1 スクリプト集です．エントリポイントは `main.ahk` で，主要な処理は `Plugins` 配下にあります．
+個人用の AutoHotkey v1.1 スクリプト集です．エントリポイントは `main.ahk` で，主要な処理は `Plugins` 配下にあります．
 
 ## 構成
 
@@ -84,7 +84,18 @@
    - `execute_passthrough_right_click` まで到達しているか
 4. `execute_empty_gesture_cancelled` が出ていれば，ジェスチャ状態により右クリックが抑止されています．
 
-## 補足
+## Appendix
 
-- 詳細な調査メモは `.claude\research.md` に保存しています．
-- `Plugins\UIA_Interface.ahk` と `Plugins\UIA_Browser.ahk` は UI Automation 系の依存ライブラリです．
+- `Plugins\UIA_Interface.ahk` and `Plugins\UIA_Browser.ahk` are UI Automation dependency libraries.
+- In `#Include` files, avoid top-level labels followed by a bare `return`.
+- Included files are effectively inlined into `main.ahk`, so auto-execute can fall into that label body and stop early at `return`.
+- This can silently break later initialization and make unrelated hotkeys appear dead.
+- Prefer function timers such as `SetTimer, % Func("MyHandler"), -10` instead of label timers in plugin files.
+
+## Reference
+
+- https://ahkwiki.net/KeyList
+- https://qiita.com/draganmaistir/items/0bf4a2ff484523a2dee9
+- https://qiita.com/ryoheiszk/items/092cc5d76838cb5a13f1
+- https://qiita.com/riekure/items/49b941fa5159f9948313
+
