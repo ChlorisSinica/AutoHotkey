@@ -64,13 +64,16 @@ MoveWindowRatio(targetTitle, xRatio, yRatio, wRatio, hRatio) {
         return
 
     ; ★重要: ウィンドウが現在あるモニターの作業領域を取得
-    GetMonitorWorkAreaFromWindow(hwnd, WL, WT, WW, WH)
+    monitor := GetMonitorWorkAreaInfoFromWindow(hwnd)
+    if !IsObject(monitor)
+        return
+    placement := GetWindowPlacementArea(monitor)
 
     ; 比率からピクセル値を計算
-    finalX := WL + (WW * xRatio)
-    finalY := WT + (WH * yRatio)
-    finalW := WW * wRatio
-    finalH := WH * hRatio
+    finalX := placement.Left + (placement.Width * xRatio)
+    finalY := placement.Top + (placement.Height * yRatio)
+    finalW := placement.Width * wRatio
+    finalH := placement.Height * hRatio
 
     ; ピクセル計算結果を使って移動 (DWM補正付き)
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
@@ -90,22 +93,118 @@ MoveWindowMaxHeightKeepWidth(targetTitle := "A", gapEdge := "Top") {
     monitor := GetMonitorWorkAreaInfoFromWindow(hwnd)
     if !IsObject(monitor)
         return
+    placement := GetWindowPlacementArea(monitor)
 
     GetVisibleWindowPos(x, y, w, h, "ahk_id " . hwnd)
     toolbarGap := GetMonitorToolbarGap(monitor.Height)
     finalX := x
     finalW := w
-    finalY := monitor.Top
-    finalH := monitor.Height - toolbarGap
+    finalY := placement.Top
+    finalH := placement.Height - toolbarGap
 
     if (gapEdge = "Top")
-        finalY := monitor.Top + toolbarGap
+        finalY := placement.Top + toolbarGap
+
+    if (finalH < 1)
+        finalH := 1
+    if (finalW > placement.Width) {
+        finalW := placement.Width
+        finalX := placement.Left
+    } else {
+        if (finalX < placement.Left)
+            finalX := placement.Left
+        if (finalX + finalW > placement.Right)
+            finalX := placement.Right - finalW
+    }
 
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
 }
 
 GetMonitorToolbarGap(monitorHeight) {
     return Round(monitorHeight * 0.03)
+}
+
+WindowIsland_Toggle() {
+    global EnableWinIsland
+
+    EnableWinIsland := !EnableWinIsland
+    ToolTip, % EnableWinIsland ? "Window Island: ON" : "Window Island: OFF"
+    SetTimer, CloseToolTip, -1500
+}
+
+WindowIsland_Enabled() {
+    global EnableWinIsland
+    return EnableWinIsland
+}
+
+ApplyWindowIslandToRect(monitor, ByRef x, ByRef y, ByRef w, ByRef h) {
+    if (!WindowIsland_Enabled() || !IsObject(monitor))
+        return
+
+    insets := GetWindowIslandInsets(monitor)
+    minWidth := 240
+    minHeight := 180
+
+    maxInsetX := Floor((w - minWidth) / 2)
+    maxInsetY := Floor((h - minHeight) / 2)
+    if (maxInsetX < 0)
+        maxInsetX := 0
+    if (maxInsetY < 0)
+        maxInsetY := 0
+
+    insetX := (insets.X < maxInsetX) ? insets.X : maxInsetX
+    insetY := (insets.Y < maxInsetY) ? insets.Y : maxInsetY
+
+    x += insetX
+    y += insetY
+    w -= insetX * 2
+    h -= insetY * 2
+}
+
+GetWindowIslandGaps(monitor) {
+    shortEdge := (monitor.Width < monitor.Height) ? monitor.Width : monitor.Height
+    gapX := Round(shortEdge * 0.006)
+    gapY := Round(shortEdge * 0.008)
+    return {OuterX: gapX, OuterY: gapY, InnerX: gapX, InnerY: gapY}
+}
+
+GetWindowIslandInsets(monitor) {
+    gaps := GetWindowIslandGaps(monitor)
+    insetX := gaps.OuterX
+    insetY := gaps.OuterY
+    return {X: insetX, Y: insetY}
+}
+
+GetWindowPlacementArea(monitor) {
+    if !IsObject(monitor)
+        return ""
+
+    left := monitor.Left
+    top := monitor.Top
+    right := monitor.Right
+    bottom := monitor.Bottom
+
+    if (WindowIsland_Enabled()) {
+        gaps := GetWindowIslandGaps(monitor)
+        left += gaps.OuterX
+        top += gaps.OuterY
+        right -= gaps.OuterX
+        bottom -= gaps.OuterY
+    }
+
+    width := right - left
+    height := bottom - top
+    if (width < 1)
+        width := 1
+    if (height < 1)
+        height := 1
+
+    return {Left: left
+        , Top: top
+        , Right: left + width
+        , Bottom: top + height
+        , Width: width
+        , Height: height}
 }
 
 ; ========================================================
@@ -121,11 +220,14 @@ GetActiveWindowInfo() {
     GetVisibleWindowPos(x, y, w, h, "A")
 
     ; 3. 比率の計算 (GetActiveWindowPosRatioのロジック)
-    GetMonitorWorkAreaFromWindow(hwnd, MonLeft, MonTop, MonWidth, MonHeight)
-    rx := (x - MonLeft) / MonWidth
-    ry := (y - MonTop)  / MonHeight
-    rw := w / MonWidth
-    rh := h / MonHeight
+    monitor := GetMonitorWorkAreaInfoFromWindow(hwnd)
+    if !IsObject(monitor)
+        return
+    placement := GetWindowPlacementArea(monitor)
+    rx := (x - placement.Left) / placement.Width
+    ry := (y - placement.Top)  / placement.Height
+    rw := w / placement.Width
+    rh := h / placement.Height
 
     ; 4. 結果の整形
     ; 設定ファイル用にそのまま貼れるコマンド文字列

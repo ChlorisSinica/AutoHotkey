@@ -1,4 +1,4 @@
-; ==============================================================================
+﻿; ==============================================================================
 ; Keyboard mouse helpers
 ; - Hold movement keys to move the cursor continuously
 ; - Use the grid hotkeys to jump between monitor grid intersections
@@ -12,10 +12,9 @@ global CursorConfig := {BaseSpeed: 2.0
     , IsRunning: false
     , CurrentSpeed: 2.0
     , Directions: {Up: 0, Left: 0, Down: 0, Right: 0}}
-
-global CursorGridConfig := {DefaultCols: 4, DefaultRows: 4, EdgeInset: 6}
-global CursorHotkeyConfig := ""
-global CursorHotkeyState := {DownMap: {}, UpMap: {}, GridMap: {}, ModifierUp: ""}
+global CursorGridConfig     := {DefaultCols: 4, DefaultRows: 4, EdgeInset: 6}
+global CursorHotkeyConfig   := ""
+global CursorHotkeyState    := {DownMap: {}, UpMap: {}, GridMap: {}, ModifierUp: ""}
 
 Cursor_RegisterHotkeys(config) {
     global CursorHotkeyConfig, CursorHotkeyState
@@ -309,18 +308,26 @@ Cursor_SetGridPosition(state, gx, gy) {
 }
 
 Cursor_CreateGridState(monitor) {
-    global GRID_COLS, GRID_ROWS, CursorGridConfig
-
-    cols := GRID_COLS ? GRID_COLS : CursorGridConfig.DefaultCols
-    rows := GRID_ROWS ? GRID_ROWS : CursorGridConfig.DefaultRows
-    if (cols < 1)
-        cols := 1
-    if (rows < 1)
-        rows := 1
+    cols := Cursor_GetGridDivisionCount("Cols")
+    rows := Cursor_GetGridDivisionCount("Rows")
 
     return {Monitor: monitor, cols: cols, rows: rows
         , monLeft: monitor.Left, monTop: monitor.Top, monRight: monitor.Right - 1, monBottom: monitor.Bottom - 1
         , unitW: monitor.Width / cols, unitH: monitor.Height / rows}
+}
+
+Cursor_GetGridDivisionCount(axis) {
+    global CursorGridConfig
+
+    ; Cursor grid is independent from the window grid layout.
+    if (axis = "Cols")
+        value := CursorGridConfig.DefaultCols
+    else
+        value := CursorGridConfig.DefaultRows
+
+    if (value < 1)
+        value := 1
+    return value
 }
 
 Cursor_GetGridAnchorIndex(position, start, size, divisions) {

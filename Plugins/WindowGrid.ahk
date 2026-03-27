@@ -97,23 +97,25 @@ Grid_GetRawState(hwnd) {
         return ""
 
     layout := Grid_GetMonitorLayout(monitor)
-    MonLeft := layout.MonLeft
-    MonTop := layout.MonTop
-    UnitW := layout.UnitW
-    UnitH := layout.UnitH
+    MonLeft := layout.AreaLeft
+    MonTop := layout.AreaTop
+    PitchW := layout.PitchW
+    PitchH := layout.PitchH
+    InnerX := layout.InnerX
+    InnerY := layout.InnerY
     try {
         GetVisibleWindowPos(wx, wy, ww, wh, "ahk_id " . hwnd)
     } catch {
         WinGetPos, wx, wy, ww, wh, ahk_id %hwnd%
     }
-    rawX := (wx - MonLeft) / UnitW
-    rawY := (wy - MonTop)  / UnitH
-    rawW := ww / UnitW
-    rawH := wh / UnitH
-    ratioX := (wx - monitor.Left) / monitor.Width
-    ratioY := (wy - monitor.Top) / monitor.Height
-    ratioW := ww / monitor.Width
-    ratioH := wh / monitor.Height
+    rawX := (wx - MonLeft) / PitchW
+    rawY := (wy - MonTop) / PitchH
+    rawW := (ww + InnerX) / PitchW
+    rawH := (wh + InnerY) / PitchH
+    ratioX := (wx - layout.AreaLeft) / layout.AreaWidth
+    ratioY := (wy - layout.AreaTop) / layout.AreaHeight
+    ratioW := ww / layout.AreaWidth
+    ratioH := wh / layout.AreaHeight
     gx := Round(rawX)
     gy := Round(rawY)
     gw := Round(rawW)
@@ -136,23 +138,52 @@ Grid_GetRawState(hwnd) {
         gy := GRID_ROWS - gh
     return {gx: gx, gy: gy, gw: gw, gh: gh, rawX: rawX, rawY: rawY, rawW: rawW, rawH: rawH
         , RatioX: ratioX, RatioY: ratioY, RatioW: ratioW, RatioH: ratioH
-        , Monitor: monitor, MonLeft: MonLeft, MonTop: MonTop, UnitW: UnitW, UnitH: UnitH}
+        , Monitor: monitor, MonLeft: MonLeft, MonTop: MonTop
+        , CellW: layout.CellW, CellH: layout.CellH
+        , PitchW: PitchW, PitchH: PitchH
+        , InnerX: InnerX, InnerY: InnerY}
 }
 
 Grid_SetWindow(hwnd, State, gx, gy, gw, gh) {
-    finalX := State.MonLeft + (gx * State.UnitW)
-    finalY := State.MonTop  + (gy * State.UnitH)
-    finalW := gw * State.UnitW
-    finalH := gh * State.UnitH
+    finalX := State.MonLeft + (gx * State.PitchW)
+    finalY := State.MonTop + (gy * State.PitchH)
+    finalW := (gw * State.CellW) + ((gw - 1) * State.InnerX)
+    finalH := (gh * State.CellH) + ((gh - 1) * State.InnerY)
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
 }
 
 Grid_GetMonitorLayout(monitor) {
+    outerX := 0
+    outerY := 0
+    innerX := 0
+    innerY := 0
+
+    if (WindowIsland_Enabled()) {
+        gaps := GetWindowIslandGaps(monitor)
+        outerX := gaps.OuterX
+        outerY := gaps.OuterY
+        innerX := gaps.InnerX
+        innerY := gaps.InnerY
+    }
+
+    Grid_NormalizeAxisGaps(monitor.Width, GRID_COLS, outerX, innerX, cellW, pitchW, areaW)
+    Grid_NormalizeAxisGaps(monitor.Height, GRID_ROWS, outerY, innerY, cellH, pitchH, areaH)
+
     return {Monitor: monitor
         , MonLeft: monitor.Left
         , MonTop: monitor.Top
-        , UnitW: monitor.Width / GRID_COLS
-        , UnitH: monitor.Height / GRID_ROWS}
+        , AreaLeft: monitor.Left + outerX
+        , AreaTop: monitor.Top + outerY
+        , AreaWidth: areaW
+        , AreaHeight: areaH
+        , CellW: cellW
+        , CellH: cellH
+        , PitchW: pitchW
+        , PitchH: pitchH
+        , OuterX: outerX
+        , OuterY: outerY
+        , InnerX: innerX
+        , InnerY: innerY}
 }
 
 Grid_MoveAcrossMonitor(hwnd, State, direction) {
@@ -188,10 +219,11 @@ Grid_MoveAcrossMonitor(hwnd, State, direction) {
 }
 
 Grid_SetWindowByRatio(hwnd, monitor, xRatio, yRatio, wRatio, hRatio) {
-    finalX := monitor.Left + (monitor.Width * xRatio)
-    finalY := monitor.Top + (monitor.Height * yRatio)
-    finalW := monitor.Width * wRatio
-    finalH := monitor.Height * hRatio
+    layout := Grid_GetMonitorLayout(monitor)
+    finalX := layout.AreaLeft + (layout.AreaWidth * xRatio)
+    finalY := layout.AreaTop + (layout.AreaHeight * yRatio)
+    finalW := layout.AreaWidth * wRatio
+    finalH := layout.AreaHeight * hRatio
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
 }
 
@@ -201,4 +233,30 @@ Grid_ClampRatio(value) {
     if (value > 1)
         return 1
     return value
+}
+
+Grid_NormalizeAxisGaps(axisSize, count, ByRef outerGap, ByRef innerGap, ByRef cellSize, ByRef pitchSize, ByRef areaSize) {
+    if (count < 1)
+        count := 1
+
+    minCellSize := 1
+    availableForGaps := axisSize - (count * minCellSize)
+    if (availableForGaps < 0)
+        availableForGaps := 0
+
+    requestedGapSize := (outerGap * 2) + (innerGap * (count - 1))
+    if (requestedGapSize > availableForGaps && requestedGapSize > 0) {
+        scale := availableForGaps / requestedGapSize
+        outerGap := Floor(outerGap * scale)
+        innerGap := Floor(innerGap * scale)
+    }
+
+    areaSize := axisSize - (outerGap * 2)
+    if (areaSize < count)
+        areaSize := count
+
+    cellSize := (axisSize - (outerGap * 2) - (innerGap * (count - 1))) / count
+    if (cellSize < 1)
+        cellSize := 1
+    pitchSize := cellSize + innerGap
 }

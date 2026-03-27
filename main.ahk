@@ -41,16 +41,20 @@ TrayTip, AutoHotkey, Script Reloaded, 2 ;
 ; ----- Indicator用変数 -----
 ; ==========================================================
 global EnableNavLayer   := 1
-global EnableWinMgr     := 1
-global EnableMouseExt   := 1
-global EnableAppSpec    := 1
+global EnableWinPlace   := 1
+global EnableWinIsland  := 0
+global EnableVDesk      := 1
 global EnableMouseEmu   := 1
+global EnableMouseBtn   := 1
 global EnableGestures   := 1
+global EnableBrowser    := 1
+global EnablePPT        := 1
+global EnableExcel      := 1
 MG_DebugInit()
 Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
 vk1C & F1::Settings_Open()
 vk1C & F2::MG_DebugSnapshot("manual-hotkey")
-#If WinActive("機能のON/OFF設定")
+#If WinActive("機能設定")
     Escape::Settings_Close()
 #If
 
@@ -93,9 +97,9 @@ Cursor_GetHotkeyConfig() {
 ; ==========================================================
 ; ----- Function-Key (for Mouse) -----
 ; ==========================================================
-#If (EnableMouseExt && !WinActive("ahk_exe POWERPNT.EXE"))
+#If (EnableMouseBtn && !WinActive("ahk_exe POWERPNT.EXE"))
     F15::                   Send ^v                         ; 　　（手前側）
-#If (EnableMouseExt)
+#If (EnableMouseBtn)
     XButton1::              XButton1                        ; 戻る（手前側）
     XButton2::              XButton2                        ; 進む（　奥側）
     F16::                   Send ^c                         ; 　　（　奥側）
@@ -113,11 +117,17 @@ Cursor_GetHotkeyConfig() {
 #If
 
 ; ==========================================================
-; ----- Window-key -----
+; ----- Virtual Desktop -----
 ; ==========================================================
-#If (EnableWinMgr)
+#If (EnableVDesk)
     #q::    Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
     #w::    Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
+#If
+
+; ==========================================================
+; ----- Window Placement -----
+; ==========================================================
+#If (EnableWinPlace)
     ^#b::   GetActiveWindowInfo()
     +#k::   Run, ms-settings:bluetooth
     ^#1::   MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
@@ -134,6 +144,7 @@ Cursor_GetHotkeyConfig() {
     ^+#F12::Reload
 
     ^#g::   Grid_ToggleMode()
+    ^+#g::  WindowIsland_Toggle()
     ^#j::   Grid_Move(-1,  0) ; Left
     ^#l::   Grid_Move( 1,  0) ; Right
     ^#i::   Grid_Move( 0, -1) ; Up
@@ -165,7 +176,7 @@ vk1C & x::          Manage_N_Hold("Off")
 ; ==========================================================
 ; ----- Browser -----
 ; ==========================================================
-#If (EnableAppSpec && WinActive("ahk_group BrowserGroup"))
+#If (EnableBrowser && WinActive("ahk_group BrowserGroup"))
     ^sc073::    TogglePDFZoom()
     F1::        RunSiteSpecificKey("{F1}", KeyActions["F1"])
     F2::        RunSiteSpecificKey("{F2}", KeyActions["F2"])
@@ -177,7 +188,7 @@ vk1C & x::          Manage_N_Hold("Off")
 ; ==========================================================
 ; ----- Power Point -----
 ; ==========================================================
-#If (EnableAppSpec && WinActive("ahk_exe POWERPNT.EXE"))
+#If (EnablePPT && WinActive("ahk_exe POWERPNT.EXE"))
     ^!l::   SetRight()
     ^!j::   SetLeft()
     ^!i::   SetTop()
@@ -203,7 +214,7 @@ vk1C & x::          Manage_N_Hold("Off")
 ; ==========================================================
 ; ----- Excel -----
 ; ==========================================================
-#If (EnableAppSpec && WinActive("ahk_exe EXCEL.EXE"))
+#If (EnableExcel && WinActive("ahk_exe EXCEL.EXE"))
     ^Tab::Send ^{PgDn}
     ^+Tab::Send ^{PgUp}
 #If
