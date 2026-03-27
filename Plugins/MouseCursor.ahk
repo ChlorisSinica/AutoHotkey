@@ -1,3 +1,10 @@
+; ==============================================================================
+; Keyboard mouse helpers
+; - Hold movement keys to move the cursor continuously
+; - Use the grid hotkeys to jump between monitor grid intersections
+; - Grid jumps can cross monitors and keep edge positions slightly inset
+; ==============================================================================
+
 global CursorConfig := {BaseSpeed: 2.0
     , MaxSpeed: 50.0
     , Acceleration: 1.25
@@ -6,7 +13,7 @@ global CursorConfig := {BaseSpeed: 2.0
     , CurrentSpeed: 2.0
     , Directions: {Up: 0, Left: 0, Down: 0, Right: 0}}
 
-global CursorGridConfig := {DefaultCols: 4, DefaultRows: 2}
+global CursorGridConfig := {DefaultCols: 4, DefaultRows: 4, EdgeInset: 6}
 global CursorHotkeyConfig := ""
 global CursorHotkeyState := {DownMap: {}, UpMap: {}, GridMap: {}, ModifierUp: ""}
 
@@ -204,20 +211,57 @@ Cursor_GridMove(dx, dy) {
     if !IsObject(state)
         return
 
+    targetState := state
     nextX := state.gx + dx
     nextY := state.gy + dy
 
+    if (nextX < 0) {
+        candidateState := Cursor_GetAdjacentGridState(state, "Left")
+        if (IsObject(candidateState)) {
+            targetState := candidateState
+            nextX := targetState.cols
+        } else {
+            nextX := 0
+        }
+    } else if (nextX > state.cols) {
+        candidateState := Cursor_GetAdjacentGridState(state, "Right")
+        if (IsObject(candidateState)) {
+            targetState := candidateState
+            nextX := 0
+        } else {
+            nextX := state.cols
+        }
+    }
+
+    if (nextY < 0) {
+        candidateState := Cursor_GetAdjacentGridState(state, "Up")
+        if (IsObject(candidateState)) {
+            targetState := candidateState
+            nextY := targetState.rows
+        } else {
+            nextY := 0
+        }
+    } else if (nextY > state.rows) {
+        candidateState := Cursor_GetAdjacentGridState(state, "Down")
+        if (IsObject(candidateState)) {
+            targetState := candidateState
+            nextY := 0
+        } else {
+            nextY := state.rows
+        }
+    }
+
     if (nextX < 0)
         nextX := 0
-    else if (nextX >= state.cols)
-        nextX := state.cols - 1
+    else if (nextX > targetState.cols)
+        nextX := targetState.cols
 
     if (nextY < 0)
         nextY := 0
-    else if (nextY >= state.rows)
-        nextY := state.rows - 1
+    else if (nextY > targetState.rows)
+        nextY := targetState.rows
 
-    Cursor_SetGridPosition(state, nextX, nextY)
+    Cursor_SetGridPosition(targetState, nextX, nextY)
 }
 
 Cursor_GridMoveByDirection(direction) {
@@ -232,12 +276,40 @@ Cursor_GridMoveByDirection(direction) {
 }
 
 Cursor_GetGridState() {
-    global GRID_COLS, GRID_ROWS, CursorGridConfig
-
     MouseGetPos, mx, my
-    GetMonitorWorkAreaFromPoint(mx, my, monLeft, monTop, monWidth, monHeight)
-    if (monWidth <= 0 || monHeight <= 0)
+    monitor := GetMonitorWorkAreaInfoFromPoint(mx, my)
+    if !IsObject(monitor)
         return ""
+
+    state := Cursor_CreateGridState(monitor)
+    state.gx := Cursor_GetGridAnchorIndex(mx, monitor.Left, monitor.Width, state.cols)
+    state.gy := Cursor_GetGridAnchorIndex(my, monitor.Top, monitor.Height, state.rows)
+    return state
+}
+
+Cursor_SetGridPosition(state, gx, gy) {
+    xInset := Cursor_GetGridEdgeInset(state.monRight - state.monLeft)
+    yInset := Cursor_GetGridEdgeInset(state.monBottom - state.monTop)
+
+    if (gx <= 0)
+        targetX := state.monLeft + xInset
+    else if (gx >= state.cols)
+        targetX := state.monRight - xInset
+    else
+        targetX := state.monLeft + (gx * state.unitW)
+
+    if (gy <= 0)
+        targetY := state.monTop + yInset
+    else if (gy >= state.rows)
+        targetY := state.monBottom - yInset
+    else
+        targetY := state.monTop + (gy * state.unitH)
+
+    MouseMove, % Round(targetX), % Round(targetY), 0
+}
+
+Cursor_CreateGridState(monitor) {
+    global GRID_COLS, GRID_ROWS, CursorGridConfig
 
     cols := GRID_COLS ? GRID_COLS : CursorGridConfig.DefaultCols
     rows := GRID_ROWS ? GRID_ROWS : CursorGridConfig.DefaultRows
@@ -246,27 +318,38 @@ Cursor_GetGridState() {
     if (rows < 1)
         rows := 1
 
-    unitW := monWidth / cols
-    unitH := monHeight / rows
-    gx := Floor((mx - monLeft) / unitW)
-    gy := Floor((my - monTop) / unitH)
-
-    if (gx < 0)
-        gx := 0
-    else if (gx >= cols)
-        gx := cols - 1
-
-    if (gy < 0)
-        gy := 0
-    else if (gy >= rows)
-        gy := rows - 1
-
-    return {gx: gx, gy: gy, cols: cols, rows: rows
-        , monLeft: monLeft, monTop: monTop, unitW: unitW, unitH: unitH}
+    return {Monitor: monitor, cols: cols, rows: rows
+        , monLeft: monitor.Left, monTop: monitor.Top, monRight: monitor.Right - 1, monBottom: monitor.Bottom - 1
+        , unitW: monitor.Width / cols, unitH: monitor.Height / rows}
 }
 
-Cursor_SetGridPosition(state, gx, gy) {
-    targetX := state.monLeft + ((gx + 0.5) * state.unitW)
-    targetY := state.monTop + ((gy + 0.5) * state.unitH)
-    MouseMove, % Round(targetX), % Round(targetY), 0
+Cursor_GetGridAnchorIndex(position, start, size, divisions) {
+    if (size <= 0)
+        return 0
+
+    index := Round(((position - start) / size) * divisions)
+    if (index < 0)
+        index := 0
+    else if (index > divisions)
+        index := divisions
+    return index
+}
+
+Cursor_GetAdjacentGridState(state, direction) {
+    targetMonitor := GetAdjacentMonitorWorkAreaInfo(state.Monitor, direction)
+    if !IsObject(targetMonitor)
+        return ""
+
+    return Cursor_CreateGridState(targetMonitor)
+}
+
+Cursor_GetGridEdgeInset(maxOffset) {
+    global CursorGridConfig
+
+    inset := CursorGridConfig.EdgeInset
+    if (inset < 0)
+        inset := 0
+    if (inset > maxOffset)
+        inset := maxOffset
+    return inset
 }

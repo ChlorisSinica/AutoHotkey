@@ -14,6 +14,15 @@ MoveWindow(targetTitle, x, y, w, h) {
 
 ; ピクセル指定移動 (見た目のズレ補正付き)
 MoveWindowPixel(hwnd, x, y, w, h) {
+    MoveWindowPixelOnce(hwnd, x, y, w, h)
+
+    ; On DPI/frame changes between monitors the first correction can still miss.
+    GetVisibleWindowPos(actualX, actualY, actualW, actualH, "ahk_id " . hwnd)
+    if (Abs(actualX - x) > 1 || Abs(actualY - y) > 1 || Abs(actualW - w) > 1 || Abs(actualH - h) > 1)
+        MoveWindowPixelOnce(hwnd, x, y, w, h)
+}
+
+MoveWindowPixelOnce(hwnd, x, y, w, h) {
     ; 現在の論理座標
     WinGetPos, lx, ly, lw, lh, ahk_id %hwnd%
 
@@ -65,6 +74,38 @@ MoveWindowRatio(targetTitle, xRatio, yRatio, wRatio, hRatio) {
 
     ; ピクセル計算結果を使って移動 (DWM補正付き)
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
+}
+
+MoveWindowMaxHeightKeepWidth(targetTitle := "A", gapEdge := "Top") {
+    if (targetTitle != "A") {
+        WinWaitActive, %targetTitle%, , 2
+        if (ErrorLevel)
+            return
+    }
+
+    WinGet, hwnd, ID, %targetTitle%
+    if !hwnd
+        return
+
+    monitor := GetMonitorWorkAreaInfoFromWindow(hwnd)
+    if !IsObject(monitor)
+        return
+
+    GetVisibleWindowPos(x, y, w, h, "ahk_id " . hwnd)
+    toolbarGap := GetMonitorToolbarGap(monitor.Height)
+    finalX := x
+    finalW := w
+    finalY := monitor.Top
+    finalH := monitor.Height - toolbarGap
+
+    if (gapEdge = "Top")
+        finalY := monitor.Top + toolbarGap
+
+    MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
+}
+
+GetMonitorToolbarGap(monitorHeight) {
+    return Round(monitorHeight * 0.03)
 }
 
 ; ========================================================
@@ -175,6 +216,125 @@ GetVisibleWindowPos(ByRef X, ByRef Y, ByRef Width, ByRef Height, WinTitle := "A"
     }
 }
 
+GetMonitorWorkAreaInfoList() {
+    monitors := []
+    SysGet, MonCount, MonitorCount
+
+    Loop, %MonCount% {
+        SysGet, Work, MonitorWorkArea, %A_Index%
+        width := WorkRight - WorkLeft
+        height := WorkBottom - WorkTop
+        monitors.Push({Index: A_Index
+            , Left: WorkLeft
+            , Top: WorkTop
+            , Right: WorkRight
+            , Bottom: WorkBottom
+            , Width: width
+            , Height: height
+            , CenterX: WorkLeft + (width / 2)
+            , CenterY: WorkTop + (height / 2)})
+    }
+
+    return monitors
+}
+
+GetMonitorWorkAreaInfoFromPoint(x, y) {
+    monitors := GetMonitorWorkAreaInfoList()
+    if !monitors.MaxIndex()
+        return ""
+
+    SysGet, primaryIndex, MonitorPrimary
+    fallback := monitors[1]
+
+    for _, monitor in monitors {
+        if (monitor.Index = primaryIndex)
+            fallback := monitor
+
+        if (x >= monitor.Left && x < monitor.Right && y >= monitor.Top && y < monitor.Bottom)
+            return monitor
+    }
+
+    return fallback
+}
+
+GetMonitorWorkAreaInfoFromWindow(hwnd) {
+    WinGetPos, x, y, w, h, ahk_id %hwnd%
+    cx := x + (w / 2)
+    cy := y + (h / 2)
+    return GetMonitorWorkAreaInfoFromPoint(cx, cy)
+}
+
+GetAdjacentMonitorWorkAreaInfo(currentMonitor, direction) {
+    if !IsObject(currentMonitor)
+        return ""
+
+    monitors := GetMonitorWorkAreaInfoList()
+    bestMonitor := ""
+    bestOverlap := -1
+    bestSideDistance := 0
+    bestCenterDistance := 0
+
+    for _, candidate in monitors {
+        if (candidate.Index = currentMonitor.Index)
+            continue
+
+        if (direction = "Left" || direction = "Right") {
+            if (direction = "Left" && candidate.Right > currentMonitor.Left)
+                continue
+            if (direction = "Right" && candidate.Left < currentMonitor.Right)
+                continue
+
+            overlap := GetSpanOverlap(currentMonitor.Top, currentMonitor.Bottom, candidate.Top, candidate.Bottom)
+            if (overlap <= 0)
+                continue
+            sideDistance := (direction = "Left")
+                ? (currentMonitor.Left - candidate.Right)
+                : (candidate.Left - currentMonitor.Right)
+            centerDistance := Abs(currentMonitor.CenterY - candidate.CenterY)
+        } else {
+            if (direction = "Up" && candidate.Bottom > currentMonitor.Top)
+                continue
+            if (direction = "Down" && candidate.Top < currentMonitor.Bottom)
+                continue
+
+            overlap := GetSpanOverlap(currentMonitor.Left, currentMonitor.Right, candidate.Left, candidate.Right)
+            if (overlap <= 0)
+                continue
+            sideDistance := (direction = "Up")
+                ? (currentMonitor.Top - candidate.Bottom)
+                : (candidate.Top - currentMonitor.Bottom)
+            centerDistance := Abs(currentMonitor.CenterX - candidate.CenterX)
+        }
+
+        if (!IsObject(bestMonitor)
+            || overlap > bestOverlap
+            || (overlap = bestOverlap && sideDistance < bestSideDistance)
+            || (overlap = bestOverlap && sideDistance = bestSideDistance && centerDistance < bestCenterDistance)) {
+            bestMonitor := candidate
+            bestOverlap := overlap
+            bestSideDistance := sideDistance
+            bestCenterDistance := centerDistance
+        }
+    }
+
+    return bestMonitor
+}
+
+GetSpanOverlap(start1, end1, start2, end2) {
+    overlapStart := (start1 > start2) ? start1 : start2
+    overlapEnd := (end1 < end2) ? end1 : end2
+    overlap := overlapEnd - overlapStart
+    return (overlap > 0) ? overlap : 0
+}
+
+GetSpanGap(start1, end1, start2, end2) {
+    if (end1 < start2)
+        return start2 - end1
+    if (end2 < start1)
+        return start1 - end2
+    return 0
+}
+
 ; 補助関数: ウィンドウハンドルからモニターハンドルを取得（今回は簡易ロジックで代用したので未使用でも可）
 GetMonitorHandleFromWindow(hwnd) {
     ; Windows API: MonitorFromWindow
@@ -182,36 +342,24 @@ GetMonitorHandleFromWindow(hwnd) {
 }
 
 GetMonitorWorkAreaFromPoint(x, y, ByRef Left, ByRef Top, ByRef Width, ByRef Height) {
-    SysGet, MonCount, MonitorCount
+    monitor := GetMonitorWorkAreaInfoFromPoint(x, y)
+    if !IsObject(monitor)
+        return
 
-    ; 見つからなかった場合はプライマリモニターを使う
-    SysGet, Mon, MonitorWorkArea, 1
-    targetLeft := MonLeft
-    targetRight := MonRight
-    targetTop := MonTop
-    targetBottom := MonBottom
-
-    Loop, %MonCount% {
-        SysGet, tmp, MonitorWorkArea, %A_Index%
-        if (x >= tmpLeft && x <= tmpRight && y >= tmpTop && y <= tmpBottom) {
-            targetLeft := tmpLeft
-            targetRight := tmpRight
-            targetTop := tmpTop
-            targetBottom := tmpBottom
-            break
-        }
-    }
-
-    Left := targetLeft
-    Top := targetTop
-    Width := targetRight - targetLeft
-    Height := targetBottom - targetTop
+    Left := monitor.Left
+    Top := monitor.Top
+    Width := monitor.Width
+    Height := monitor.Height
 }
 
 ; 指定ウィンドウが含まれるモニターの作業領域を取得
 GetMonitorWorkAreaFromWindow(hwnd, ByRef Left, ByRef Top, ByRef Width, ByRef Height) {
-    WinGetPos, x, y, w, h, ahk_id %hwnd%
-    cx := x + (w / 2)
-    cy := y + (h / 2)
-    GetMonitorWorkAreaFromPoint(cx, cy, Left, Top, Width, Height)
+    monitor := GetMonitorWorkAreaInfoFromWindow(hwnd)
+    if !IsObject(monitor)
+        return
+
+    Left := monitor.Left
+    Top := monitor.Top
+    Width := monitor.Width
+    Height := monitor.Height
 }

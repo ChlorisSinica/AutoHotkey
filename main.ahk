@@ -19,7 +19,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\GestureMap.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
 #Include %A_ScriptDir%\Plugins\MouseCursor.ahk
-#Include %A_ScriptDir%\Plugins\MouseExt.ahk
+#Include %A_ScriptDir%\Plugins\MouseWheel.ahk
 #Include %A_ScriptDir%\Plugins\MouseGesture.ahk
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
 #Include %A_ScriptDir%\Plugins\IndicatorManager.ahk
@@ -58,6 +58,8 @@ vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 ; ----- vk1C(Non-Convert) -----
 ; ==========================================================
 #If (EnableNavLayer)
+    vk1C & q::IME_ToEnglish()
+    vk1C & w::IME_ToJapanese()
     vk1C & j::Send,{Blind}{Left}
     vk1C & k::Send,{Blind}{Down}
     vk1C & i::Send,{Blind}{Up}
@@ -71,26 +73,44 @@ vk1C & F2::MG_DebugSnapshot("manual-hotkey")
     vk1C & m::OpenWithNotePad(0, SettingsUI.EditorType)
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #If
-#If (EnableMouseEmu)
-    vk1C & w::Click, Down
-    vk1C & r::Click, Right, Down
-    vk1C & w Up::Click, Up
-    vk1C & r Up::Click, Right, Up
-#If
 
+; ==========================================================
+; ----- Mouse Cursor -----
+; ==========================================================
 Cursor_GetHotkeyConfig() {
-    return {Modifier: "F12"
+    return {Modifier: "F13"
         , Move: {o: "Up", k: "Left", l: "Down", sc027: "Right"}
         , Grid: {o: "Up", k: "Left", l: "Down", sc027: "Right"}}
 }
+#If (EnableMouseEmu)
+    F13 & i::Click, Down
+    F13 & .::Click, Middle
+    F13 & p::Click, Right, Down
+    F13 & i Up::Click, Up
+    F13 & p Up::Click, Right, Up
+#If
 
 ; ==========================================================
-; ----- Alt -----
+; ----- Function-Key (for Mouse) -----
 ; ==========================================================
-!w::    Send, !{F4}
-^!c::   ReplaceEscapeToSlash()
-^!n::   OpenWithMspaint(1)
-^!m::   OpenWithNotePad(1, SettingsUI.EditorType)
+#If (EnableMouseExt && !WinActive("ahk_exe POWERPNT.EXE"))
+    F15::                   Send ^v                         ; 　　（手前側）
+#If (EnableMouseExt)
+    XButton1::              XButton1                        ; 戻る（手前側）
+    XButton2::              XButton2                        ; 進む（　奥側）
+    F16::                   Send ^c                         ; 　　（　奥側）
+    F17::                   Send ^w                         ; タブを閉じる
+    F15 & MButton::         SendInput {Media_Play_Pause}    ;
+    XButton1 & WheelUp::    MouseWheel_HScroll("Left")      ; 左スクロール
+    XButton1 & WheelDown::  MouseWheel_HScroll("Right")     ; 右スクロール
+    XButton2 & WheelUp::    MouseWheel_Zoom("In")           ; ウィンドウ拡大
+    XButton2 & WheelDown::  MouseWheel_Zoom("Out")          ; ウィンドウ縮小
+    F15 & WheelUp::         Send, {Volume_Up}               ; 音量アップ
+    F15 & WheelDown::       Send, {Volume_Down}             ; 音量ダウン
+    F16 & WheelDown::       AltTabAction("Next")
+    F16 & WheelUp::         AltTabAction("Prev")
+    *F16 Up::               CloseAltTabMenu()
+#If
 
 ; ==========================================================
 ; ----- Window-key -----
@@ -104,9 +124,11 @@ Cursor_GetHotkeyConfig() {
     ^#2::   MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
     ^#3::   MoveWindowRatio("A", 0.000, 0.030, 1.000, 0.970)
     ^#4::   MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
+    ^#8::   MoveWindowMaxHeightKeepWidth("A", "Top")
     ^+#1::  MoveWindowRatio("A", 0.003, 0.206, 0.360, 0.470)
     ^+#2::  MoveWindowRatio("A", 0.003, 0.216, 0.404, 0.766)
     ^+#4::  MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
+    ^+#8::  MoveWindowMaxHeightKeepWidth("A", "Bottom")
     ^#F11:: OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
     ^#F12:: OpenVSCode()
     ^+#F12::Reload
@@ -123,27 +145,12 @@ Cursor_GetHotkeyConfig() {
 #If
 
 ; ==========================================================
-; ----- Function-Key (for Mouse) -----
+; ----- Alt -----
 ; ==========================================================
-#If (EnableMouseExt && !WinActive("ahk_exe POWERPNT.EXE"))
-    F15::                   Send ^v                         ; 　　（手前側）
-#If (EnableMouseExt)
-    XButton1::              XButton1                        ; 戻る（手前側）
-    XButton2::              XButton2                        ; 進む（　奥側）
-    F16::                   Send ^c                         ; 　　（　奥側）
-    F17::                   Send ^w                         ; タブを閉じる
-    F15 & F17::             SendInput {Media_Play_Pause}    ;
-    XButton2 & F17::        Send !{F4}                      ;
-    XButton1 & WheelUp::    MouseExt_HScroll("Left")        ; F13 + 上スクロール → 左へ
-    XButton1 & WheelDown::  MouseExt_HScroll("Right")       ; F13 + 下スクロール → 右へ
-    XButton2 & WheelUp::    MouseExt_Zoom("In")             ; ウィンドウ拡大
-    XButton2 & WheelDown::  MouseExt_Zoom("Out")            ; ウィンドウ縮小
-    F15 & WheelUp::         Send, {Volume_Up}               ; 音量アップ
-    F15 & WheelDown::       Send, {Volume_Down}             ; 音量ダウン
-    F16 & WheelDown::       AltTabAction("Next")
-    F16 & WheelUp::         AltTabAction("Prev")
-    *F16 Up::               CloseAltTabMenu()
-#If
+!w::    Send, !{F4}
+^!c::   ReplaceEscapeToSlash()
+^!n::   OpenWithMspaint(1)
+^!m::   OpenWithNotePad(1, SettingsUI.EditorType)
 
 ; ==========================================================
 ; ----- Others -----
@@ -164,7 +171,7 @@ vk1C & x::          Manage_N_Hold("Off")
     F2::        RunSiteSpecificKey("{F2}", KeyActions["F2"])
     ^+c::       CopyPlaneURL()
     F8::        GetAllEdgeURLs(false)
-    ; F8::        Debug_GetAllEdgeURLs()
+; F8::        Debug_GetAllEdgeURLs()
 #If
 
 ; ==========================================================
