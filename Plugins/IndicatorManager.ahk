@@ -1,15 +1,13 @@
 ﻿; ==============================================================================
 ; Indicator / settings UI
-; TreeView (checkboxes) + ListView (hotkey help)
+; ListView (checkboxes + labels) + ListView (hotkey help)
 ; ==============================================================================
 global _SUI_ItemMap := {}
 global _SUI_HelpData := {}
-global _SUI_ParentIDs := []
-global _SUI_PendingID := 0
 global _SUI_CheckStateMap := {}
 global SUI_SettingsGuiHwnd := 0
 global SUI_SubSettingsGuiHwnd := 0
-global SettingsTree := ""
+global SettingsItemsLV := ""
 global SettingsLV := ""
 global RadioNotepads := 0
 global RadioStandard := 0
@@ -30,7 +28,7 @@ Settings_Open() {
 }
 
 Settings_Close() {
-    global SUI_SettingsGuiHwnd, SUI_SubSettingsGuiHwnd, _SUI_PendingID
+    global SUI_SettingsGuiHwnd, SUI_SubSettingsGuiHwnd
 
     SUI_FlushPendingChange("close")
     SUI_DebugLog("settings_close")
@@ -38,7 +36,6 @@ Settings_Close() {
     Gui, SubSettings:Destroy
     SUI_SettingsGuiHwnd := 0
     SUI_SubSettingsGuiHwnd := 0
-    _SUI_PendingID := 0
 }
 
 SUI_DebugInit() {
@@ -104,13 +101,12 @@ SUI_DebugDescribeItem(itemID) {
         return "itemID=" . itemID . " missing=1"
 
     item := _SUI_ItemMap[itemID]
-    currentState := TV_Get(itemID, "Check") ? 1 : 0
+    currentState := SUI_IsItemChecked(itemID) ? 1 : 0
     prevState := _SUI_CheckStateMap.HasKey(itemID) ? _SUI_CheckStateMap[itemID] : "?"
 
     return "itemID=" . itemID
         . " var=" . item.Var
-        . " isParent=" . item.IsParent
-        . " parentID=" . item.ParentID
+        . " row=" . item.Row
         . " prev=" . prevState
         . " cur=" . currentState
 }
@@ -178,6 +174,7 @@ class SettingsUI {
         Menu, Tray, Add, スタートアップで実行する, Startup_Toggle
         Menu, Tray, Add, 機能設定 (Settings), Settings_Open
         Menu, Tray, Add, 設定ログを開く, SUI_DebugOpenLog
+        Menu, Tray, Add, PPT 間隔ログを開く, PPT_SpacingOpenLog
         Menu, Tray, Add
         Menu, Tray, Add, 右クリック状態を記録, MG_DebugSnapshotMenu
         Menu, Tray, Add, 右クリックログを開く, MG_DebugOpenLog
@@ -189,23 +186,29 @@ class SettingsUI {
     }
 
     Show() {
-        Global SUI_SettingsGuiHwnd, SettingsTree, SettingsLV
+        Global SUI_SettingsGuiHwnd, SettingsItemsLV, SettingsLV
         Gui, Settings:Destroy
         Gui, Settings:New, +AlwaysOnTop +HwndhSettingsGui, 機能設定
         SUI_SettingsGuiHwnd := hSettingsGui
         Gui, Settings:Font, s9, Segoe UI
 
-        Gui, Settings:Add, TreeView, x10 y10 w190 h360 vSettingsTree gSUI_TreeHandler Checked -0x4
+        Gui, Settings:Add, ListView, x10 y10 w190 h360 vSettingsItemsLV gSUI_ItemsHandler Checked AltSubmit -Multi -Hdr +LV0x20, |機能
         Gui, Settings:Add, ListView, x210 y10 w400 h360 vSettingsLV Grid NoSortHdr, ホットキー|説明
+
+        SUI_BuildItemList()
+        Gui, Settings:ListView, SettingsItemsLV
+        LV_ModifyCol(1, 28)
+        LV_ModifyCol(2, 138)
+
+        Gui, Settings:ListView, SettingsLV
         LV_ModifyCol(1, 130)
         LV_ModifyCol(2, 260)
-
-        SUI_BuildTree()
         SUI_SnapshotCheckStates()
 
-        firstID := TV_GetNext()
+        Gui, Settings:ListView, SettingsItemsLV
+        firstID := LV_GetCount() ? 1 : 0
         if (firstID) {
-            TV_Modify(firstID, "Select Vis")
+            LV_Modify(firstID, "Select Focus Vis")
             SUI_RefreshLV(firstID)
         }
 
@@ -339,140 +342,114 @@ SUI_InitHelpData() {
     _SUI_HelpData := d
 }
 
-SUI_BuildTree() {
-    global _SUI_ItemMap, _SUI_ParentIDs
+SUI_BuildItemList() {
+    global _SUI_ItemMap, SettingsItemsLV
     Gui, Settings:Default
+    Gui, Settings:ListView, SettingsItemsLV
+    LV_Delete()
     _SUI_ItemMap := {}
-    _SUI_ParentIDs := []
 
-    SUI_AddLeaf("キーボード拡張", "EnableNavLayer", 0)
-    SUI_AddLeaf("ウィンドウ配置", "EnableWinPlace", 0)
-    SUI_AddLeaf("仮想デスクトップ", "EnableVDesk", 0)
-    SUI_AddLeaf("キーボードマウス", "EnableMouseEmu", 0)
-    SUI_AddLeaf("ボタン・ホイール", "EnableMouseBtn", 0)
-    SUI_AddLeaf("マウスジェスチャー", "EnableGestures", 0)
-    SUI_AddLeaf("ブラウザ", "EnableBrowser", 0)
-    SUI_AddLeaf("PowerPoint", "EnablePPT", 0)
-    SUI_AddLeaf("Excel", "EnableExcel", 0)
+    SUI_AddLeaf("キーボード拡張", "EnableNavLayer")
+    SUI_AddLeaf("ウィンドウ配置", "EnableWinPlace")
+    SUI_AddLeaf("仮想デスクトップ", "EnableVDesk")
+    SUI_AddLeaf("キーボードマウス", "EnableMouseEmu")
+    SUI_AddLeaf("ボタン・ホイール", "EnableMouseBtn")
+    SUI_AddLeaf("マウスジェスチャー", "EnableGestures")
+    SUI_AddLeaf("ブラウザ", "EnableBrowser")
+    SUI_AddLeaf("PowerPoint", "EnablePPT")
+    SUI_AddLeaf("Excel", "EnableExcel")
 }
 
-SUI_AddParent(name) {
-    global _SUI_ItemMap, _SUI_ParentIDs
-    pID := TV_Add(name, 0, "Expand Bold")
-    _SUI_ItemMap[pID] := {Var: "", IsParent: true, ParentID: 0, ChildIDs: []}
-    _SUI_ParentIDs.Push(pID)
-    return pID
-}
-
-SUI_AddLeaf(name, varName, parentID) {
-    global _SUI_ItemMap
+SUI_AddLeaf(name, varName) {
+    global _SUI_ItemMap, SettingsItemsLV
+    Gui, Settings:Default
+    Gui, Settings:ListView, SettingsItemsLV
     val := SUI_GetFlagValue(varName)
     opts := ""
     if (val)
-        opts .= " Check"
-    leafID := TV_Add(name, parentID, opts)
-    _SUI_ItemMap[leafID] := {Var: varName, IsParent: false, ParentID: parentID}
-    if (parentID && _SUI_ItemMap.HasKey(parentID))
-        _SUI_ItemMap[parentID].ChildIDs.Push(leafID)
-    return leafID
+        opts := "Check"
+    row := LV_Add(opts, "", name)
+    _SUI_ItemMap[row] := {Var: varName, Row: row, Name: name}
+    return row
 }
 
-SUI_FinalizeParent(parentID) {
-    global _SUI_ItemMap
-    if (!_SUI_ItemMap.HasKey(parentID))
-        return
-    SUI_SyncParent(parentID)
-}
+SUI_IsItemChecked(itemID) {
+    global SettingsItemsLV
 
-SUI_TreeHandler() {
-    global _SUI_PendingID
+    if (!itemID)
+        return false
+
     Gui, Settings:Default
+    Gui, Settings:ListView, SettingsItemsLV
+    return (LV_GetNext(itemID - 1, "Checked") = itemID)
+}
+
+SUI_GetSelectedItemID() {
+    global SettingsItemsLV
+
+    Gui, Settings:Default
+    Gui, Settings:ListView, SettingsItemsLV
+    itemID := LV_GetNext(0, "Focused")
+    if (!itemID)
+        itemID := LV_GetNext()
+    return itemID
+}
+
+SUI_ItemsHandler() {
     evt := A_GuiEvent
     info := A_EventInfo
-    currentSelID := TV_GetSelection()
-    targetID := (evt = "Normal" && info) ? info : currentSelID
+    flags := ErrorLevel
+    targetID := info ? info : SUI_GetSelectedItemID()
+    selectedID := SUI_GetSelectedItemID()
 
-    if (evt = "Normal") {
-        if (info && info != currentSelID)
-            TV_Modify(info, "Select Vis")
-        else if (info)
-            SUI_RefreshLV(info)
+    if (selectedID)
+        SUI_RefreshLV(selectedID)
+    else if (targetID)
+        SUI_RefreshLV(targetID)
 
-        _SUI_PendingID := info
-        fn := Func("SUI_AfterClick")
-        SetTimer, %fn%, -30
-    } else if (evt = "S") {
-        SUI_RefreshLV(info)
-    } else if (evt = "K") {
-        SUI_RefreshLV(currentSelID)
-        if (info = 32) {
-            _SUI_PendingID := currentSelID
-            fn := Func("SUI_AfterClick")
-            SetTimer, %fn%, -30
-        }
+    if (evt = "I" && info && (InStr(flags, "C") || InStr(flags, "c"))) {
+        SUI_ProcessItemCheckChange(info, "item")
     }
 
-    SUI_DebugLog("tree_event"
+    SUI_DebugLog("list_event"
         , "evt=" . evt
         . " info=" . info
-        . " selID=" . currentSelID
+        . " flags=" . flags
+        . " selID=" . selectedID
         . " targetID=" . targetID
         . " " . SUI_DebugDescribeItem(targetID))
 }
 
-SUI_AfterClick() {
-    global _SUI_PendingID
-
-    clickedID := _SUI_PendingID
-    _SUI_PendingID := 0
-    if (!clickedID)
-        return
-
-    Gui, Settings:Default
-    TV_Modify(clickedID, "Select Vis")
-    SUI_RefreshLV(clickedID)
-    SUI_ProcessClick(clickedID, "timer")
-}
-
-SUI_ProcessClick(clickedID, source := "manual") {
+SUI_ProcessItemCheckChange(clickedID, source := "manual") {
     global _SUI_ItemMap
-    Gui, Settings:Default
 
     if (!clickedID || !_SUI_ItemMap.HasKey(clickedID))
         return false
 
     if !SUI_DidCheckStateChange(clickedID) {
-        SUI_DebugLog("after_click_nochange"
+        SUI_DebugLog("item_check_nochange"
             , "source=" . source . " " . SUI_DebugDescribeItem(clickedID))
         return false
     }
 
-    item := _SUI_ItemMap[clickedID]
-    SUI_DebugLog("after_click_apply"
+    SUI_DebugLog("item_check_apply"
         , "source=" . source . " " . SUI_DebugDescribeItem(clickedID))
 
     SUI_SyncVars()
     SUI_SnapshotCheckStates()
-    SUI_DebugLog("after_click_done"
+    SUI_DebugLog("item_check_done"
         , "source=" . source . " " . SUI_DebugDescribeItem(clickedID))
     return true
 }
 
 SUI_FlushPendingChange(reason := "manual") {
-    global SUI_SettingsGuiHwnd, _SUI_PendingID
+    global SUI_SettingsGuiHwnd
 
     if !(SUI_SettingsGuiHwnd && DllCall("IsWindow", "Ptr", SUI_SettingsGuiHwnd))
         return
 
-    Gui, Settings:Default
-    if !SUI_ProcessClick(_SUI_PendingID, "flush-" . reason) {
-        SUI_SyncVars()
-        SUI_SnapshotCheckStates()
-    }
-
-    _SUI_PendingID := 0
-    static timerFn := Func("SUI_AfterClick")
-    SetTimer, %timerFn%, Off
+    SUI_SyncVars()
+    SUI_SnapshotCheckStates()
     SUI_DebugLog("flush_done", "reason=" . reason)
 }
 
@@ -511,10 +488,10 @@ SUI_SyncVars() {
     Gui, Settings:Default
 
     for itemID, item in _SUI_ItemMap {
-        if (item.IsParent || item.Var = "")
+        if (item.Var = "")
             continue
 
-        v := TV_Get(itemID, "Check") ? 1 : 0
+        v := SUI_IsItemChecked(itemID) ? 1 : 0
         if (item.Var = "EnableNavLayer")
             EnableNavLayer := v
         else if (item.Var = "EnableWinPlace")
@@ -536,34 +513,6 @@ SUI_SyncVars() {
     }
 
     SUI_DebugLog("sync_vars")
-}
-
-SUI_SyncAllParents() {
-    global _SUI_ParentIDs
-
-    for _, parentID in _SUI_ParentIDs
-        SUI_SyncParent(parentID)
-}
-
-SUI_SyncParent(parentID) {
-    global _SUI_ItemMap
-
-    if (!_SUI_ItemMap.HasKey(parentID))
-        return
-
-    parent := _SUI_ItemMap[parentID]
-    allChecked := true
-    for _, childID in parent.ChildIDs {
-        if !TV_Get(childID, "Check") {
-            allChecked := false
-            break
-        }
-    }
-
-    if (allChecked)
-        TV_Modify(parentID, "Check")
-    else
-        TV_Modify(parentID, "-Check")
 }
 
 SUI_GetFlagValue(varName) {
@@ -598,7 +547,7 @@ SUI_DidCheckStateChange(itemID) {
     if (!itemID || !_SUI_ItemMap.HasKey(itemID))
         return false
 
-    currentState := TV_Get(itemID, "Check") ? 1 : 0
+    currentState := SUI_IsItemChecked(itemID) ? 1 : 0
     if !_SUI_CheckStateMap.HasKey(itemID)
         return false
 
@@ -610,7 +559,7 @@ SUI_SnapshotCheckStates() {
 
     _SUI_CheckStateMap := {}
     for itemID, item in _SUI_ItemMap
-        _SUI_CheckStateMap[itemID] := TV_Get(itemID, "Check") ? 1 : 0
+        _SUI_CheckStateMap[itemID] := SUI_IsItemChecked(itemID) ? 1 : 0
 }
 
 Startup_Toggle(ItemName, ItemPos := "", MenuName := "") {

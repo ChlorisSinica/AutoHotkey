@@ -1,5 +1,34 @@
 ﻿global g_HoldN_Active := 0
 
+IME_SetOpenStatus(isOpen, showTip := true) {
+    WinGet, activeHwnd, ID, A
+    if !activeHwnd
+        return false
+
+    imeHwnd := DllCall("imm32\ImmGetDefaultIMEWnd", "Ptr", activeHwnd, "Ptr")
+    if !imeHwnd
+        return false
+
+    prevDetectHiddenWindows := A_DetectHiddenWindows
+    DetectHiddenWindows, On
+    SendMessage, 0x0283, 0x0006, % isOpen ? 1 : 0,, ahk_id %imeHwnd%
+    DetectHiddenWindows, %prevDetectHiddenWindows%
+
+    if (showTip) {
+        ToolTip, % isOpen ? "[IME] JP" : "[IME] ENG"
+        SetTimer, CloseToolTip, -1000
+    }
+    return true
+}
+
+IME_ToEnglish() {
+    return IME_SetOpenStatus(false)
+}
+
+IME_ToJapanese() {
+    return IME_SetOpenStatus(true)
+}
+
 InsertDateTime(fmt) {
     FormatTime, TimeString,, %fmt%
     SendInput, {Text}%TimeString%
