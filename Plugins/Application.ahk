@@ -66,6 +66,11 @@ OpenWithMspaint(withFile = 1) {
     Run, mspaint.exe "%TargetArgs%"
 }
 
+IsNotepadsAvailable() {
+    EnvGet, localAppData, LOCALAPPDATA
+    return FileExist(localAppData . "\Microsoft\WindowsApps\Notepads.exe") ? 1 : 0
+}
+
 OpenWithNotePad(withFile = 1, editorType = 1) {
     TargetArgs := ""
     if (withFile = 1) {
@@ -79,7 +84,7 @@ OpenWithNotePad(withFile = 1, editorType = 1) {
         }
     }
 
-    if (editorType = 1) {
+    if (editorType = 1 && IsNotepadsAvailable()) {
         Run, Notepads %TargetArgs%
     } else {
         Run, notepad.exe %TargetArgs%

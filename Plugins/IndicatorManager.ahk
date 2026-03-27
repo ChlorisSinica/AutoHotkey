@@ -308,6 +308,10 @@ class SettingsUI {
 
     ShowDetailWindow() {
         Global SUI_SubSettingsGuiHwnd, RadioNotepads, RadioStandard
+        notepadsAvailable := IsNotepadsAvailable()
+        if (!notepadsAvailable && this.EditorType = 1)
+            this.EditorType := 2
+
         Gui, SubSettings:Destroy
         Gui, SubSettings:New, +OwnerSettings +AlwaysOnTop +ToolWindow +HwndhSubSettingsGui, エディタ選択
         SUI_SubSettingsGuiHwnd := hSubSettingsGui
@@ -318,8 +322,12 @@ class SettingsUI {
 
         check1 := (this.EditorType = 1) ? "Checked" : ""
         check2 := (this.EditorType = 2) ? "Checked" : ""
-        Gui, SubSettings:Add, Radio, xs+10 ys+25 vRadioNotepads g%fnEditor% %check1%, Notepads (UWP)
+        disabled1 := notepadsAvailable ? "" : "Disabled"
+        label1 := notepadsAvailable ? "Notepads (UWP)" : "Notepads (未インストール)"
+        Gui, SubSettings:Add, Radio, xs+10 ys+25 vRadioNotepads g%fnEditor% %check1% %disabled1%, %label1%
         Gui, SubSettings:Add, Radio, x+10 vRadioStandard g%fnEditor% %check2%, notepad.exe (標準)
+        if (!notepadsAvailable)
+            Gui, SubSettings:Add, Text, xs+10 y+4 cGray, Notepads が見つからないため使用不可
         Gui, SubSettings:Show, AutoSize Center
     }
 

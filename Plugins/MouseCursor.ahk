@@ -5,16 +5,28 @@
 ; - Grid jumps can cross monitors and keep edge positions slightly inset
 ; ==============================================================================
 
-global CursorConfig := {BaseSpeed: 2.0
-    , MaxSpeed: 50.0
-    , Acceleration: 1.25
-    , TimerInterval: 10
-    , IsRunning: false
-    , CurrentSpeed: 2.0
-    , Directions: {Up: 0, Left: 0, Down: 0, Right: 0}}
-global CursorGridConfig     := {DefaultCols: 4, DefaultRows: 4, EdgeInset: 6}
+global CursorConfig := Cursor_CreateConfig()
+global CursorGridConfig     := Cursor_CreateGridConfig()
 global CursorHotkeyConfig   := ""
-global CursorHotkeyState    := {DownMap: {}, UpMap: {}, GridMap: {}, ModifierUp: ""}
+global CursorHotkeyState    := Cursor_CreateHotkeyState()
+
+Cursor_CreateConfig() {
+    return {BaseSpeed: 2.0
+        , MaxSpeed: 50.0
+        , Acceleration: 1.25
+        , TimerInterval: 10
+        , IsRunning: false
+        , CurrentSpeed: 2.0
+        , Directions: {Up: 0, Left: 0, Down: 0, Right: 0}}
+}
+
+Cursor_CreateGridConfig() {
+    return {DefaultCols: 4, DefaultRows: 4, EdgeInset: 6}
+}
+
+Cursor_CreateHotkeyState() {
+    return {DownMap: {}, UpMap: {}, GridMap: {}, ModifierUp: ""}
+}
 
 Cursor_RegisterHotkeys(config) {
     global CursorHotkeyConfig, CursorHotkeyState
