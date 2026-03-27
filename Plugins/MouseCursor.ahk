@@ -55,6 +55,14 @@ Cursor_GridHotkeyEnabled() {
     return Cursor_Enabled() && GetKeyState("Ctrl", "P")
 }
 
+; AHK v1 requires Hotkey, If expressions to already exist as #If directives.
+#If Cursor_MoveHotkeyEnabled()
+#If
+#If Cursor_Enabled()
+#If
+#If Cursor_GridHotkeyEnabled()
+#If
+
 Cursor_MoveHotkeyDown() {
     global CursorHotkeyState
 

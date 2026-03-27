@@ -19,6 +19,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\GestureMap.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
 #Include %A_ScriptDir%\Plugins\MouseCursor.ahk
+#Include %A_ScriptDir%\Plugins\MouseExt.ahk
 #Include %A_ScriptDir%\Plugins\MouseGesture.ahk
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
 #Include %A_ScriptDir%\Plugins\IndicatorManager.ahk
@@ -133,10 +134,10 @@ Cursor_GetHotkeyConfig() {
     F17::                   Send ^w                         ; タブを閉じる
     F15 & F17::             SendInput {Media_Play_Pause}    ;
     XButton2 & F17::        Send !{F4}                      ;
-    XButton1 & WheelUp::    Send, {WheelLeft}               ; F13 + 上スクロール → 左へ
-    XButton1 & WheelDown::  Send, {WheelRight}              ; F13 + 下スクロール → 右へ
-    XButton2 & WheelUp::    Send ^{NumpadAdd}               ; ウィンドウ拡大
-    XButton2 & WheelDown::  Send ^{NumpadSub}               ; ウィンドウ縮小
+    XButton1 & WheelUp::    MouseExt_HScroll("Left")        ; F13 + 上スクロール → 左へ
+    XButton1 & WheelDown::  MouseExt_HScroll("Right")       ; F13 + 下スクロール → 右へ
+    XButton2 & WheelUp::    MouseExt_Zoom("In")             ; ウィンドウ拡大
+    XButton2 & WheelDown::  MouseExt_Zoom("Out")            ; ウィンドウ縮小
     F15 & WheelUp::         Send, {Volume_Up}               ; 音量アップ
     F15 & WheelDown::       Send, {Volume_Down}             ; 音量ダウン
     F16 & WheelDown::       AltTabAction("Next")

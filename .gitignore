@@ -11,7 +11,7 @@
 # VS Code settings (optional)
 .vscode/
 .claude/
-.claude_tmp/
+.codex_tmp/
 
 # Zips
 __zip__/
