@@ -162,7 +162,7 @@ IME_SetOpenStatus(isOpen, showTip := true) {
         if (success = true)
             ToolTip, % isOpen ? "[IME] かな" : "[IME] 英"
         else if (success = -1)
-            ToolTip, % isOpen ? "[IME] かな切替要求" : "[IME] 英切替要求"
+            ToolTip, % isOpen ? "[IME] かな" : "[IME] 英"
         else
             ToolTip, % isOpen ? "[IME] かな切替失敗" : "[IME] 英切替失敗"
         SetTimer, CloseToolTip, -1000
