@@ -31,19 +31,6 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
 
 ; ==========================================================
-; --- 初期化処理 ---
-; ==========================================================
-DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
-EnvGet, profilePath, USERPROFILE
-
-Indicator_Init()
-TrayTip, AutoHotkey, Script Reloaded, 2 ;
-CG_Init(70, ["XButton1", "XButton2"])
-OnExit("CG_Cleanup")
-UiaInit()
-OnExit("UiaCleanup")
-
-; ==========================================================
 ; ----- Indicator用変数 -----
 ; ==========================================================
 global EnableNavLayer   := 1
@@ -59,11 +46,26 @@ global EnableBrowser    := 1
 global EnablePPT        := 1
 global EnableExcel      := 1
 
+; ==========================================================
+; --- 初期化処理 ---
+; ==========================================================
+DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
+EnvGet, profilePath, USERPROFILE
+
+Indicator_Init()
+TrayTip, AutoHotkey, Script Reloaded, 2 ;
+
 SUI_LoadConfig()
+CG_Init(70, ["XButton1", "XButton2"])
+OnExit("CG_Cleanup")
+UiaInit()
+OnExit("UiaCleanup")
+
 MG_DebugInit()
 Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
 PPT_SpacingLog("startup", "script=" . A_ScriptFullPath)
 PPT_CaptionInit()
+
 vk1C & F1::Settings_Open()
 vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 #If WinActive("機能設定") && SUI_HasHelpSelection()
