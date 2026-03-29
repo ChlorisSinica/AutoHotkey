@@ -38,7 +38,6 @@ EnvGet, profilePath, USERPROFILE
 
 Indicator_Init()
 TrayTip, AutoHotkey, Script Reloaded, 2 ;
-global SuppressedFunctionKeyUntil := {}
 CG_Init(70, ["XButton1", "XButton2"])
 OnExit("CG_Cleanup")
 UiaInit()
@@ -65,14 +64,8 @@ MG_DebugInit()
 Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
 PPT_SpacingLog("startup", "script=" . A_ScriptFullPath)
 PPT_CaptionInit()
-vk1C & F1::
-    SuppressFunctionKey("F1")
-    Settings_Open()
-return
-vk1C & F2::
-    SuppressFunctionKey("F2")
-    MG_DebugSnapshot("manual-hotkey")
-return
+vk1C & F1::Settings_Open()
+vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 #If WinActive("機能設定") && SUI_HasHelpSelection()
     ^c::SUI_CopySelectedHelpRow()
 #If
@@ -209,40 +202,10 @@ Cursor_GetHotkeyConfig() {
 #If (EnableBrowser && WinActive("ahk_group BrowserGroup"))
     ^+c::       CopyPlaneURL()
     $^sc073::   TogglePDFZoom()
-    $F1 Up::
-        if ConsumeSuppressedFunctionKey("F1")
-            return
-        RunSiteSpecificKey("{F1}", KeyActions["F1"])
-    return
-
-    F2::
-        if ConsumeSuppressedFunctionKey("F2")
-            return
-        RunSiteSpecificKey("{F2}", KeyActions["F2"])
-    return
+    F1::        RunSiteSpecificKey("{F1}", KeyActions["F1"])
+    F2::        RunSiteSpecificKey("{F2}", KeyActions["F2"])
     F8::        GetAllEdgeURLs(false)
 #If
-
-SuppressFunctionKey(keyName, ttlMs := 350) {
-    global SuppressedFunctionKeyUntil
-
-    if !IsObject(SuppressedFunctionKeyUntil)
-        SuppressedFunctionKeyUntil := {}
-    SuppressedFunctionKeyUntil[keyName] := A_TickCount + ttlMs
-}
-
-ConsumeSuppressedFunctionKey(keyName) {
-    global SuppressedFunctionKeyUntil
-
-    if !IsObject(SuppressedFunctionKeyUntil)
-        return false
-    if !SuppressedFunctionKeyUntil.HasKey(keyName)
-        return false
-
-    expiresAt := SuppressedFunctionKeyUntil[keyName]
-    SuppressedFunctionKeyUntil.Delete(keyName)
-    return (A_TickCount <= expiresAt)
-}
 
 ; ==========================================================
 ; ----- Power Point -----
