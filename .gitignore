@@ -1,5 +1,7 @@
 ﻿# AutoHotkey compiled scripts
 *.exe
+!lib/CSharpUIA/UiaMonitor/*.exe
+!lib/CSharpUIA/UiaMonitor/**/*.exe
 
 # Logs
 *.log
@@ -12,6 +14,11 @@
 .vscode/
 .claude/
 .codex_tmp/
+.logs/
+
+
+# UiaMonitor self-contained build (git管理対象)
+!lib/CSharpUIA/UiaMonitor/
 
 # Zips
 __zip__/
@@ -24,4 +31,5 @@ out/
 temp/
 
 auth.json
-Plugins/indicator_settings.ini
+config/
+lib/MGLahk141/

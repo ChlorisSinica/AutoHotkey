@@ -1,9 +1,16 @@
 ﻿global KeyActions := {}
 KeyActions["F1"] := {}
+KeyActions["F2"] := {}
 KeyActions["F1"]["x.com"]             := Func("SaveCookiesCurrentSite")
 KeyActions["F1"]["youtube.com"]       := Func("SaveCookiesCurrentSite")
 KeyActions["F1"]["instagram.com"]     := Func("SaveCookiesCurrentSite")
 KeyActions["F1"]["music.youtube.com"] := Func("SaveCookiesCurrentSite")
+global Browser_PDFZoomDebugEnabled    := false
+global Browser_PDFZoomDebugLogDir     := A_ScriptDir . "\.claude"
+global Browser_PDFZoomDebugLogPath    := Browser_PDFZoomDebugLogDir . "\pdf_zoom_debug.log"
+global Browser_PDFZoomDebugMaxBytes   := 262144
+global Browser_PDFZoomTryShortcutFirst := false
+global Browser_URLExportPath          := "C:\myApp\__temp__\urls.txt"
 
 ; ==========================================================
 ; ホットキー定義 (ブラウザがアクティブな時のみ有効)
@@ -54,6 +61,446 @@ CopyPlaneURL() {
     Clipboard := UrlText
 
     ClipSaved := ""
+}
+
+Browser_DebugEnsurePdfZoomLogDir() {
+    global Browser_PDFZoomDebugLogDir
+
+    if !InStr(FileExist(Browser_PDFZoomDebugLogDir), "D")
+        FileCreateDir, %Browser_PDFZoomDebugLogDir%
+}
+
+Browser_DebugRotatePdfZoomLogIfNeeded() {
+    global Browser_PDFZoomDebugLogPath, Browser_PDFZoomDebugMaxBytes
+
+    if !FileExist(Browser_PDFZoomDebugLogPath)
+        return
+
+    FileGetSize, logSize, %Browser_PDFZoomDebugLogPath%
+    if (logSize < Browser_PDFZoomDebugMaxBytes)
+        return
+
+    backupPath := RegExReplace(Browser_PDFZoomDebugLogPath, "\.log$", ".old.log")
+    FileDelete, %backupPath%
+    FileMove, %Browser_PDFZoomDebugLogPath%, %backupPath%, 1
+}
+
+Browser_DebugSanitize(text) {
+    if IsObject(text) {
+        if (text.Message != "")
+            text := text.Message
+        else if (text.What != "")
+            text := text.What
+        else
+            text := "[object]"
+    }
+
+    text := text . ""
+    text := StrReplace(text, "`r", " ")
+    text := StrReplace(text, "`n", " ")
+    text := StrReplace(text, "`t", " ")
+    return text
+}
+
+Browser_PDFZoomLog(event, extra := "") {
+    global Browser_PDFZoomDebugEnabled, Browser_PDFZoomDebugLogPath
+
+    if (!Browser_PDFZoomDebugEnabled)
+        return
+
+    Browser_DebugEnsurePdfZoomLogDir()
+    Browser_DebugRotatePdfZoomLogIfNeeded()
+
+    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
+    line := stamp . "." . A_MSec . " event=" . event
+    if (extra != "")
+        line .= " extra=" . Browser_DebugSanitize(extra)
+    FileAppend, % line . "`n", %Browser_PDFZoomDebugLogPath%, UTF-8
+}
+
+Browser_IsPdfUrl(url) {
+    if (url = "")
+        return false
+    return RegExMatch(url, "i)\.pdf(?:$|[?#&])")
+}
+
+Browser_IsPdfTitle(title) {
+    if (title = "")
+        return false
+    return RegExMatch(title, "i)\.pdf(?:$|\s| - )")
+}
+
+Browser_AppendReason(ByRef reasonText, reason) {
+    if (reason = "")
+        return
+
+    if (reasonText = "") {
+        reasonText := reason
+        return
+    }
+
+    if !InStr("|" . reasonText . "|", "|" . reason . "|")
+        reasonText .= "|" . reason
+}
+
+Browser_GetFocusedElementSummary() {
+    global Browser_PDFZoomDebugEnabled
+
+    if (!Browser_PDFZoomDebugEnabled)
+        return ""
+
+    try {
+        UIA := UIA_Interface()
+        focusedEl := UIA.GetFocusedElement()
+        summary := "name=" . Browser_DebugSanitize(focusedEl.CurrentName)
+        summary .= " type=" . Browser_DebugSanitize(focusedEl.CurrentLocalizedControlType)
+        summary .= " aid=" . Browser_DebugSanitize(focusedEl.CurrentAutomationId)
+        summary .= " class=" . Browser_DebugSanitize(focusedEl.CurrentClassName)
+        return summary
+    }
+
+    return "unavailable"
+}
+
+Browser_GetFocusedControlSummary(activeHwnd) {
+    global Browser_PDFZoomDebugEnabled
+
+    if (!Browser_PDFZoomDebugEnabled)
+        return ""
+
+    ControlGetFocus, focusedCtl, ahk_id %activeHwnd%
+    WinGet, controlList, ControlList, ahk_id %activeHwnd%
+
+    preferredCtl := ""
+    for _, ctl in StrSplit(controlList, "`n", "`r") {
+        if (ctl = "")
+            continue
+        if RegExMatch(ctl, "i)^Chrome_RenderWidgetHostHWND") {
+            preferredCtl := ctl
+            break
+        }
+        if (preferredCtl = "" && RegExMatch(ctl, "i)^Intermediate D3D Window"))
+            preferredCtl := ctl
+        else if (preferredCtl = "" && RegExMatch(ctl, "i)^Chrome_WidgetWin"))
+            preferredCtl := ctl
+    }
+
+    summary := "focusedCtl=" . Browser_DebugSanitize(focusedCtl)
+    if (preferredCtl != "")
+        summary .= " preferredCtl=" . Browser_DebugSanitize(preferredCtl)
+    return summary
+}
+
+Browser_FocusBrowserControl(activeHwnd, ByRef focusMethod := "") {
+    WinGet, controlList, ControlList, ahk_id %activeHwnd%
+
+    targetCtl := ""
+    for _, ctl in StrSplit(controlList, "`n", "`r") {
+        if (ctl = "")
+            continue
+        if RegExMatch(ctl, "i)^Chrome_RenderWidgetHostHWND") {
+            targetCtl := ctl
+            break
+        }
+        if (targetCtl = "" && RegExMatch(ctl, "i)^Intermediate D3D Window"))
+            targetCtl := ctl
+        else if (targetCtl = "" && RegExMatch(ctl, "i)^Chrome_WidgetWin"))
+            targetCtl := ctl
+    }
+
+    if (targetCtl = "")
+        return false
+
+    ControlFocus, %targetCtl%, ahk_id %activeHwnd%
+    Sleep, 40
+    ControlGetFocus, focusedCtl, ahk_id %activeHwnd%
+    if (focusedCtl = targetCtl) {
+        focusMethod := "ControlFocus:" . targetCtl
+        return true
+    }
+
+    return false
+}
+
+Browser_ScreenToClient(hwnd, screenX, screenY) {
+    VarSetCapacity(pt, 8, 0)
+    NumPut(screenX, pt, 0, "Int")
+    NumPut(screenY, pt, 4, "Int")
+
+    if !DllCall("ScreenToClient", "Ptr", hwnd, "Ptr", &pt)
+        return ""
+
+    return {x: NumGet(pt, 0, "Int"), y: NumGet(pt, 4, "Int")}
+}
+
+Browser_DescribeElement(el) {
+    if (!el)
+        return "missing"
+
+    name := ""
+    type := ""
+    aid := ""
+    className := ""
+    focusable := "?"
+    hasFocus := "?"
+
+    try name := el.CurrentName
+    try type := el.CurrentLocalizedControlType
+    try aid := el.CurrentAutomationId
+    try className := el.CurrentClassName
+    try focusable := el.CurrentIsKeyboardFocusable
+    try hasFocus := el.CurrentHasKeyboardFocus
+
+    return "name=" . Browser_DebugSanitize(name)
+        . " type=" . Browser_DebugSanitize(type)
+        . " aid=" . Browser_DebugSanitize(aid)
+        . " class=" . Browser_DebugSanitize(className)
+        . " focusable=" . focusable
+        . " hasFocus=" . hasFocus
+}
+
+Browser_IsPDFToolbarElement(el) {
+    if (!el)
+        return false
+
+    aid := ""
+    name := ""
+    type := ""
+
+    try aid := el.CurrentAutomationId
+    try name := el.CurrentName
+    try type := el.CurrentLocalizedControlType
+
+    if (aid = "pagefit" || aid = "fit-to-width" || aid = "widthfit")
+        return true
+
+    if (type = "ボタン" || type = "button") {
+        if InStr(name, "ページに合わせる")
+            return true
+        if InStr(name, "幅に合わせる")
+            return true
+        if InStr(name, "Fit to page")
+            return true
+        if InStr(name, "Fit to width")
+            return true
+    }
+
+    return false
+}
+
+Browser_TrySetUIAAutoSetFocus(uia, enabled, ByRef previousValue := "", ByRef detail := "") {
+    if !IsObject(uia) {
+        detail := "AutoSetFocus=uia_missing"
+        return false
+    }
+
+    try {
+        previousValue := uia.AutoSetFocus
+        uia.AutoSetFocus := enabled ? 1 : 0
+        detail := "AutoSetFocus=" . previousValue . "->" . (enabled ? 1 : 0)
+        return true
+    } catch e {
+        detail := "AutoSetFocus=unsupported error=" . Browser_DebugSanitize(e)
+        return false
+    }
+}
+
+Browser_RestoreUIAAutoSetFocus(uia, previousValue, ByRef detail := "") {
+    if !IsObject(uia) {
+        detail := "AutoSetFocusRestore=uia_missing"
+        return false
+    }
+
+    try {
+        uia.AutoSetFocus := previousValue
+        detail := "AutoSetFocusRestore=" . previousValue
+        return true
+    } catch e {
+        detail := "AutoSetFocusRestore=failed error=" . Browser_DebugSanitize(e)
+        return false
+    }
+}
+
+Browser_AddPDFFocusCandidate(ByRef candidates, label, el) {
+    if (!el)
+        return
+
+    candidates.Push({Label: label, Element: el, Summary: Browser_DescribeElement(el)})
+}
+
+Browser_DescribePDFFocusCandidates(candidates) {
+    text := ""
+
+    for _, candidate in candidates {
+        if (text != "")
+            text .= " || "
+        text .= candidate.Label . ":" . candidate.Summary
+    }
+
+    return (text != "") ? text : "none"
+}
+
+Browser_ShouldRestorePDFFocus() {
+    try {
+        UIA := UIA_Interface()
+        focusedEl := UIA.GetFocusedElement()
+        focusedAid := focusedEl.CurrentAutomationId
+        focusedType := focusedEl.CurrentControlType
+
+        if (focusedAid = "RootWebArea")
+            return false
+        if (focusedType = UIA_Enum.UIA_DocumentControlTypeId)
+            return false
+    }
+
+    return true
+}
+
+Browser_FocusWebContentPane(activeHwnd, ByRef focusMethod := "") {
+    WinActivate, ahk_id %activeHwnd%
+    WinWaitActive, ahk_id %activeHwnd%, , 1
+
+    Send, ^{F6}
+    Sleep, 40
+    focusMethod := "Ctrl+F6"
+    Browser_PDFZoomLog("pdf_zoom_focus_web_content"
+        , "step=" . focusMethod
+        . " focus=" . Browser_GetFocusedElementSummary()
+        . " " . Browser_GetFocusedControlSummary(activeHwnd))
+
+    if !Browser_ShouldRestorePDFFocus()
+        return true
+
+    SendInput, {Esc}
+    Sleep, 20
+    Send, ^{F6}
+    Sleep, 40
+    focusMethod := "Esc + Ctrl+F6"
+    Browser_PDFZoomLog("pdf_zoom_focus_web_content"
+        , "step=" . focusMethod
+        . " focus=" . Browser_GetFocusedElementSummary()
+        . " " . Browser_GetFocusedControlSummary(activeHwnd))
+
+    return !Browser_ShouldRestorePDFFocus()
+}
+
+Browser_TryRefocusViaMousePoint(activeHwnd, ByRef focusMethod := "") {
+    MouseGetPos, mouseX, mouseY, mouseHwnd
+    if (mouseHwnd != activeHwnd) {
+        focusMethod := "mouse_outside_active_window"
+        return false
+    }
+
+    mouseElSummary := "unavailable"
+    try {
+        UIA := UIA_Interface()
+        mouseEl := UIA.ElementFromPoint(mouseX, mouseY)
+        mouseElSummary := Browser_DescribeElement(mouseEl)
+        if Browser_IsPDFToolbarElement(mouseEl) {
+            focusMethod := "mouse_over_toolbar " . mouseElSummary
+            return false
+        }
+    }
+
+    clientPt := Browser_ScreenToClient(activeHwnd, mouseX, mouseY)
+    if !IsObject(clientPt) {
+        focusMethod := "screen_to_client_failed"
+        return false
+    }
+
+    clickPos := "X" . clientPt.x . " Y" . clientPt.y
+    ControlClick, %clickPos%, ahk_id %activeHwnd%,, Left, 1, NA
+    Sleep, 30
+    focusMethod := "ControlClickCurrentMousePoint x=" . clientPt.x . " y=" . clientPt.y
+        . " mouseEl=" . mouseElSummary
+    return true
+}
+
+Browser_GetPDFDocumentElement(cBrowser) {
+    if !IsObject(cBrowser)
+        return ""
+
+    try {
+        docEl := cBrowser.GetCurrentDocumentElement()
+        if (docEl)
+            return docEl
+    }
+
+    try {
+        rootWebArea := cBrowser.BrowserElement.FindFirstBy("AutomationId=RootWebArea")
+        if (rootWebArea)
+            return rootWebArea
+    }
+
+    try {
+        genericDoc := cBrowser.BrowserElement.FindFirstBy("ControlType=Document")
+        if (genericDoc)
+            return genericDoc
+    }
+
+    return ""
+}
+
+Browser_GetPDFDocumentPoint(cBrowser, relativeTo := "window") {
+    docEl := Browser_GetPDFDocumentElement(cBrowser)
+    if (!docEl)
+        return ""
+
+    try pos := docEl.GetCurrentPos(relativeTo)
+    if !IsObject(pos)
+        return ""
+
+    ; 中央寄りだとリンク等を踏む可能性があるので、左寄り・やや上寄りの安全側を狙う
+    clickX := pos.x + Round(pos.w * 0.18)
+    clickY := pos.y + Round(pos.h * 0.22)
+
+    if (clickX < pos.x + 12)
+        clickX := pos.x + 12
+    if (clickY < pos.y + 12)
+        clickY := pos.y + 12
+
+    return {x: clickX, y: clickY, w: pos.w, h: pos.h}
+}
+
+Browser_TryRefocusViaDocumentControlClick(activeHwnd, cBrowser, ByRef focusMethod := "") {
+    clickPt := Browser_GetPDFDocumentPoint(cBrowser, "window")
+    if !IsObject(clickPt) {
+        focusMethod := "document_control_click=no_point"
+        return false
+    }
+
+    clickPos := "X" . clickPt.x . " Y" . clickPt.y
+    ControlClick, %clickPos%, ahk_id %activeHwnd%,, Left, 1, NA
+    Sleep, 40
+    focusMethod := "ControlClickDocumentPoint x=" . clickPt.x . " y=" . clickPt.y
+    Browser_PDFZoomLog("pdf_zoom_focus_doc_click"
+        , "step=" . focusMethod
+        . " focus=" . Browser_GetFocusedElementSummary()
+        . " " . Browser_GetFocusedControlSummary(activeHwnd))
+    return true
+}
+
+Browser_TryRefocusViaDocumentPhysicalClick(activeHwnd, cBrowser, ByRef focusMethod := "") {
+    clickPt := Browser_GetPDFDocumentPoint(cBrowser, "screen")
+    if !IsObject(clickPt) {
+        focusMethod := "document_physical_click=no_point"
+        return false
+    }
+
+    MouseGetPos, origX, origY
+    MouseMove, % clickPt.x, % clickPt.y, 0
+    Sleep, 10
+    MouseClick, Left, % clickPt.x, % clickPt.y, 1, 0
+    Sleep, 20
+    MouseMove, % origX, % origY, 0
+    Sleep, 20
+
+    focusMethod := "PhysicalClickDocumentPoint x=" . clickPt.x . " y=" . clickPt.y
+    Browser_PDFZoomLog("pdf_zoom_focus_doc_click"
+        , "step=" . focusMethod
+        . " focus=" . Browser_GetFocusedElementSummary()
+        . " " . Browser_GetFocusedControlSummary(activeHwnd))
+    return true
 }
 
 ; ==========================================================
@@ -109,88 +556,391 @@ vClockFullScreen(cBrowser) {
 ; ==========================================================
 ; 関数: 幅に合わせる ⇔ ページに合わせる の切り替え
 ; ==========================================================
-TogglePDFZoom() {
-    ; UIA初期化
-    UIA := UIA_Interface()
-    if (!UIA)
-        return
+Browser_GetPDFContextInfo(activeHwnd, ByRef cBrowser := "") {
+    info := {State: 0, Exe: "", Class: "", Title: "", Url: "", Reasons: "", Error: "", ZoomButton: ""}
+    reasons := ""
 
-    ; ウィンドウ要素取得
+    WinGet, exeName, ProcessName, ahk_id %activeHwnd%
+    WinGetClass, winClass, ahk_id %activeHwnd%
+    WinGetTitle, winTitle, ahk_id %activeHwnd%
+    info.Exe   := exeName
+    info.Class := winClass
+    info.Title := winTitle
+
+    if Browser_IsPdfTitle(winTitle)
+        Browser_AppendReason(reasons, "title")
+
+    try cBrowser := new UIA_Browser("ahk_id " . activeHwnd)
+    catch e {
+        info.Error := Browser_DebugSanitize(e)
+        info.Reasons := reasons
+        info.State := (reasons != "") ? 1 : 0
+        return info
+    }
+
     try {
-        el := UIA.ElementFromHandle(WinExist("A"))
-    } catch {
-        return
+        currentUrl := cBrowser.GetCurrentURL()
+        info.Url := currentUrl
+        if Browser_IsPdfUrl(currentUrl)
+            Browser_AppendReason(reasons, "url")
+    } catch e {
+        info.Error := Browser_DebugSanitize(e)
     }
 
-    ; --- 検索対象のIDリスト ---
-    ; 1. pagefit (ダンプ画像で確認済み: 現在が「幅に合わせる」状態のときに出現)
-    ; 2. fit-to-width (標準的なID: 現在が「ページに合わせる」状態のときに出現すると推測)
-    ; 3. widthfit (pagefitの命名規則からの推測)
-    targetIDs := ["pagefit", "fit-to-width", "widthfit"]
-
-    btn := ""
-
-    ; IDリストを順に検索し、見つかったボタンを押す
-    for index, id in targetIDs {
-        btn := el.FindFirstBy("AutomationId=" . id)
-        if (btn)
-            break ; 見つかったらループを抜ける
-    }
-
-    ; IDで見つからない場合、Name（日本語名）で検索するバックアップ処理
-    ; 「Ctrl+\」というショートカットキー表記が名前に含まれているボタンを探す
-    if (!btn) {
-        cond1 := UIA.CreatePropertyCondition("Name", "ページに合わせる (Ctrl+\)")
-        cond2 := UIA.CreatePropertyCondition("Name", "幅に合わせる (Ctrl+\)")
-        condOr := UIA.CreateOrCondition(cond1, cond2)
-
-        btn := el.FindFirst(condOr)
-    }
-
-    ; 実行
-    if (btn) {
+    for _, id in ["pagefit", "fit-to-width", "widthfit"] {
         try {
-            btn.Invoke()
-        } catch {
-            ; Invokeがダメな場合の予備
-            try {
-                btn.Click()
+            if (cBrowser.BrowserElement.FindFirstBy("AutomationId=" . id)) {
+                Browser_AppendReason(reasons, "aid:" . id)
+                break
             }
         }
-    } else {
-        ; ボタンが見つからない場合 (ツールバーが隠れている等)
-        ToolTip, PDF操作ボタンが見つかりません
-        SetTimer, CloseToolTip, -2000
     }
 
-    ; --- 【修正案：マウス移動なしのフォーカス復帰】 ---
+    try {
+        if Browser_FindPDFZoomButton(cBrowser, matchLabel) {
+            info.ZoomButton := matchLabel
+            Browser_AppendReason(reasons, "button")
+        }
+    }
+
+    info.Reasons := reasons
+    info.State := (reasons != "") ? 1 : 0
+    return info
+}
+
+Browser_GetPDFContextState(activeHwnd) {
+    info := Browser_GetPDFContextInfo(activeHwnd)
+    return info.State
+}
+
+Browser_FindPDFZoomButton(cBrowser, ByRef matchLabel := "") {
+    for _, id in ["pagefit", "fit-to-width", "widthfit"] {
+        try {
+            btn := cBrowser.BrowserElement.FindFirstBy("AutomationId=" . id)
+            if (btn) {
+                matchLabel := "AutomationId=" . id
+                return btn
+            }
+        }
+    }
+
+    for _, name in ["ページに合わせる (Ctrl+\)", "幅に合わせる (Ctrl+\)"
+        , "ページに合わせる", "幅に合わせる"
+        , "Fit to page (Ctrl+\)", "Fit to width (Ctrl+\)"
+        , "Fit to page", "Fit to width"] {
+        try {
+            btn := cBrowser.BrowserElement.FindFirstBy("Name=" . name)
+            if (btn) {
+                matchLabel := "Name=" . name
+                return btn
+            }
+        }
+    }
+
+    return ""
+}
+
+Browser_DescribePDFZoomButton(cBrowser) {
+    btn := Browser_FindPDFZoomButton(cBrowser, matchLabel)
+    if (!btn)
+        return "missing"
+
+    buttonName := ""
+    buttonId := ""
+    buttonHelp := ""
+    try buttonName := btn.CurrentName
+    try buttonId := btn.CurrentAutomationId
+    try buttonHelp := btn.CurrentHelpText
+
+    return "match=" . Browser_DebugSanitize(matchLabel)
+        . " aid=" . Browser_DebugSanitize(buttonId)
+        . " name=" . Browser_DebugSanitize(buttonName)
+        . (buttonHelp != "" ? " help=" . Browser_DebugSanitize(buttonHelp) : "")
+}
+
+Browser_TogglePDFZoomViaShortcut(cBrowser, ByRef detail := "", preButtonState := "") {
+    if !IsObject(cBrowser) {
+        detail := "shortcut=no_browser"
+        return false
+    }
+
+    if (preButtonState = "")
+        preButtonState := Browser_DescribePDFZoomButton(cBrowser)
+
+    SendInput, ^{sc073}
     Sleep, 100
 
+    postButtonState := Browser_DescribePDFZoomButton(cBrowser)
+    detail := "shortcut=Ctrl+sc073"
+        . " preButton=" . preButtonState
+        . " postButton=" . postButtonState
+
+    if (postButtonState != "missing" && preButtonState != postButtonState)
+        return true
+
+    return false
+}
+
+Browser_TogglePDFZoomViaButton(cBrowser, ByRef detail := "") {
+    btn := Browser_FindPDFZoomButton(cBrowser, matchLabel)
+    if (!btn) {
+        detail := "button_not_found"
+        return false
+    }
+
+    autoFocusChanged := Browser_TrySetUIAAutoSetFocus(cBrowser.UIA, false, autoFocusPrevious, autoFocusDetail)
+    actionDetail := ""
+    success := false
+
     try {
-        ; まず要素(RootWebArea)を取得
-        docEl := el.FindFirstBy("AutomationId=RootWebArea")
-        if (!docEl)
-            docEl := el.FindFirstBy("ControlType=50030")
+        btn.Click()
+        actionDetail := matchLabel . " via=Click"
+        success := true
+    } catch e {
+        Browser_PDFZoomLog("pdf_zoom_button_click_failed", matchLabel . " error=" . Browser_DebugSanitize(e))
+    }
 
-        if (docEl) {
-            ; 方法A: LegacyIAccessibleパターン経由でのフォーカス (マウス不要)
-            try {
-                ; "LegacyIAccessible" パターンを取得
-                legacy := docEl.GetCurrentPatternAs("LegacyIAccessible")
+    if (!success) {
+        try {
+            btn.Invoke()
+            actionDetail := matchLabel . " via=Invoke"
+            success := true
+        } catch e {
+            Browser_PDFZoomLog("pdf_zoom_button_invoke_failed", matchLabel . " error=" . Browser_DebugSanitize(e))
+        }
+    }
 
-                if (legacy) {
-                    ; 0x1 は "TakeFocus" (フォーカスを取得せよ) というフラグです
-                    legacy.Select(1)
-                    Send, {Tab}+{Tab}{F6}{Esc}
-                    return ; 成功したらここで終了
-                }
-            } catch {
-                ; レガシーパターン取得失敗時は次へ
+    if (autoFocusChanged) {
+        Browser_RestoreUIAAutoSetFocus(cBrowser.UIA, autoFocusPrevious, autoFocusRestoreDetail)
+        autoFocusDetail .= " " . autoFocusRestoreDetail
+    }
+
+    if (autoFocusDetail != "") {
+        if (actionDetail = "")
+            actionDetail := matchLabel . " via=failed"
+        actionDetail .= " " . autoFocusDetail
+    }
+
+    detail := actionDetail
+    return success
+}
+
+Browser_FocusPDFDocument(activeHwnd, cBrowser := "", ByRef focusMethod := "") {
+    if !IsObject(cBrowser) {
+        try cBrowser := new UIA_Browser("ahk_id " . activeHwnd)
+        catch
+            return false
+    }
+
+    WinActivate, ahk_id %activeHwnd%
+    WinWaitActive, ahk_id %activeHwnd%, , 1
+
+    if Browser_TryRefocusViaDocumentControlClick(activeHwnd, cBrowser, documentClickMethod) {
+        focusMethod := documentClickMethod
+        return true
+    }
+
+    Browser_FocusWebContentPane(activeHwnd, webContentFocusMethod)
+
+    if Browser_TryRefocusViaDocumentControlClick(activeHwnd, cBrowser, documentClickMethod) {
+        focusMethod := webContentFocusMethod
+        if (focusMethod != "")
+            focusMethod .= " + "
+        focusMethod .= documentClickMethod
+        return true
+    }
+
+    if Browser_TryRefocusViaMousePoint(activeHwnd, mouseClickFocusMethod) {
+        focusMethod := webContentFocusMethod
+        if (focusMethod != "")
+            focusMethod .= " + "
+        focusMethod .= mouseClickFocusMethod
+        return true
+    }
+
+    if Browser_TryRefocusViaDocumentPhysicalClick(activeHwnd, cBrowser, physicalClickMethod) {
+        focusMethod := webContentFocusMethod
+        if (focusMethod != "")
+            focusMethod .= " + "
+        focusMethod .= physicalClickMethod
+        return true
+    }
+
+    candidates := []
+
+    try {
+        docEl := cBrowser.GetCurrentDocumentElement()
+        Browser_AddPDFFocusCandidate(candidates, "CurrentDocument", docEl)
+    }
+
+    try {
+        rootWebArea := cBrowser.BrowserElement.FindFirstBy("AutomationId=RootWebArea")
+        Browser_AddPDFFocusCandidate(candidates, "RootWebArea", rootWebArea)
+    }
+
+    try {
+        genericDoc := cBrowser.BrowserElement.FindFirstBy("ControlType=Document")
+        Browser_AddPDFFocusCandidate(candidates, "GenericDocument", genericDoc)
+    }
+
+    Browser_PDFZoomLog("pdf_zoom_focus_candidates", Browser_DescribePDFFocusCandidates(candidates))
+
+    logicalFocusOk := false
+    logicalFocusMethod := ""
+    for _, candidate in candidates {
+        if Browser_TryFocusPDFElement(candidate.Element, candidateMethod)
+        {
+            logicalFocusOk := true
+            logicalFocusMethod := candidate.Label . ":" . candidateMethod
+            break
+        }
+    }
+
+    if Browser_FocusBrowserControl(activeHwnd, controlFocusMethod) {
+        focusMethod := logicalFocusMethod
+        if (focusMethod != "")
+            focusMethod .= " + "
+        focusMethod .= controlFocusMethod
+        return true
+    }
+
+    ; Chromium の PDF viewer は Esc でツールバー由来の疑似フォーカスが外れることがある。
+    SendInput, {Esc}
+    Sleep, 40
+    if Browser_FocusBrowserControl(activeHwnd, controlFocusMethodAfterEsc) {
+        focusMethod := logicalFocusMethod
+        if (focusMethod != "")
+            focusMethod .= " + "
+        focusMethod .= "Esc + " . controlFocusMethodAfterEsc
+        return true
+    }
+
+    focusMethod := logicalFocusMethod
+    return logicalFocusOk
+}
+
+Browser_TryFocusPDFElement(el, ByRef focusMethod := "") {
+    if (!el)
+        return false
+
+    try {
+        el.SetFocus()
+        Sleep, 40
+        if (el.CurrentHasKeyboardFocus) {
+            focusMethod := "SetFocus"
+            return true
+        }
+    }
+
+    try {
+        legacy := el.GetCurrentPatternAs("LegacyIAccessible")
+        if (legacy) {
+            legacy.Select(1) ; TakeFocus
+            Sleep, 40
+            if (el.CurrentHasKeyboardFocus) {
+                focusMethod := "LegacyIAccessible.Select"
+                return true
             }
         }
-    } catch e {
-        ; エラー処理
     }
+
+    try {
+        el.ControlClick()
+        Sleep, 40
+        if (el.CurrentHasKeyboardFocus) {
+            focusMethod := "ControlClick"
+            return true
+        }
+    }
+
+    return false
+}
+
+TogglePDFZoom() {
+    global Browser_PDFZoomTryShortcutFirst
+
+    activeHwnd := WinExist("A")
+    if (!activeHwnd)
+        return false
+
+    pdfInfo := Browser_GetPDFContextInfo(activeHwnd, cBrowser)
+    Browser_PDFZoomLog("pdf_zoom_start"
+        , "state=" . pdfInfo.State
+        . " reasons=" . pdfInfo.Reasons
+        . " exe=" . pdfInfo.Exe
+        . " class=" . pdfInfo.Class
+        . " title=" . pdfInfo.Title
+        . " url=" . pdfInfo.Url
+        . " zoomButton=" . pdfInfo.ZoomButton
+        . " focus=" . Browser_GetFocusedElementSummary()
+        . " " . Browser_GetFocusedControlSummary(activeHwnd)
+        . (pdfInfo.Error != "" ? " error=" . pdfInfo.Error : ""))
+
+    if (pdfInfo.State != 1) {
+        Browser_PDFZoomLog("pdf_zoom_skip_not_pdf"
+            , "title=" . pdfInfo.Title . " url=" . pdfInfo.Url)
+        return false
+    }
+
+    zoomMethod := ""
+    usedButtonPath := false
+    preButtonState := IsObject(cBrowser) ? Browser_DescribePDFZoomButton(cBrowser) : "no_browser"
+    if (Browser_PDFZoomTryShortcutFirst && IsObject(cBrowser) && Browser_TogglePDFZoomViaShortcut(cBrowser, zoomMethod, preButtonState)) {
+        Browser_PDFZoomLog("pdf_zoom_toggle"
+            , "method=" . zoomMethod
+            . " focus=" . Browser_GetFocusedElementSummary()
+            . " " . Browser_GetFocusedControlSummary(activeHwnd))
+        return true
+    }
+
+    if (Browser_PDFZoomTryShortcutFirst) {
+        Browser_PDFZoomLog("pdf_zoom_toggle_shortcut_failed"
+            , zoomMethod
+            . " focus=" . Browser_GetFocusedElementSummary()
+            . " " . Browser_GetFocusedControlSummary(activeHwnd))
+    }
+
+    if (IsObject(cBrowser) && Browser_TogglePDFZoomViaButton(cBrowser, zoomMethod)) {
+        usedButtonPath := true
+        postButtonState := Browser_DescribePDFZoomButton(cBrowser)
+        Browser_PDFZoomLog("pdf_zoom_toggle"
+            , "method=button " . zoomMethod
+            . " preButton=" . preButtonState
+            . " postButton=" . postButtonState
+            . " focus=" . Browser_GetFocusedElementSummary()
+            . " " . Browser_GetFocusedControlSummary(activeHwnd))
+    } else {
+        zoomMethod := "shortcut=Ctrl+sc073"
+        Browser_PDFZoomLog("pdf_zoom_toggle_fallback"
+            , zoomMethod . " preButton=" . preButtonState)
+        SendInput, ^{sc073}
+        Sleep, 40
+        postButtonState := IsObject(cBrowser) ? Browser_DescribePDFZoomButton(cBrowser) : "no_browser"
+        Browser_PDFZoomLog("pdf_zoom_toggle"
+            , "method=" . zoomMethod
+            . " preButton=" . preButtonState
+            . " postButton=" . postButtonState
+            . " focus=" . Browser_GetFocusedElementSummary()
+            . " " . Browser_GetFocusedControlSummary(activeHwnd))
+        return true
+    }
+    Sleep, 40
+
+    if (usedButtonPath && Browser_FocusPDFDocument(activeHwnd, cBrowser, focusMethod)) {
+        Browser_PDFZoomLog("pdf_zoom_focus_restore"
+            , "result=ok method=" . zoomMethod . " focusMethod=" . focusMethod
+            . " focus=" . Browser_GetFocusedElementSummary()
+            . " " . Browser_GetFocusedControlSummary(activeHwnd))
+        return true
+    }
+
+    if (usedButtonPath) {
+        Browser_PDFZoomLog("pdf_zoom_focus_restore"
+            , "result=logical_only method=" . zoomMethod . " focusMethod=" . focusMethod
+            . " focus=" . Browser_GetFocusedElementSummary()
+            . " " . Browser_GetFocusedControlSummary(activeHwnd))
+    }
+    return true
 }
 
 InspectElementUnderMouse() {
@@ -389,11 +1139,15 @@ RunSiteSpecificKey(fallbackKey, targetMap) {
 ; ==============================================================================
 GetAllEdgeURLs(includeTitle := false) {
     ; 保存先の設定
-    targetDir := "C:\myApp\__temp__"
-    targetPath := targetDir . "\urls.txt"
+    global Browser_URLExportPath
+
+    targetPath := Trim(Browser_URLExportPath)
+    if (targetPath = "")
+        targetPath := "C:\myApp\__temp__\urls.txt"
+    SplitPath, targetPath, , targetDir
 
     ; フォルダがない場合は作成
-    if !InStr(FileExist(targetDir), "D") {
+    if (targetDir != "" && !InStr(FileExist(targetDir), "D")) {
         FileCreateDir, %targetDir%
     }
 

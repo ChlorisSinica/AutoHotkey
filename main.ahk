@@ -27,6 +27,8 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
+#Include %A_ScriptDir%\lib\CSharpUIA\UiaIntegration.ahk
+#Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
 
 ; ==========================================================
 ; --- 初期化処理 ---
@@ -36,6 +38,11 @@ EnvGet, profilePath, USERPROFILE
 
 Indicator_Init()
 TrayTip, AutoHotkey, Script Reloaded, 2 ;
+global SuppressedFunctionKeyUntil := {}
+CG_Init(70, ["XButton1", "XButton2"])
+OnExit("CG_Cleanup")
+UiaInit()
+OnExit("UiaCleanup")
 
 ; ==========================================================
 ; ----- Indicator用変数 -----
@@ -54,13 +61,21 @@ global EnablePPT        := 1
 global EnableExcel      := 1
 
 SUI_LoadConfig()
-
 MG_DebugInit()
 Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
 PPT_SpacingLog("startup", "script=" . A_ScriptFullPath)
 PPT_CaptionInit()
-vk1C & F1::Settings_Open()
-vk1C & F2::MG_DebugSnapshot("manual-hotkey")
+vk1C & F1::
+    SuppressFunctionKey("F1")
+    Settings_Open()
+return
+vk1C & F2::
+    SuppressFunctionKey("F2")
+    MG_DebugSnapshot("manual-hotkey")
+return
+#If WinActive("機能設定") && SUI_HasHelpSelection()
+    ^c::SUI_CopySelectedHelpRow()
+#If
 #If WinActive("機能設定")
     Escape::Settings_Close()
 #If
@@ -81,7 +96,7 @@ vk1C & F2::MG_DebugSnapshot("manual-hotkey")
     vk1C & o::Send,{Blind}{End}
     vk1C & p::Send,{Blind}{F2}
     vk1C & n::OpenWithMspaint(0)
-    vk1C & m::OpenWithNotePad(0, SettingsUI.EditorType)
+    vk1C & m::OpenTextEditor(0)
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #If
 
@@ -139,12 +154,12 @@ Cursor_GetHotkeyConfig() {
     +#k::       Run, ms-settings:bluetooth
     ^#1::       MoveWindowRatio("A", 0.503, 0.206, 0.360, 0.470)
     ^#2::       MoveWindowRatio("A", 0.503, 0.216, 0.404, 0.766)
-    ^#3::       MoveWindowRatio("A", 0.000, 0.030, 1.000, 0.970)
-    ^#4::       MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
+    ^#3::       MoveWindowRatio("A", 0.503, 0.240, 0.456, 0.742)
     ^#8::       MoveWindowMaxHeightKeepWidth("A", "Top")
+    ^#9::       MoveWindowRatio("A", 0.000, 0.030, 1.000, 0.970)
     ^+#1::      MoveWindowRatio("A", 0.003, 0.206, 0.360, 0.470)
     ^+#2::      MoveWindowRatio("A", 0.003, 0.216, 0.404, 0.766)
-    ^+#4::      MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
+    ^+#3::      MoveWindowRatio("A", 0.003, 0.240, 0.456, 0.742)
     ^+#8::      MoveWindowMaxHeightKeepWidth("A", "Bottom")
     ^#F11::     OpenMoveExplorer(profilePath . "\Downloads", 0.180, 0.000, 0.320, 1.000)
     ^#F12::     OpenVSCode()
@@ -172,7 +187,7 @@ Cursor_GetHotkeyConfig() {
     ^!n::           OpenWithMspaint(1)
 #If
 #If (EnableAlt && !WinActive("ahk_exe POWERPNT.EXE"))
-    ^!m::           OpenWithNotePad(1, SettingsUI.EditorType)
+    ^!m::           OpenTextEditor(1)
 #If
 
 ; ==========================================================
@@ -184,19 +199,50 @@ Cursor_GetHotkeyConfig() {
     $+sc073::           Send, {sc073}  ; _ → \
     vk1C & z::          Manage_N_Hold("Toggle")
     vk1C & x::          Manage_N_Hold("Off")
+    ^!#Backspace::      CapsLock_SetState(false)
+    ^!#Delete::         CapsLock_SetState(true)
 #If
 
 ; ==========================================================
 ; ----- Browser -----
 ; ==========================================================
 #If (EnableBrowser && WinActive("ahk_group BrowserGroup"))
-    ^sc073::    TogglePDFZoom()
-    F1::        RunSiteSpecificKey("{F1}", KeyActions["F1"])
-    F2::        RunSiteSpecificKey("{F2}", KeyActions["F2"])
     ^+c::       CopyPlaneURL()
+    $^sc073::   TogglePDFZoom()
+    $F1 Up::
+        if ConsumeSuppressedFunctionKey("F1")
+            return
+        RunSiteSpecificKey("{F1}", KeyActions["F1"])
+    return
+
+    F2::
+        if ConsumeSuppressedFunctionKey("F2")
+            return
+        RunSiteSpecificKey("{F2}", KeyActions["F2"])
+    return
     F8::        GetAllEdgeURLs(false)
-; F8::        Debug_GetAllEdgeURLs()
 #If
+
+SuppressFunctionKey(keyName, ttlMs := 350) {
+    global SuppressedFunctionKeyUntil
+
+    if !IsObject(SuppressedFunctionKeyUntil)
+        SuppressedFunctionKeyUntil := {}
+    SuppressedFunctionKeyUntil[keyName] := A_TickCount + ttlMs
+}
+
+ConsumeSuppressedFunctionKey(keyName) {
+    global SuppressedFunctionKeyUntil
+
+    if !IsObject(SuppressedFunctionKeyUntil)
+        return false
+    if !SuppressedFunctionKeyUntil.HasKey(keyName)
+        return false
+
+    expiresAt := SuppressedFunctionKeyUntil[keyName]
+    SuppressedFunctionKeyUntil.Delete(keyName)
+    return (A_TickCount <= expiresAt)
+}
 
 ; ==========================================================
 ; ----- Power Point -----
@@ -268,3 +314,4 @@ Cursor_GetHotkeyConfig() {
     WheelUp::MG_ScrollAction("Up")
     WheelDown::MG_ScrollAction("Down")
 #If
+

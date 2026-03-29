@@ -4,18 +4,34 @@
 ; - XButton2 + Wheel: zoom routing
 ; ==============================================================================
 
-global MouseWheel_ExplorerScrollBarRepeat := 3
-global MouseWheel_ZoomRules := {}
-global MouseWheel_DebugEnabled := false
-global MouseWheel_DebugLogDir := A_ScriptDir . "\.claude"
-global MouseWheel_DebugLogPath := MouseWheel_DebugLogDir . "\mouse_wheel_debug.log"
+global MouseWheel_ExplorerScrollBarRepeat  := 3
+global MouseWheel_ZoomRules                := {}
+global MouseWheel_DebugEnabled             := false
+global MouseWheel_DebugLogDir              := A_ScriptDir . "\.claude"
+global MouseWheel_DebugLogPath             := MouseWheel_DebugLogDir . "\mouse_wheel_debug.log"
+global MouseWheel_DefaultZoomMode          := "CtrlNumpad"
+global MouseWheel_ExplorerZoomMode         := "CtrlWheel"
+global MouseWheel_PyCharmZoomMode          := "CtrlWheel"
+global MouseWheel_WordZoomMode             := "CtrlWheel"
+global MouseWheel_ExcelZoomMode            := "CtrlWheel"
+global MouseWheel_PowerPointZoomMode       := "CtrlWheel"
 
-MouseWheel_ZoomRules["default"]       := {Mode: "CtrlNumpad"}
-MouseWheel_ZoomRules["explorer.exe"]  := {Mode: "CtrlWheel"}
-MouseWheel_ZoomRules["pycharm64.exe"] := {Mode: "CtrlWheel"}
-MouseWheel_ZoomRules["WINWORD.EXE"]   := {Mode: "CtrlWheel"}
-MouseWheel_ZoomRules["EXCEL.EXE"]     := {Mode: "CtrlWheel"}
-MouseWheel_ZoomRules["POWERPNT.EXE"]  := {Mode: "CtrlWheel"}
+MouseWheel_RebuildZoomRules() {
+    global MouseWheel_ZoomRules
+    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode
+    global MouseWheel_PyCharmZoomMode, MouseWheel_WordZoomMode
+    global MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+
+    MouseWheel_ZoomRules := {}
+    MouseWheel_ZoomRules["default"]       := {Mode: MouseWheel_DefaultZoomMode}
+    MouseWheel_ZoomRules["explorer.exe"]  := {Mode: MouseWheel_ExplorerZoomMode}
+    MouseWheel_ZoomRules["pycharm64.exe"] := {Mode: MouseWheel_PyCharmZoomMode}
+    MouseWheel_ZoomRules["WINWORD.EXE"]   := {Mode: MouseWheel_WordZoomMode}
+    MouseWheel_ZoomRules["EXCEL.EXE"]     := {Mode: MouseWheel_ExcelZoomMode}
+    MouseWheel_ZoomRules["POWERPNT.EXE"]  := {Mode: MouseWheel_PowerPointZoomMode}
+}
+
+MouseWheel_RebuildZoomRules()
 
 MouseWheel_HScroll(direction) {
     if (WinActive("ahk_group ExplorerGroup")) {

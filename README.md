@@ -89,6 +89,9 @@
 - `Plugins\UIA_Interface.ahk` and `Plugins\UIA_Browser.ahk` are UI Automation dependency libraries.
 - In `#Include` files, avoid top-level labels followed by a bare `return`.
 - Included files are effectively inlined into `main.ahk`, so auto-execute can fall into that label body and stop early at `return`.
+- Also avoid top-level hotkeys, hotstrings, and `#If` hotkey blocks in `#Include` files when later startup lines in `main.ahk` still need to run.
+- A top-level hotkey definition in an included file can end the auto-execute section before later lines such as `TrayTip`, config load, or other initialization.
+- Keep context-sensitive hotkeys in `main.ahk` after startup initialization, or register them later from functions.
 - This can silently break later initialization and make unrelated hotkeys appear dead.
 - Prefer function timers such as `SetTimer, % Func("MyHandler"), -10` instead of label timers in plugin files.
 

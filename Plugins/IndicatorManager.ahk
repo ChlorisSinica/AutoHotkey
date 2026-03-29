@@ -1,24 +1,70 @@
 ﻿; ==============================================================================
 ; Indicator / settings UI
-; ListView (checkboxes + labels) + ListView (hotkey help)
+; ListView (checkboxes + labels) + ListView (hotkey help) + Edit (details)
 ; ==============================================================================
-global _SUI_ItemMap := {}
-global _SUI_HelpData := {}
-global _SUI_CheckStateMap := {}
-global SUI_SettingsGuiHwnd := 0
-global SUI_SubSettingsGuiHwnd := 0
-global SettingsItemsLV := ""
-global SettingsLV := ""
-global RadioNotepads := 0
-global RadioStandard := 0
-global SUI_IsInitializing := false
-global _SUI_PendingCheckItemID := 0
-global _SUI_PendingCheckSource := ""
-global SUI_DebugEnabled := true
-global SUI_DebugLogDir := A_ScriptDir . "\.claude"
-global SUI_DebugLogPath := SUI_DebugLogDir . "\indicator_manager_debug.log"
-global SUI_DebugMaxBytes := 262144
-global SUI_ConfigPath := A_ScriptDir . "\Plugins\indicator_settings.ini"
+global _SUI_ItemMap                := {}
+global _SUI_HelpData               := {}
+global _SUI_HelpRowMap             := {}
+global _SUI_Theme                  := {}
+global _SUI_ThemeBrushMap          := {}
+global _SUI_CheckStateMap          := {}
+global SUI_SettingsGuiHwnd         := 0
+global SUI_SettingsTabHwnd         := 0
+global SUI_SettingsItemsLabelHwnd  := 0
+global SUI_SettingsItemsLVHwnd     := 0
+global SUI_SettingsHelpLabelHwnd   := 0
+global SUI_SettingsLVHwnd          := 0
+global SUI_CodePreviewLabelHwnd    := 0
+global SUI_CodePreviewEditHwnd     := 0
+global SettingsItemsLV             := ""
+global SettingsLV                  := ""
+global SettingsCodePreviewLabel    := ""
+global SettingsCodePreviewEdit     := ""
+global SettingsEditorProvider      := ""
+global SettingsEditorCustomPath    := ""
+global SettingsEditorArgs          := ""
+global SettingsAuthSaveDir         := ""
+global SettingsAuthOutputPath      := ""
+global SettingsBrowserUrlExportPath:= ""
+global SettingsPPTCaptionGapH      := ""
+global SettingsPPTCaptionGapV      := ""
+global SettingsBrowserPdfZoomShortcutFirst := ""
+global SettingsMouseWheelExplorerRepeat := ""
+global SettingsMouseWheelDefaultMode := ""
+global SettingsMouseWheelExplorerMode := ""
+global SettingsMouseWheelPycharmMode := ""
+global SettingsMouseWheelWordMode  := ""
+global SettingsMouseWheelExcelMode := ""
+global SettingsMouseWheelPowerPointMode := ""
+global SettingsCursorBaseSpeed     := ""
+global SettingsCursorMaxSpeed      := ""
+global SettingsCursorAcceleration  := ""
+global SettingsCursorTimerInterval := ""
+global SettingsCursorGridCols      := ""
+global SettingsCursorGridRows      := ""
+global SettingsCursorEdgeInset     := ""
+global SettingsIndicatorDebug      := ""
+global SettingsMouseGestureDebug   := ""
+global SettingsMouseWheelDebug     := ""
+global SettingsBrowserPdfZoomDebug := ""
+global SettingsPPTSpacingDebug     := ""
+global SettingsPPTCaptionDebug     := ""
+global SettingsValidationHint      := ""
+global _SUI_CodePreviewCachePath   := ""
+global _SUI_CodePreviewCacheLines  := ""
+global SUI_IsInitializing          := false
+global SUI_SelectedItemID          := 0
+global _SUI_LastHelpRow            := 0
+global _SUI_HelpRefreshPending     := false
+global _SUI_PendingCheckItemID     := 0
+global _SUI_PendingCheckSource     := ""
+global SUI_DebugEnabled            := true
+global SUI_DebugLogDir             := A_ScriptDir . "\.claude"
+global SUI_DebugLogPath            := SUI_DebugLogDir . "\indicator_manager_debug.log"
+global SUI_DebugMaxBytes           := 262144
+global SUI_ConfigDir               := A_ScriptDir . "\config"
+global SUI_LegacyConfigPath        := A_ScriptDir . "\Plugins\indicator_settings.ini"
+global SUI_ConfigPath              := SUI_ConfigDir . "\indicator_settings.ini"
 
 Indicator_Init() {
     SUI_DebugInit()
@@ -32,14 +78,28 @@ Settings_Open() {
 }
 
 Settings_Close() {
-    global SUI_SettingsGuiHwnd, SUI_SubSettingsGuiHwnd
+    global SUI_SettingsGuiHwnd, SUI_SettingsItemsLabelHwnd, SUI_SettingsItemsLVHwnd
+    global SUI_SettingsHelpLabelHwnd, SUI_SettingsLVHwnd
+    global SUI_CodePreviewLabelHwnd, SUI_CodePreviewEditHwnd
+    global SUI_SettingsTabHwnd
+    global SUI_SelectedItemID, _SUI_LastHelpRow, SUI_IsInitializing
 
+    if (SUI_SettingsGuiHwnd && !SUI_IsInitializing)
+        SUI_SaveAdvancedSettingsFromGui("close")
     SUI_FlushPendingChange("close")
     SUI_DebugLog("settings_close")
     Gui, Settings:Destroy
-    Gui, SubSettings:Destroy
-    SUI_SettingsGuiHwnd := 0
-    SUI_SubSettingsGuiHwnd := 0
+    SUI_ClearThemeBrushes()
+    SUI_SettingsGuiHwnd       := 0
+    SUI_SettingsTabHwnd       := 0
+    SUI_SettingsItemsLabelHwnd:= 0
+    SUI_SettingsItemsLVHwnd   := 0
+    SUI_SettingsHelpLabelHwnd := 0
+    SUI_SettingsLVHwnd        := 0
+    SUI_CodePreviewLabelHwnd  := 0
+    SUI_CodePreviewEditHwnd   := 0
+    SUI_SelectedItemID        := 0
+    _SUI_LastHelpRow          := 0
 }
 
 SUI_DebugInit() {
@@ -86,18 +146,18 @@ SUI_DebugFlagsText() {
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
 
-    return "EnableNavLayer=" . EnableNavLayer
-        . " EnableWinPlace=" . EnableWinPlace
+    return "EnableNavLayer="  . EnableNavLayer
+        . " EnableWinPlace="  . EnableWinPlace
         . " EnableWinIsland=" . EnableWinIsland
-        . " EnableVDesk=" . EnableVDesk
-        . " EnableMouseEmu=" . EnableMouseEmu
-        . " EnableMouseBtn=" . EnableMouseBtn
-        . " EnableGestures=" . EnableGestures
-        . " EnableAlt=" . EnableAlt
-        . " EnableOthers=" . EnableOthers
-        . " EnableBrowser=" . EnableBrowser
-        . " EnablePPT=" . EnablePPT
-        . " EnableExcel=" . EnableExcel
+        . " EnableVDesk="     . EnableVDesk
+        . " EnableMouseEmu="  . EnableMouseEmu
+        . " EnableMouseBtn="  . EnableMouseBtn
+        . " EnableGestures="  . EnableGestures
+        . " EnableAlt="       . EnableAlt
+        . " EnableOthers="    . EnableOthers
+        . " EnableBrowser="   . EnableBrowser
+        . " EnablePPT="       . EnablePPT
+        . " EnableExcel="     . EnableExcel
 }
 
 SUI_DebugDescribeItem(itemID) {
@@ -111,10 +171,10 @@ SUI_DebugDescribeItem(itemID) {
     prevState := _SUI_CheckStateMap.HasKey(itemID) ? _SUI_CheckStateMap[itemID] : "?"
 
     return "itemID=" . itemID
-        . " var=" . item.Var
-        . " row=" . item.Row
-        . " prev=" . prevState
-        . " cur=" . currentState
+        . " var="    . item.Var
+        . " row="    . item.Row
+        . " prev="   . prevState
+        . " cur="    . currentState
 }
 
 SUI_DebugLog(event, extra := "") {
@@ -143,6 +203,118 @@ SUI_DebugOpenLog() {
     Run, notepad.exe "%SUI_DebugLogPath%"
 }
 
+SUI_CreateDefaultTheme() {
+    ; Keep the entire settings window on a single MouseGestureL-like palette.
+    ; Base it on the white/black ExNavi colors rather than a dark editor theme.
+    theme := {Name:         "mousegesture-light"
+        , ForegroundHex:    "000000"
+        , MutedHex:         "7F7F7F"
+        , WindowHex:        "F3F3F3"
+        , PanelHex:         "FFFFFF"
+        , ListHex:          "FFFFFF"
+        , EditorHex:        "FAFAFA"
+        , EditorForegroundHex: "1E1E1E"
+        , TitleHex:         "F3F3F3"
+        , BorderHex:        "C8C8C8"
+        , AccentHex:        "7F7F7F"}
+    SUI_FinalizeTheme(theme)
+    return theme
+}
+
+SUI_FinalizeTheme(theme) {
+    theme.ForegroundRGB  := theme.ForegroundHex
+    theme.MutedRGB       := theme.MutedHex
+    theme.WindowRGB      := theme.WindowHex
+    theme.PanelRGB       := theme.PanelHex
+    theme.ListRGB        := theme.ListHex
+    theme.EditorRGB      := theme.EditorHex
+    theme.EditorForegroundRGB := theme.EditorForegroundHex
+    theme.TitleRGB       := theme.TitleHex
+    theme.BorderRGB      := theme.BorderHex
+    theme.AccentRGB      := theme.AccentHex
+
+    theme.ForegroundColor  := SUI_HexToColorRef(theme.ForegroundHex)
+    theme.MutedColor       := SUI_HexToColorRef(theme.MutedHex)
+    theme.WindowColor      := SUI_HexToColorRef(theme.WindowHex)
+    theme.PanelColor       := SUI_HexToColorRef(theme.PanelHex)
+    theme.ListColor        := SUI_HexToColorRef(theme.ListHex)
+    theme.EditorColor      := SUI_HexToColorRef(theme.EditorHex)
+    theme.EditorForegroundColor := SUI_HexToColorRef(theme.EditorForegroundHex)
+    theme.TitleColor       := SUI_HexToColorRef(theme.TitleHex)
+    theme.BorderColor      := SUI_HexToColorRef(theme.BorderHex)
+    theme.AccentColor      := SUI_HexToColorRef(theme.AccentHex)
+}
+
+SUI_HexToColorRef(hex) {
+    hex := StrReplace(hex, "#")
+    if (StrLen(hex) != 6)
+        return 0
+
+    r := "0x" . SubStr(hex, 1, 2)
+    g := "0x" . SubStr(hex, 3, 2)
+    b := "0x" . SubStr(hex, 5, 2)
+    return r + (g << 8) + (b << 16)
+}
+
+SUI_LoadTheme() {
+    global _SUI_Theme
+
+    _SUI_Theme := SUI_CreateDefaultTheme()
+    SUI_DebugLog("theme_load", "name=" . _SUI_Theme.Name . " panel=#" . _SUI_Theme.PanelHex . " editor=#" . _SUI_Theme.EditorHex)
+}
+
+SUI_GetThemeBrush(colorRef) {
+    global _SUI_ThemeBrushMap
+
+    key := colorRef . ""
+    if !_SUI_ThemeBrushMap.HasKey(key)
+        _SUI_ThemeBrushMap[key] := DllCall("CreateSolidBrush", "UInt", colorRef, "Ptr")
+    return _SUI_ThemeBrushMap[key]
+}
+
+SUI_ClearThemeBrushes() {
+    global _SUI_ThemeBrushMap
+
+    for _, brush in _SUI_ThemeBrushMap {
+        if (brush)
+            DllCall("DeleteObject", "Ptr", brush)
+    }
+    _SUI_ThemeBrushMap := {}
+}
+
+SUI_ApplyListViewTheme(hwnd, bgColor, textColor) {
+    static LVM_SETBKCOLOR     := 0x1001
+    static LVM_SETTEXTCOLOR   := 0x1024
+    static LVM_SETTEXTBKCOLOR := 0x1026
+
+    ; Disable the Windows theme for these ListViews so our monochrome palette
+    ; is actually used instead of themed drawing colors.
+    DllCall("uxtheme\SetWindowTheme", "Ptr", hwnd, "WStr", "", "Ptr", 0)
+    SendMessage, %LVM_SETBKCOLOR%,      0, %bgColor%,   , ahk_id %hwnd%
+    SendMessage, %LVM_SETTEXTBKCOLOR%,  0, %bgColor%,   , ahk_id %hwnd%
+    SendMessage, %LVM_SETTEXTCOLOR%,    0, %textColor%, , ahk_id %hwnd%
+}
+
+SUI_ApplyThemeToControls() {
+    global _SUI_Theme, SUI_SettingsGuiHwnd, SUI_SettingsItemsLVHwnd
+    global SUI_SettingsLVHwnd
+
+    if !IsObject(_SUI_Theme)
+        return
+
+    Gui, Settings:Default
+    Gui, Settings:Color, % _SUI_Theme.WindowRGB, % _SUI_Theme.WindowRGB
+
+    if (SUI_SettingsItemsLVHwnd)
+        SUI_ApplyListViewTheme(SUI_SettingsItemsLVHwnd, _SUI_Theme.ListColor, _SUI_Theme.ForegroundColor)
+
+    if (SUI_SettingsLVHwnd)
+        SUI_ApplyListViewTheme(SUI_SettingsLVHwnd, _SUI_Theme.ListColor, _SUI_Theme.ForegroundColor)
+
+    if (SUI_SettingsGuiHwnd)
+        DllCall("RedrawWindow", "Ptr", SUI_SettingsGuiHwnd, "Ptr", 0, "Ptr", 0, "UInt", 0x0401)
+}
+
 SUI_NormalizeBool(value, defaultValue := 0) {
     value := Trim(value)
     if (value = "")
@@ -161,40 +333,209 @@ SUI_NormalizeEditorType(value, defaultValue := 1) {
     return (defaultValue = 2) ? 2 : 1
 }
 
+SUI_NormalizeTextEditorProvider(value, defaultValue := "Notepads") {
+    value := Trim(value)
+    if (value = "Notepads" || value = "Notepad" || value = "VSCode" || value = "Custom")
+        return value
+    return defaultValue
+}
+
+SUI_NormalizeZoomMode(value, defaultValue := "CtrlNumpad") {
+    value := Trim(value)
+    if (value = "CtrlWheel" || value = "CtrlNumpad")
+        return value
+    return defaultValue
+}
+
+SUI_NormalizeInt(value, defaultValue, minValue := "", maxValue := "") {
+    value := Trim(value)
+    if !RegExMatch(value, "^-?\d+$")
+        value := defaultValue + 0
+    else
+        value := value + 0
+
+    if (minValue != "" && value < minValue)
+        value := minValue
+    if (maxValue != "" && value > maxValue)
+        value := maxValue
+    return value + 0
+}
+
+SUI_NormalizeFloat(value, defaultValue, minValue := "", maxValue := "", decimals := 2) {
+    value := Trim(value)
+    if !RegExMatch(value, "^-?\d+(\.\d+)?$")
+        value := defaultValue + 0
+    else
+        value := value + 0
+
+    if (minValue != "" && value < minValue)
+        value := minValue
+    if (maxValue != "" && value > maxValue)
+        value := maxValue
+    return Round(value, decimals)
+}
+
+SUI_NormalizeText(value, defaultValue := "") {
+    value := Trim(value)
+    return (value = "") ? defaultValue : value
+}
+
+SUI_FormatNumber(value, decimals := 2) {
+    if (value = "")
+        return ""
+
+    formatPattern := "{:." . decimals . "f}"
+    text := Format(formatPattern, value + 0)
+    text := RTrim(text, "0")
+    text := RTrim(text, ".")
+    return (text = "") ? "0" : text
+}
+
+SUI_IsNotepadsAvailable() {
+    if IsFunc("IsNotepadsAvailable")
+        return IsNotepadsAvailable()
+
+    EnvGet, localAppData, LOCALAPPDATA
+    return FileExist(localAppData . "\Microsoft\WindowsApps\Notepads.exe") ? 1 : 0
+}
+
+SUI_EnsureConfigPath() {
+    global SUI_ConfigDir, SUI_ConfigPath, SUI_LegacyConfigPath
+
+    if !InStr(FileExist(SUI_ConfigDir), "D")
+        FileCreateDir, %SUI_ConfigDir%
+
+    if FileExist(SUI_ConfigPath)
+        return
+
+    if !FileExist(SUI_LegacyConfigPath)
+        return
+
+    FileMove, %SUI_LegacyConfigPath%, %SUI_ConfigPath%, 0
+    if (ErrorLevel) {
+        FileCopy, %SUI_LegacyConfigPath%, %SUI_ConfigPath%, 0
+        if (ErrorLevel)
+            return
+    }
+
+    SUI_DebugLog("config_migrated", "from=" . SUI_LegacyConfigPath . " to=" . SUI_ConfigPath)
+}
+
 SUI_LoadConfig() {
     global SUI_ConfigPath
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
+    global SaveDir, OutputFileName, Browser_URLExportPath
+    global Browser_PDFZoomTryShortcutFirst
+    global MouseWheel_ExplorerScrollBarRepeat
+    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
+    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global CursorConfig, CursorGridConfig
+    global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
+    global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
 
-    IniRead, navLayerRaw, %SUI_ConfigPath%, Indicators, EnableNavLayer, %EnableNavLayer%
-    IniRead, winPlaceRaw, %SUI_ConfigPath%, Indicators, EnableWinPlace, %EnableWinPlace%
+    SUI_EnsureConfigPath()
+
+    IniRead, navLayerRaw,  %SUI_ConfigPath%, Indicators, EnableNavLayer,  %EnableNavLayer%
+    IniRead, winPlaceRaw,  %SUI_ConfigPath%, Indicators, EnableWinPlace,  %EnableWinPlace%
     IniRead, winIslandRaw, %SUI_ConfigPath%, Indicators, EnableWinIsland, %EnableWinIsland%
-    IniRead, vdeskRaw, %SUI_ConfigPath%, Indicators, EnableVDesk, %EnableVDesk%
-    IniRead, mouseEmuRaw, %SUI_ConfigPath%, Indicators, EnableMouseEmu, %EnableMouseEmu%
-    IniRead, mouseBtnRaw, %SUI_ConfigPath%, Indicators, EnableMouseBtn, %EnableMouseBtn%
-    IniRead, gesturesRaw, %SUI_ConfigPath%, Indicators, EnableGestures, %EnableGestures%
-    IniRead, altRaw, %SUI_ConfigPath%, Indicators, EnableAlt, %EnableAlt%
-    IniRead, othersRaw, %SUI_ConfigPath%, Indicators, EnableOthers, %EnableOthers%
-    IniRead, browserRaw, %SUI_ConfigPath%, Indicators, EnableBrowser, %EnableBrowser%
-    IniRead, pptRaw, %SUI_ConfigPath%, Indicators, EnablePPT, %EnablePPT%
-    IniRead, excelRaw, %SUI_ConfigPath%, Indicators, EnableExcel, %EnableExcel%
+    IniRead, vdeskRaw,     %SUI_ConfigPath%, Indicators, EnableVDesk,     %EnableVDesk%
+    IniRead, mouseEmuRaw,  %SUI_ConfigPath%, Indicators, EnableMouseEmu,  %EnableMouseEmu%
+    IniRead, mouseBtnRaw,  %SUI_ConfigPath%, Indicators, EnableMouseBtn,  %EnableMouseBtn%
+    IniRead, gesturesRaw,  %SUI_ConfigPath%, Indicators, EnableGestures,  %EnableGestures%
+    IniRead, altRaw,       %SUI_ConfigPath%, Indicators, EnableAlt,       %EnableAlt%
+    IniRead, othersRaw,    %SUI_ConfigPath%, Indicators, EnableOthers,    %EnableOthers%
+    IniRead, browserRaw,   %SUI_ConfigPath%, Indicators, EnableBrowser,   %EnableBrowser%
+    IniRead, pptRaw,       %SUI_ConfigPath%, Indicators, EnablePPT,       %EnablePPT%
+    IniRead, excelRaw,     %SUI_ConfigPath%, Indicators, EnableExcel,     %EnableExcel%
 
-    EnableNavLayer := SUI_NormalizeBool(navLayerRaw, EnableNavLayer)
-    EnableWinPlace := SUI_NormalizeBool(winPlaceRaw, EnableWinPlace)
-    EnableWinIsland := SUI_NormalizeBool(winIslandRaw, EnableWinIsland)
-    EnableVDesk := SUI_NormalizeBool(vdeskRaw, EnableVDesk)
-    EnableMouseEmu := SUI_NormalizeBool(mouseEmuRaw, EnableMouseEmu)
-    EnableMouseBtn := SUI_NormalizeBool(mouseBtnRaw, EnableMouseBtn)
-    EnableGestures := SUI_NormalizeBool(gesturesRaw, EnableGestures)
-    EnableAlt := SUI_NormalizeBool(altRaw, EnableAlt)
-    EnableOthers := SUI_NormalizeBool(othersRaw, EnableOthers)
-    EnableBrowser := SUI_NormalizeBool(browserRaw, EnableBrowser)
-    EnablePPT := SUI_NormalizeBool(pptRaw, EnablePPT)
-    EnableExcel := SUI_NormalizeBool(excelRaw, EnableExcel)
+    EnableNavLayer   := SUI_NormalizeBool(navLayerRaw, EnableNavLayer)
+    EnableWinPlace   := SUI_NormalizeBool(winPlaceRaw, EnableWinPlace)
+    EnableWinIsland  := SUI_NormalizeBool(winIslandRaw, EnableWinIsland)
+    EnableVDesk      := SUI_NormalizeBool(vdeskRaw, EnableVDesk)
+    EnableMouseEmu   := SUI_NormalizeBool(mouseEmuRaw, EnableMouseEmu)
+    EnableMouseBtn   := SUI_NormalizeBool(mouseBtnRaw, EnableMouseBtn)
+    EnableGestures   := SUI_NormalizeBool(gesturesRaw, EnableGestures)
+    EnableAlt        := SUI_NormalizeBool(altRaw, EnableAlt)
+    EnableOthers     := SUI_NormalizeBool(othersRaw, EnableOthers)
+    EnableBrowser    := SUI_NormalizeBool(browserRaw, EnableBrowser)
+    EnablePPT        := SUI_NormalizeBool(pptRaw, EnablePPT)
+    EnableExcel      := SUI_NormalizeBool(excelRaw, EnableExcel)
 
-    IniRead, editorTypeRaw, %SUI_ConfigPath%, SettingsUI, EditorType, % SettingsUI.EditorType
-    SettingsUI.EditorType := SUI_NormalizeEditorType(editorTypeRaw, SettingsUI.EditorType)
+    IniRead, editorProviderRaw,    %SUI_ConfigPath%, TextEditor, Provider, %TextEditorProvider%
+    IniRead, editorCustomPathRaw,  %SUI_ConfigPath%, TextEditor, CustomPath, __EMPTY__
+    IniRead, editorArgsRaw,        %SUI_ConfigPath%, TextEditor, CustomArgs, __EMPTY__
+    if (Trim(editorProviderRaw) = "") {
+        IniRead, editorTypeRaw, %SUI_ConfigPath%, SettingsUI, EditorType, % SettingsUI.EditorType
+        SettingsUI.EditorType := SUI_NormalizeEditorType(editorTypeRaw, SettingsUI.EditorType)
+        TextEditorProvider := (SettingsUI.EditorType = 1) ? "Notepads" : "Notepad"
+    } else {
+        TextEditorProvider := SUI_NormalizeTextEditorProvider(editorProviderRaw, TextEditorProvider)
+        SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
+    }
+    if (editorCustomPathRaw = "__EMPTY__" || editorCustomPathRaw = "ERROR")
+        editorCustomPathRaw := ""
+    if (editorArgsRaw = "__EMPTY__" || editorArgsRaw = "ERROR")
+        editorArgsRaw := ""
+    TextEditorCustomPath := Trim(editorCustomPathRaw)
+    TextEditorArgsTemplate := editorArgsRaw
+
+    IniRead, cookieSaveDirRaw,     %SUI_ConfigPath%, Paths, CookieSaveDir, %SaveDir%
+    IniRead, authOutputPathRaw,    %SUI_ConfigPath%, Paths, AuthOutputPath, %OutputFileName%
+    IniRead, browserExportPathRaw, %SUI_ConfigPath%, Paths, BrowserUrlExportPath, %Browser_URLExportPath%
+    SaveDir := Trim(cookieSaveDirRaw)
+    OutputFileName := Trim(authOutputPathRaw)
+    Browser_URLExportPath := Trim(browserExportPathRaw)
+
+    IniRead, browserTryShortcutRaw, %SUI_ConfigPath%, Browser, PDFZoomTryShortcutFirst, %Browser_PDFZoomTryShortcutFirst%
+    Browser_PDFZoomTryShortcutFirst := SUI_NormalizeBool(browserTryShortcutRaw, Browser_PDFZoomTryShortcutFirst)
+
+    IniRead, explorerRepeatRaw,       %SUI_ConfigPath%, MouseWheel, ExplorerScrollBarRepeat, %MouseWheel_ExplorerScrollBarRepeat%
+    IniRead, defaultZoomModeRaw,      %SUI_ConfigPath%, MouseWheel, DefaultZoomMode, %MouseWheel_DefaultZoomMode%
+    IniRead, explorerZoomModeRaw,     %SUI_ConfigPath%, MouseWheel, ExplorerZoomMode, %MouseWheel_ExplorerZoomMode%
+    IniRead, pycharmZoomModeRaw,      %SUI_ConfigPath%, MouseWheel, PyCharmZoomMode, %MouseWheel_PyCharmZoomMode%
+    IniRead, wordZoomModeRaw,         %SUI_ConfigPath%, MouseWheel, WordZoomMode, %MouseWheel_WordZoomMode%
+    IniRead, excelZoomModeRaw,        %SUI_ConfigPath%, MouseWheel, ExcelZoomMode, %MouseWheel_ExcelZoomMode%
+    IniRead, powerpointZoomModeRaw,   %SUI_ConfigPath%, MouseWheel, PowerPointZoomMode, %MouseWheel_PowerPointZoomMode%
+    MouseWheel_ExplorerScrollBarRepeat := SUI_NormalizeInt(explorerRepeatRaw, MouseWheel_ExplorerScrollBarRepeat, 1, 20)
+    MouseWheel_DefaultZoomMode := SUI_NormalizeZoomMode(defaultZoomModeRaw, MouseWheel_DefaultZoomMode)
+    MouseWheel_ExplorerZoomMode := SUI_NormalizeZoomMode(explorerZoomModeRaw, MouseWheel_ExplorerZoomMode)
+    MouseWheel_PyCharmZoomMode := SUI_NormalizeZoomMode(pycharmZoomModeRaw, MouseWheel_PyCharmZoomMode)
+    MouseWheel_WordZoomMode := SUI_NormalizeZoomMode(wordZoomModeRaw, MouseWheel_WordZoomMode)
+    MouseWheel_ExcelZoomMode := SUI_NormalizeZoomMode(excelZoomModeRaw, MouseWheel_ExcelZoomMode)
+    MouseWheel_PowerPointZoomMode := SUI_NormalizeZoomMode(powerpointZoomModeRaw, MouseWheel_PowerPointZoomMode)
+    if IsFunc("MouseWheel_RebuildZoomRules")
+        MouseWheel_RebuildZoomRules()
+
+    IniRead, cursorBaseSpeedRaw,    %SUI_ConfigPath%, Cursor, BaseSpeed, % CursorConfig.BaseSpeed
+    IniRead, cursorMaxSpeedRaw,     %SUI_ConfigPath%, Cursor, MaxSpeed, % CursorConfig.MaxSpeed
+    IniRead, cursorAccelRaw,        %SUI_ConfigPath%, Cursor, Acceleration, % CursorConfig.Acceleration
+    IniRead, cursorTimerRaw,        %SUI_ConfigPath%, Cursor, TimerInterval, % CursorConfig.TimerInterval
+    IniRead, cursorGridColsRaw,     %SUI_ConfigPath%, Cursor, GridCols, % CursorGridConfig.DefaultCols
+    IniRead, cursorGridRowsRaw,     %SUI_ConfigPath%, Cursor, GridRows, % CursorGridConfig.DefaultRows
+    IniRead, cursorEdgeInsetRaw,    %SUI_ConfigPath%, Cursor, EdgeInset, % CursorGridConfig.EdgeInset
+    CursorConfig.BaseSpeed := SUI_NormalizeFloat(cursorBaseSpeedRaw, CursorConfig.BaseSpeed, 0.25, 50, 2)
+    CursorConfig.MaxSpeed := SUI_NormalizeFloat(cursorMaxSpeedRaw, CursorConfig.MaxSpeed, CursorConfig.BaseSpeed, 200, 2)
+    CursorConfig.Acceleration := SUI_NormalizeFloat(cursorAccelRaw, CursorConfig.Acceleration, 1.01, 5, 2)
+    CursorConfig.TimerInterval := SUI_NormalizeInt(cursorTimerRaw, CursorConfig.TimerInterval, 1, 100)
+    CursorGridConfig.DefaultCols := SUI_NormalizeInt(cursorGridColsRaw, CursorGridConfig.DefaultCols, 1, 12)
+    CursorGridConfig.DefaultRows := SUI_NormalizeInt(cursorGridRowsRaw, CursorGridConfig.DefaultRows, 1, 12)
+    CursorGridConfig.EdgeInset := SUI_NormalizeInt(cursorEdgeInsetRaw, CursorGridConfig.EdgeInset, 0, 100)
+
+    IniRead, suiDebugRaw,           %SUI_ConfigPath%, Debug, IndicatorManager, %SUI_DebugEnabled%
+    IniRead, mgDebugRaw,            %SUI_ConfigPath%, Debug, MouseGesture, %MG_DebugEnabled%
+    IniRead, mouseWheelDebugRaw,    %SUI_ConfigPath%, Debug, MouseWheel, %MouseWheel_DebugEnabled%
+    IniRead, browserDebugRaw,       %SUI_ConfigPath%, Debug, BrowserPDFZoom, %Browser_PDFZoomDebugEnabled%
+    IniRead, pptSpacingDebugRaw,    %SUI_ConfigPath%, Debug, PowerPointSpacing, %PPT_SpacingLogEnabled%
+    IniRead, pptCaptionDebugRaw,    %SUI_ConfigPath%, Debug, PowerPointCaption, %PPT_CaptionLogEnabled%
+    SUI_DebugEnabled := SUI_NormalizeBool(suiDebugRaw, SUI_DebugEnabled)
+    MG_DebugEnabled := SUI_NormalizeBool(mgDebugRaw, MG_DebugEnabled)
+    MouseWheel_DebugEnabled := SUI_NormalizeBool(mouseWheelDebugRaw, MouseWheel_DebugEnabled)
+    Browser_PDFZoomDebugEnabled := SUI_NormalizeBool(browserDebugRaw, Browser_PDFZoomDebugEnabled)
+    PPT_SpacingLogEnabled := SUI_NormalizeBool(pptSpacingDebugRaw, PPT_SpacingLogEnabled)
+    PPT_CaptionLogEnabled := SUI_NormalizeBool(pptCaptionDebugRaw, PPT_CaptionLogEnabled)
 
     SUI_DebugLog("config_load", "path=" . SUI_ConfigPath)
 }
@@ -204,20 +545,69 @@ SUI_SaveConfig() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
+    global SaveDir, OutputFileName, Browser_URLExportPath
+    global Browser_PDFZoomTryShortcutFirst
+    global MouseWheel_ExplorerScrollBarRepeat
+    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
+    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global CursorConfig, CursorGridConfig
+    global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
+    global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
+    global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
 
-    IniWrite, % EnableNavLayer ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableNavLayer
-    IniWrite, % EnableWinPlace ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinPlace
-    IniWrite, % EnableWinIsland ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinIsland
-    IniWrite, % EnableVDesk ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableVDesk
-    IniWrite, % EnableMouseEmu ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseEmu
-    IniWrite, % EnableMouseBtn ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseBtn
-    IniWrite, % EnableGestures ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableGestures
-    IniWrite, % EnableAlt ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableAlt
-    IniWrite, % EnableOthers ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableOthers
-    IniWrite, % EnableBrowser ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
-    IniWrite, % EnablePPT ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
-    IniWrite, % EnableExcel ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
+    SUI_EnsureConfigPath()
+
+    IniWrite, % EnableNavLayer   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableNavLayer
+    IniWrite, % EnableWinPlace   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinPlace
+    IniWrite, % EnableWinIsland  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinIsland
+    IniWrite, % EnableVDesk      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableVDesk
+    IniWrite, % EnableMouseEmu   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseEmu
+    IniWrite, % EnableMouseBtn   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseBtn
+    IniWrite, % EnableGestures   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableGestures
+    IniWrite, % EnableAlt        ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableAlt
+    IniWrite, % EnableOthers     ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableOthers
+    IniWrite, % EnableBrowser    ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
+    IniWrite, % EnablePPT        ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
+    IniWrite, % EnableExcel      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
+    SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
     IniWrite, % SettingsUI.EditorType, %SUI_ConfigPath%, SettingsUI, EditorType
+
+    IniWrite, %TextEditorProvider%, %SUI_ConfigPath%, TextEditor, Provider
+    IniWrite, %TextEditorCustomPath%, %SUI_ConfigPath%, TextEditor, CustomPath
+    IniWrite, %TextEditorArgsTemplate%, %SUI_ConfigPath%, TextEditor, CustomArgs
+
+    IniWrite, %SaveDir%, %SUI_ConfigPath%, Paths, CookieSaveDir
+    IniWrite, %OutputFileName%, %SUI_ConfigPath%, Paths, AuthOutputPath
+    IniWrite, %Browser_URLExportPath%, %SUI_ConfigPath%, Paths, BrowserUrlExportPath
+
+    IniWrite, % Browser_PDFZoomTryShortcutFirst ? 1 : 0, %SUI_ConfigPath%, Browser, PDFZoomTryShortcutFirst
+
+    IniWrite, %MouseWheel_ExplorerScrollBarRepeat%, %SUI_ConfigPath%, MouseWheel, ExplorerScrollBarRepeat
+    IniWrite, %MouseWheel_DefaultZoomMode%, %SUI_ConfigPath%, MouseWheel, DefaultZoomMode
+    IniWrite, %MouseWheel_ExplorerZoomMode%, %SUI_ConfigPath%, MouseWheel, ExplorerZoomMode
+    IniWrite, %MouseWheel_PyCharmZoomMode%, %SUI_ConfigPath%, MouseWheel, PyCharmZoomMode
+    IniWrite, %MouseWheel_WordZoomMode%, %SUI_ConfigPath%, MouseWheel, WordZoomMode
+    IniWrite, %MouseWheel_ExcelZoomMode%, %SUI_ConfigPath%, MouseWheel, ExcelZoomMode
+    IniWrite, %MouseWheel_PowerPointZoomMode%, %SUI_ConfigPath%, MouseWheel, PowerPointZoomMode
+
+    IniWrite, % SUI_FormatNumber(CursorConfig.BaseSpeed, 2), %SUI_ConfigPath%, Cursor, BaseSpeed
+    IniWrite, % SUI_FormatNumber(CursorConfig.MaxSpeed, 2), %SUI_ConfigPath%, Cursor, MaxSpeed
+    IniWrite, % SUI_FormatNumber(CursorConfig.Acceleration, 2), %SUI_ConfigPath%, Cursor, Acceleration
+    IniWrite, % CursorConfig.TimerInterval, %SUI_ConfigPath%, Cursor, TimerInterval
+    IniWrite, % CursorGridConfig.DefaultCols, %SUI_ConfigPath%, Cursor, GridCols
+    IniWrite, % CursorGridConfig.DefaultRows, %SUI_ConfigPath%, Cursor, GridRows
+    IniWrite, % CursorGridConfig.EdgeInset, %SUI_ConfigPath%, Cursor, EdgeInset
+
+    IniWrite, % SUI_FormatNumber(PPT_CaptionVisualGapHorizontal, 2), %SUI_ConfigPath%, PowerPoint, CaptionHorizontalGap
+    IniWrite, % SUI_FormatNumber(PPT_CaptionVisualGapVertical, 2), %SUI_ConfigPath%, PowerPoint, CaptionVerticalGap
+
+    IniWrite, % SUI_DebugEnabled ? 1 : 0, %SUI_ConfigPath%, Debug, IndicatorManager
+    IniWrite, % MG_DebugEnabled ? 1 : 0, %SUI_ConfigPath%, Debug, MouseGesture
+    IniWrite, % MouseWheel_DebugEnabled ? 1 : 0, %SUI_ConfigPath%, Debug, MouseWheel
+    IniWrite, % Browser_PDFZoomDebugEnabled ? 1 : 0, %SUI_ConfigPath%, Debug, BrowserPDFZoom
+    IniWrite, % PPT_SpacingLogEnabled ? 1 : 0, %SUI_ConfigPath%, Debug, PowerPointSpacing
+    IniWrite, % PPT_CaptionLogEnabled ? 1 : 0, %SUI_ConfigPath%, Debug, PowerPointCaption
 
     SUI_DebugLog("config_save", "path=" . SUI_ConfigPath)
 }
@@ -229,22 +619,180 @@ SUI_RegisterMessageHandlers() {
         return
 
     OnMessage(0x0010, "SUI_HandleWmClose")
+    OnMessage(0x0201, "SUI_HandleLButtonDown")
+    OnMessage(0x0210, "SUI_HandleParentNotify")
+    OnMessage(0x004E, "SUI_HandleNotify")
+    OnMessage(0x0133, "SUI_HandleCtlColorEdit")
+    OnMessage(0x0135, "SUI_HandleCtlColorBtn")
+    OnMessage(0x0136, "SUI_HandleCtlColorDlg")
+    OnMessage(0x0138, "SUI_HandleCtlColorStatic")
     isRegistered := true
 }
 
 SUI_HandleWmClose(wParam, lParam, msg, hwnd) {
-    global SUI_SettingsGuiHwnd, SUI_SubSettingsGuiHwnd
+    global SUI_SettingsGuiHwnd
 
-    if (hwnd = SUI_SettingsGuiHwnd) {
+    if (SUI_SettingsGuiHwnd && hwnd = SUI_SettingsGuiHwnd) {
         Settings_Close()
         return 0
     }
+}
 
-    if (hwnd = SUI_SubSettingsGuiHwnd) {
-        Gui, SubSettings:Destroy
-        SUI_SubSettingsGuiHwnd := 0
-        return 0
+SUI_HandleNotify(wParam, lParam, msg, hwnd) {
+    global SUI_SettingsGuiHwnd, SUI_SettingsLVHwnd
+
+    if (!SUI_SettingsGuiHwnd || hwnd != SUI_SettingsGuiHwnd || !SUI_SettingsLVHwnd)
+        return
+
+    hwndFrom := NumGet(lParam + 0, 0, "Ptr")
+    if (hwndFrom != SUI_SettingsLVHwnd)
+        return
+
+    code := NumGet(lParam + 0, A_PtrSize * 2, "Int")
+    if (code = -101 || code = -2 || code = -3 || code = -155)
+        SUI_QueueHelpRefresh("notify code=" . code)
+}
+
+SUI_GetWindowClassName(hwnd) {
+    VarSetCapacity(className, 256, 0)
+    DllCall("GetClassName", "Ptr", hwnd, "Str", className, "Int", 256)
+    return className
+}
+
+SUI_IsGroupBoxHwnd(hwnd) {
+    if !hwnd
+        return false
+    if (SUI_GetWindowClassName(hwnd) != "Button")
+        return false
+    style := DllCall(A_PtrSize = 8 ? "GetWindowLongPtr" : "GetWindowLong", "Ptr", hwnd, "Int", -16, "Ptr")
+    return ((style & 0xF) = 0x7)
+}
+
+SUI_ShouldClearEditFocus(clickedHwnd) {
+    global SUI_SettingsGuiHwnd
+
+    if !clickedHwnd
+        return true
+    if (clickedHwnd = SUI_SettingsGuiHwnd)
+        return true
+
+    className := SUI_GetWindowClassName(clickedHwnd)
+    if (className = "Static" || className = "SysTabControl32")
+        return true
+    if (className = "Button" && SUI_IsGroupBoxHwnd(clickedHwnd))
+        return true
+    return false
+}
+
+SUI_TryClearEditFocus(clickedHwnd := 0) {
+    global SUI_SettingsGuiHwnd, SUI_SettingsTabHwnd
+
+    if (!SUI_SettingsGuiHwnd || !SUI_SettingsTabHwnd)
+        return
+
+    focusHwnd := DllCall("GetFocus", "Ptr")
+    if !focusHwnd
+        return
+    if (SUI_GetWindowClassName(focusHwnd) != "Edit")
+        return
+
+    if !clickedHwnd {
+        MouseGetPos,,, mouseWin, clickedHwnd, 2
+        if (mouseWin != SUI_SettingsGuiHwnd)
+            return
     }
+
+    if !SUI_ShouldClearEditFocus(clickedHwnd)
+        return
+
+    GuiControlGet, focusedControlName, Name, %focusHwnd%
+    if (focusedControlName != "")
+        SUI_ClampNumericControl(focusedControlName)
+
+    DllCall("SetFocus", "Ptr", SUI_SettingsTabHwnd)
+}
+
+SUI_HandleLButtonDown(wParam, lParam, msg, hwnd) {
+    global SUI_SettingsGuiHwnd
+
+    if (!SUI_SettingsGuiHwnd)
+        return
+    if (hwnd != SUI_SettingsGuiHwnd && !DllCall("IsChild", "Ptr", SUI_SettingsGuiHwnd, "Ptr", hwnd))
+        return
+    SUI_TryClearEditFocus(hwnd)
+}
+
+SUI_HandleParentNotify(wParam, lParam, msg, hwnd) {
+    global SUI_SettingsGuiHwnd
+
+    if (!SUI_SettingsGuiHwnd || hwnd != SUI_SettingsGuiHwnd)
+        return
+    if ((wParam & 0xFFFF) != 0x0201)
+        return
+    SUI_TryClearEditFocus()
+}
+
+SUI_IsSettingsGuiCtlColor(hwnd) {
+    global SUI_SettingsGuiHwnd
+    return (SUI_SettingsGuiHwnd && hwnd = SUI_SettingsGuiHwnd)
+}
+
+SUI_IsTitleLabelHwnd(ctrlHwnd) {
+    global SUI_SettingsItemsLabelHwnd, SUI_SettingsHelpLabelHwnd, SUI_CodePreviewLabelHwnd
+    return (ctrlHwnd = SUI_SettingsItemsLabelHwnd
+        || ctrlHwnd = SUI_SettingsHelpLabelHwnd
+        || ctrlHwnd = SUI_CodePreviewLabelHwnd)
+}
+
+SUI_HandleCtlColorEdit(wParam, lParam, msg, hwnd) {
+    global _SUI_Theme
+
+    if (!IsObject(_SUI_Theme) || !SUI_IsSettingsGuiCtlColor(hwnd))
+        return
+
+    DllCall("SetTextColor", "Ptr", wParam, "UInt", _SUI_Theme.EditorForegroundColor)
+    DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.EditorColor)
+    return SUI_GetThemeBrush(_SUI_Theme.EditorColor)
+}
+
+SUI_HandleCtlColorStatic(wParam, lParam, msg, hwnd) {
+    global _SUI_Theme
+
+    if (!IsObject(_SUI_Theme) || !SUI_IsSettingsGuiCtlColor(hwnd))
+        return
+
+    if (SUI_IsTitleLabelHwnd(lParam)) {
+        DllCall("SetTextColor", "Ptr", wParam, "UInt", _SUI_Theme.ForegroundColor)
+        DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.TitleColor)
+        DllCall("SetBkMode", "Ptr", wParam, "Int", 2)
+        return SUI_GetThemeBrush(_SUI_Theme.TitleColor)
+    }
+
+    DllCall("SetTextColor", "Ptr", wParam, "UInt", _SUI_Theme.ForegroundColor)
+    DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.WindowColor)
+    DllCall("SetBkMode", "Ptr", wParam, "Int", 1)
+    return SUI_GetThemeBrush(_SUI_Theme.WindowColor)
+}
+
+SUI_HandleCtlColorBtn(wParam, lParam, msg, hwnd) {
+    global _SUI_Theme
+
+    if (!IsObject(_SUI_Theme) || !SUI_IsSettingsGuiCtlColor(hwnd))
+        return
+
+    DllCall("SetTextColor", "Ptr", wParam, "UInt", _SUI_Theme.ForegroundColor)
+    DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.WindowColor)
+    DllCall("SetBkMode", "Ptr", wParam, "Int", 1)
+    return SUI_GetThemeBrush(_SUI_Theme.WindowColor)
+}
+
+SUI_HandleCtlColorDlg(wParam, lParam, msg, hwnd) {
+    global _SUI_Theme
+
+    if (!IsObject(_SUI_Theme) || !SUI_IsSettingsGuiCtlColor(hwnd))
+        return
+
+    return SUI_GetThemeBrush(_SUI_Theme.WindowColor)
 }
 
 class SettingsUI {
@@ -268,29 +816,155 @@ class SettingsUI {
         IfExist, %StartupShortcutPath%
             Menu, Tray, Check, スタートアップで実行する
 
+        SUI_LoadTheme()
         SUI_InitHelpData()
     }
 
     Show() {
-        Global SUI_SettingsGuiHwnd, SettingsItemsLV, SettingsLV, SUI_IsInitializing
+        Global SUI_SettingsGuiHwnd, SUI_SettingsItemsLabelHwnd, SUI_SettingsItemsLVHwnd
+        Global SUI_SettingsHelpLabelHwnd, SUI_SettingsLVHwnd
+        Global SUI_CodePreviewLabelHwnd, SUI_CodePreviewEditHwnd
+        Global _SUI_Theme
+        Global SettingsItemsLV, SettingsLV, SettingsCodePreviewLabel, SettingsCodePreviewEdit
+        Global SettingsEditorProvider, SettingsEditorCustomPath, SettingsEditorArgs
+        Global SettingsAuthSaveDir, SettingsAuthOutputPath, SettingsBrowserUrlExportPath
+        Global SettingsPPTCaptionGapH, SettingsPPTCaptionGapV
+        Global SettingsBrowserPdfZoomShortcutFirst, SettingsMouseWheelExplorerRepeat
+        Global SettingsMouseWheelDefaultMode, SettingsMouseWheelExplorerMode, SettingsMouseWheelPycharmMode
+        Global SettingsMouseWheelWordMode, SettingsMouseWheelExcelMode, SettingsMouseWheelPowerPointMode
+        Global SettingsCursorBaseSpeed, SettingsCursorMaxSpeed, SettingsCursorAcceleration, SettingsCursorTimerInterval
+        Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorEdgeInset
+        Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
+        Global SettingsBrowserPdfZoomDebug, SettingsPPTSpacingDebug, SettingsPPTCaptionDebug, SettingsValidationHint
+        Global SUI_IsInitializing, SUI_SelectedItemID, _SUI_LastHelpRow
         SUI_IsInitializing := true
+        SUI_SelectedItemID := 0
+        _SUI_LastHelpRow := 0
+        SUI_LoadTheme()
         Gui, Settings:Destroy
         Gui, Settings:New, +AlwaysOnTop +HwndhSettingsGui, 機能設定
         SUI_SettingsGuiHwnd := hSettingsGui
-        Gui, Settings:Font, s9, Segoe UI
+        Gui, Settings:Color, % _SUI_Theme.WindowRGB, % _SUI_Theme.WindowRGB
+        Gui, Settings:Font, % "s9 c" . _SUI_Theme.ForegroundHex, Segoe UI
 
-        Gui, Settings:Add, ListView, x10 y10 w190 h360 vSettingsItemsLV gSUI_ItemsHandler Checked AltSubmit -Multi -Hdr +LV0x20, |機能
-        Gui, Settings:Add, ListView, x210 y10 w400 h360 vSettingsLV gSUI_HelpHandler Grid NoSortHdr -Multi -TabStop, ホットキー|説明
+        ; =========================================
+        ; --- タブコントロールの追加 ---
+        ; =========================================
+        Gui, Settings:Add, Tab3, x10 y10 w750 h510 HwndhSettingsTab, 基本設定|詳細設定
+        SUI_SettingsTabHwnd := hSettingsTab
 
+        ; -----------------------------------------
+        ; ▼ 1つ目のタブ (基本設定) の内容
+        ; -----------------------------------------
+        Gui, Settings:Tab, 1
+        Gui, Settings:Font, % "s9 c" . _SUI_Theme.ForegroundHex, Segoe UI
+        Gui, Settings:Add, Text, x20 y44 w210 h20 HwndhSettingsItemsLabel +0x200, 機能
+        SUI_SettingsItemsLabelHwnd := hSettingsItemsLabel
+        Gui, Settings:Add, Text, x245 y44 w495 h20 HwndhSettingsHelpLabel +0x200, ホットキー / 説明
+        SUI_SettingsHelpLabelHwnd := hSettingsHelpLabel
+        Gui, Settings:Add, ListView, x20 y66 w210 h430 vSettingsItemsLV gSUI_ItemsHandler HwndhSettingsItemsLV Checked AltSubmit -Multi -Hdr +LV0x20 -0x100000, |機能
+        SUI_SettingsItemsLVHwnd := hSettingsItemsLV
+        Gui, Settings:Add, ListView, x245 y66 w495 h245 vSettingsLV gSUI_HelpHandler HwndhSettingsLV Grid AltSubmit -Hdr -Multi -TabStop +0x8 -0x100000, ホットキー|説明
+        SUI_SettingsLVHwnd := hSettingsLV
+        Gui, Settings:Font, % "s9 c" . _SUI_Theme.ForegroundHex, Segoe UI
+        Gui, Settings:Add, Text, x245 y323 w495 h20 vSettingsCodePreviewLabel HwndhSettingsCodePreviewLabel +0x200, 詳細
+        SUI_CodePreviewLabelHwnd := hSettingsCodePreviewLabel
+        Gui, Settings:Font, % "s9 c" . _SUI_Theme.EditorForegroundHex, Consolas
+        Gui, Settings:Add, Edit, x245 y345 w495 h151 vSettingsCodePreviewEdit HwndhSettingsCodePreviewEdit ReadOnly -Wrap -TabStop
+        SUI_CodePreviewEditHwnd := hSettingsCodePreviewEdit
+        Gui, Settings:Font, % "s9 c" . _SUI_Theme.ForegroundHex, Segoe UI
+
+        ; -----------------------------------------
+        ; ▼ 2つ目のタブ (詳細設定) の内容
+        ; -----------------------------------------
+        Gui, Settings:Tab, 2
+        Gui, Settings:Add, GroupBox, x20 y45 w330 h116, Text Editor
+        Gui, Settings:Add, Text, x35 y69 w68 h20 +0x200, Provider
+        Gui, Settings:Add, DropDownList, x105 y67 w225 vSettingsEditorProvider gSUI_EditorProviderChanged, Notepads|Notepad|VSCode|Custom
+        Gui, Settings:Add, Text, x35 y98 w68 h20 +0x200, Custom path
+        Gui, Settings:Add, Edit, x105 y96 w225 h21 vSettingsEditorCustomPath
+        Gui, Settings:Add, Text, x35 y123 w68 h20 +0x200, Custom args
+        Gui, Settings:Add, Edit, x105 y121 w225 h21 vSettingsEditorArgs
+
+        Gui, Settings:Add, GroupBox, x20 y171 w330 h136, Output Paths
+        Gui, Settings:Add, Text, x35 y196 w68 h20 +0x200, Cookies dir
+        Gui, Settings:Add, Edit, x105 y194 w225 h21 vSettingsAuthSaveDir
+        Gui, Settings:Add, Text, x35 y231 w68 h20 +0x200, Auth json
+        Gui, Settings:Add, Edit, x105 y229 w225 h21 vSettingsAuthOutputPath
+        Gui, Settings:Add, Text, x35 y266 w68 h20 +0x200, URL export
+        Gui, Settings:Add, Edit, x105 y264 w225 h21 vSettingsBrowserUrlExportPath
+
+        Gui, Settings:Add, GroupBox, x20 y315 w330 h66, PowerPoint
+        Gui, Settings:Add, Text, x35 y341 w70 h20 +0x200, Caption H
+        Gui, Settings:Add, Edit, x105 y339 w70 h21 vSettingsPPTCaptionGapH gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x190 y341 w70 h20 +0x200, Caption V
+        Gui, Settings:Add, Edit, x260 y339 w70 h21 vSettingsPPTCaptionGapV gSUI_PositiveFloatEditChanged
+
+        Gui, Settings:Add, GroupBox, x370 y45 w370 h222, Advanced
+        Gui, Settings:Add, CheckBox, x388 y68 w190 h20 vSettingsBrowserPdfZoomShortcutFirst, PDF zoom: 先に Ctrl+\ を試す
+        Gui, Settings:Add, Text, x388 y97 w112 h20 +0x200, Explorer repeat
+        Gui, Settings:Add, Edit, x497 y95 w44 h21 Number vSettingsMouseWheelExplorerRepeat gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x560 y97 w48 h20 +0x200, Default
+        Gui, Settings:Add, DropDownList, x612 y95 w110 vSettingsMouseWheelDefaultMode, CtrlNumpad|CtrlWheel
+        Gui, Settings:Add, Text, x388 y127 w60 h20 +0x200, Explorer
+        Gui, Settings:Add, DropDownList, x448 y125 w92 vSettingsMouseWheelExplorerMode, CtrlNumpad|CtrlWheel
+        Gui, Settings:Add, Text, x554 y127 w58 h20 +0x200, Pycharm
+        Gui, Settings:Add, DropDownList, x612 y125 w110 vSettingsMouseWheelPycharmMode, CtrlNumpad|CtrlWheel
+        Gui, Settings:Add, Text, x388 y157 w60 h20 +0x200, Word
+        Gui, Settings:Add, DropDownList, x448 y155 w92 vSettingsMouseWheelWordMode, CtrlNumpad|CtrlWheel
+        Gui, Settings:Add, Text, x554 y157 w58 h20 +0x200, Excel
+        Gui, Settings:Add, DropDownList, x612 y155 w110 vSettingsMouseWheelExcelMode, CtrlNumpad|CtrlWheel
+        Gui, Settings:Add, Text, x388 y187 w60 h20 +0x200, PPT
+        Gui, Settings:Add, DropDownList, x448 y185 w92 vSettingsMouseWheelPowerPointMode, CtrlNumpad|CtrlWheel
+        Gui, Settings:Add, Text, x388 y222 w36 h20 +0x200, Base
+        Gui, Settings:Add, Edit, x425 y220 w46 h21 vSettingsCursorBaseSpeed gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x479 y222 w30 h20 +0x200, Max
+        Gui, Settings:Add, Edit, x510 y220 w46 h21 vSettingsCursorMaxSpeed gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x564 y222 w36 h20 +0x200, Accel
+        Gui, Settings:Add, Edit, x602 y220 w46 h21 vSettingsCursorAcceleration gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x656 y222 w26 h20 +0x200, ms
+        Gui, Settings:Add, Edit, x683 y220 w39 h21 Number vSettingsCursorTimerInterval gSUI_NonNegativeIntEditChanged
+
+        Gui, Settings:Add, GroupBox, x370 y274 w370 h62, Cursor Grid
+        Gui, Settings:Add, Text, x388 y299 w34 h20 +0x200, Cols
+        Gui, Settings:Add, Edit, x424 y297 w48 h21 Number vSettingsCursorGridCols gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x486 y299 w34 h20 +0x200, Rows
+        Gui, Settings:Add, Edit, x522 y297 w48 h21 Number vSettingsCursorGridRows gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x584 y299 w36 h20 +0x200, Inset
+        Gui, Settings:Add, Edit, x622 y297 w48 h21 Number vSettingsCursorEdgeInset gSUI_NonNegativeIntEditChanged
+
+        Gui, Settings:Add, GroupBox, x370 y344 w370 h108, Debug
+        Gui, Settings:Add, CheckBox, x388 y369 w145 h20 vSettingsIndicatorDebug, IndicatorManager
+        Gui, Settings:Add, CheckBox, x548 y369 w145 h20 vSettingsMouseGestureDebug, MouseGesture
+        Gui, Settings:Add, CheckBox, x388 y395 w145 h20 vSettingsMouseWheelDebug, MouseWheel
+        Gui, Settings:Add, CheckBox, x548 y395 w145 h20 vSettingsBrowserPdfZoomDebug, Browser PDF
+        Gui, Settings:Add, CheckBox, x388 y421 w145 h20 vSettingsPPTSpacingDebug, PPT spacing
+        Gui, Settings:Add, CheckBox, x548 y421 w145 h20 vSettingsPPTCaptionDebug, PPT caption
+
+        Gui, Settings:Add, Button, x20 y403 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
+        Gui, Settings:Add, Button, x150 y403 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
+        Gui, Settings:Add, Text, x20 y437 w330 h18 vSettingsValidationHint,
+
+        ; -----------------------------------------
+        ; ▼ タブの配置指定を終了 (以降はタブ外の要素)
+        ; -----------------------------------------
+        Gui, Settings:Tab
+
+        ; =========================================
+        ; --- リストビュー等の初期化処理 ---
+        ; =========================================
         SUI_BuildItemList()
         Gui, Settings:ListView, SettingsItemsLV
         LV_ModifyCol(1, 28)
-        LV_ModifyCol(2, 138)
+        LV_ModifyCol(2, 170)
 
         Gui, Settings:ListView, SettingsLV
-        LV_ModifyCol(1, 130)
-        LV_ModifyCol(2, 260)
+        LV_ModifyCol(1, 160)
+        LV_ModifyCol(2, 315)
+        SUI_LoadAdvancedSettingsIntoGui()
+        SUI_ApplyThemeToControls()
         SUI_SnapshotCheckStates()
+        SUI_SetDetailPane(SUI_DefaultDetailMessage())
 
         Gui, Settings:ListView, SettingsItemsLV
         firstID := LV_GetCount() ? 1 : 0
@@ -299,200 +973,873 @@ class SettingsUI {
             SUI_RefreshLV(firstID)
         }
 
-        fnDetail := ObjBindMethod(this, "ShowDetailWindow")
-        Gui, Settings:Add, Button, x10 y380 w190 g%fnDetail%, エディタ設定...
-        Gui, Settings:Show, w630 h420 xCenter yCenter
+        ; 全体のウィンドウサイズを表示
+        Gui, Settings:Show, w770 h540 xCenter yCenter
         SUI_IsInitializing := false
         SUI_DebugLog("settings_show")
     }
 
-    ShowDetailWindow() {
-        Global SUI_SubSettingsGuiHwnd, RadioNotepads, RadioStandard
-        notepadsAvailable := IsNotepadsAvailable()
-        if (!notepadsAvailable && this.EditorType = 1)
-            this.EditorType := 2
+}
 
-        Gui, SubSettings:Destroy
-        Gui, SubSettings:New, +OwnerSettings +AlwaysOnTop +ToolWindow +HwndhSubSettingsGui, エディタ選択
-        SUI_SubSettingsGuiHwnd := hSubSettingsGui
-        Gui, SubSettings:Font, s9, Segoe UI
+SUI_LoadAdvancedSettingsIntoGui() {
+    global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
+    global SaveDir, OutputFileName, Browser_URLExportPath
+    global Browser_PDFZoomTryShortcutFirst
+    global MouseWheel_ExplorerScrollBarRepeat
+    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
+    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global CursorConfig, CursorGridConfig
+    global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
+    global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
+    global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
 
-        fnEditor := ObjBindMethod(this, "OnEditorChange")
-        Gui, SubSettings:Add, GroupBox, xm ym w250 h80, デフォルトエディタ
+    GuiControl, Settings:ChooseString, SettingsEditorProvider, %TextEditorProvider%
+    GuiControl, Settings:, SettingsEditorCustomPath, %TextEditorCustomPath%
+    GuiControl, Settings:, SettingsEditorArgs, %TextEditorArgsTemplate%
 
-        check1 := (this.EditorType = 1) ? "Checked" : ""
-        check2 := (this.EditorType = 2) ? "Checked" : ""
-        disabled1 := notepadsAvailable ? "" : "Disabled"
-        label1 := notepadsAvailable ? "Notepads (UWP)" : "Notepads (未インストール)"
-        Gui, SubSettings:Add, Radio, xs+10 ys+25 vRadioNotepads g%fnEditor% %check1% %disabled1%, %label1%
-        Gui, SubSettings:Add, Radio, x+10 vRadioStandard g%fnEditor% %check2%, notepad.exe (標準)
-        if (!notepadsAvailable)
-            Gui, SubSettings:Add, Text, xs+10 y+4 cGray, Notepads が見つからないため使用不可
-        Gui, SubSettings:Show, AutoSize Center
+    GuiControl, Settings:, SettingsAuthSaveDir, %SaveDir%
+    GuiControl, Settings:, SettingsAuthOutputPath, %OutputFileName%
+    GuiControl, Settings:, SettingsBrowserUrlExportPath, %Browser_URLExportPath%
+
+    GuiControl, Settings:, SettingsPPTCaptionGapH, % SUI_FormatNumber(PPT_CaptionVisualGapHorizontal, 2)
+    GuiControl, Settings:, SettingsPPTCaptionGapV, % SUI_FormatNumber(PPT_CaptionVisualGapVertical, 2)
+
+    GuiControl, Settings:, SettingsBrowserPdfZoomShortcutFirst, % Browser_PDFZoomTryShortcutFirst ? 1 : 0
+    GuiControl, Settings:, SettingsMouseWheelExplorerRepeat, %MouseWheel_ExplorerScrollBarRepeat%
+    GuiControl, Settings:ChooseString, SettingsMouseWheelDefaultMode, %MouseWheel_DefaultZoomMode%
+    GuiControl, Settings:ChooseString, SettingsMouseWheelExplorerMode, %MouseWheel_ExplorerZoomMode%
+    GuiControl, Settings:ChooseString, SettingsMouseWheelPycharmMode, %MouseWheel_PyCharmZoomMode%
+    GuiControl, Settings:ChooseString, SettingsMouseWheelWordMode, %MouseWheel_WordZoomMode%
+    GuiControl, Settings:ChooseString, SettingsMouseWheelExcelMode, %MouseWheel_ExcelZoomMode%
+    GuiControl, Settings:ChooseString, SettingsMouseWheelPowerPointMode, %MouseWheel_PowerPointZoomMode%
+
+    GuiControl, Settings:, SettingsCursorBaseSpeed, % SUI_FormatNumber(CursorConfig.BaseSpeed, 2)
+    GuiControl, Settings:, SettingsCursorMaxSpeed, % SUI_FormatNumber(CursorConfig.MaxSpeed, 2)
+    GuiControl, Settings:, SettingsCursorAcceleration, % SUI_FormatNumber(CursorConfig.Acceleration, 2)
+    GuiControl, Settings:, SettingsCursorTimerInterval, % CursorConfig.TimerInterval
+    GuiControl, Settings:, SettingsCursorGridCols, % CursorGridConfig.DefaultCols
+    GuiControl, Settings:, SettingsCursorGridRows, % CursorGridConfig.DefaultRows
+    GuiControl, Settings:, SettingsCursorEdgeInset, % CursorGridConfig.EdgeInset
+
+    GuiControl, Settings:, SettingsIndicatorDebug, % SUI_DebugEnabled ? 1 : 0
+    GuiControl, Settings:, SettingsMouseGestureDebug, % MG_DebugEnabled ? 1 : 0
+    GuiControl, Settings:, SettingsMouseWheelDebug, % MouseWheel_DebugEnabled ? 1 : 0
+    GuiControl, Settings:, SettingsBrowserPdfZoomDebug, % Browser_PDFZoomDebugEnabled ? 1 : 0
+    GuiControl, Settings:, SettingsPPTSpacingDebug, % PPT_SpacingLogEnabled ? 1 : 0
+    GuiControl, Settings:, SettingsPPTCaptionDebug, % PPT_CaptionLogEnabled ? 1 : 0
+    GuiControl, Settings:, SettingsValidationHint,
+
+    SUI_RefreshEditorProviderControls()
+}
+
+SUI_RefreshEditorProviderControls() {
+    GuiControlGet, editorProvider,, SettingsEditorProvider
+    enableCustom := (editorProvider = "Custom")
+
+    if (enableCustom) {
+        GuiControl, Settings:Enable, SettingsEditorCustomPath
+        GuiControl, Settings:Enable, SettingsEditorArgs
+    } else {
+        GuiControl, Settings:Disable, SettingsEditorCustomPath
+        GuiControl, Settings:Disable, SettingsEditorArgs
+    }
+}
+
+SUI_SanitizeNumericEditValue(value, allowFloat := false) {
+    sanitized := ""
+    dotSeen := false
+
+    Loop, Parse, value
+    {
+        ch := A_LoopField
+        if (ch >= "0" && ch <= "9") {
+            sanitized .= ch
+            continue
+        }
+
+        if (allowFloat && ch = "." && !dotSeen) {
+            if (sanitized = "")
+                sanitized := "0"
+            sanitized .= "."
+            dotSeen := true
+        }
     }
 
-    OnEditorChange() {
-        Global RadioNotepads, RadioStandard
-        Gui, SubSettings:Submit, NoHide
-        if (RadioNotepads = 1)
-            this.EditorType := 1
+    return sanitized
+}
+
+SUI_GetNumericControlSpec(controlName) {
+    global CursorConfig
+
+    if (controlName = "SettingsMouseWheelExplorerRepeat")
+        return {Label: "Explorer repeat", Type: "int", Min: 1, Max: 20}
+    if (controlName = "SettingsPPTCaptionGapH")
+        return {Label: "Caption H", Type: "float", Min: 0, Max: 20, Decimals: 2}
+    if (controlName = "SettingsPPTCaptionGapV")
+        return {Label: "Caption V", Type: "float", Min: 0, Max: 20, Decimals: 2}
+    if (controlName = "SettingsCursorBaseSpeed")
+        return {Label: "Cursor Base", Type: "float", Min: 0.25, Max: 50, Decimals: 2}
+    if (controlName = "SettingsCursorMaxSpeed") {
+        GuiControlGet, currentBaseSpeed,, SettingsCursorBaseSpeed
+        baseMin := SUI_NormalizeFloat(currentBaseSpeed, CursorConfig.BaseSpeed, 0.25, 50, 2)
+        return {Label: "Cursor Max", Type: "float", Min: baseMin, Max: 200, Decimals: 2}
+    }
+    if (controlName = "SettingsCursorAcceleration")
+        return {Label: "Cursor Accel", Type: "float", Min: 1.01, Max: 5, Decimals: 2}
+    if (controlName = "SettingsCursorTimerInterval")
+        return {Label: "Cursor ms", Type: "int", Min: 1, Max: 100}
+    if (controlName = "SettingsCursorGridCols")
+        return {Label: "Grid Cols", Type: "int", Min: 1, Max: 12}
+    if (controlName = "SettingsCursorGridRows")
+        return {Label: "Grid Rows", Type: "int", Min: 1, Max: 12}
+    if (controlName = "SettingsCursorEdgeInset")
+        return {Label: "Grid Inset", Type: "int", Min: 0, Max: 100}
+    return ""
+}
+
+SUI_SetValidationHint(text := "") {
+    GuiControl, Settings:, SettingsValidationHint, %text%
+}
+
+SUI_GetNumericHintText(spec) {
+    if !IsObject(spec)
+        return ""
+    return spec.Label . ": " . spec.Min . " - " . spec.Max
+}
+
+SUI_ValidateNumericControl(controlName, value := "") {
+    spec := SUI_GetNumericControlSpec(controlName)
+    if !IsObject(spec)
+        return ""
+
+    if (value = "")
+        GuiControlGet, value,, %controlName%
+
+    value := Trim(value)
+    if (value = "")
+        return ""
+
+    if (spec.Type = "int") {
+        if !(value ~= "^\d+$")
+            return SUI_GetNumericHintText(spec)
+        numericValue := value + 0
+    } else {
+        if !(value ~= "^\d+(\.\d*)?$")
+            return SUI_GetNumericHintText(spec)
+        numericValue := value + 0
+    }
+
+    if (numericValue < spec.Min || numericValue > spec.Max)
+        return SUI_GetNumericHintText(spec)
+    return ""
+}
+
+SUI_ClampNumericControl(controlName) {
+    spec := SUI_GetNumericControlSpec(controlName)
+    if !IsObject(spec)
+        return false
+
+    GuiControlGet, currentValue,, %controlName%
+    currentValue := Trim(currentValue)
+    if (currentValue = "") {
+        SUI_SetValidationHint("")
+        return false
+    }
+
+    if (spec.Type = "int")
+        normalizedValue := SUI_NormalizeInt(currentValue, spec.Min, spec.Min, spec.Max)
+    else
+        normalizedValue := SUI_NormalizeFloat(currentValue, spec.Min, spec.Min, spec.Max, spec.Decimals)
+
+    if (spec.Type = "int")
+        formattedValue := normalizedValue
+    else
+        formattedValue := SUI_FormatNumber(normalizedValue, spec.Decimals)
+
+    if (currentValue != formattedValue)
+        GuiControl, Settings:, %controlName%, %formattedValue%
+
+    SUI_SetValidationHint("")
+    return true
+}
+
+SUI_SanitizeNumericControl(allowFloat := false) {
+    global SUI_IsInitializing
+    static isUpdating := false
+
+    if (SUI_IsInitializing || isUpdating || A_GuiControl = "")
+        return
+
+    GuiControlGet, currentValue,, %A_GuiControl%
+    sanitizedValue := SUI_SanitizeNumericEditValue(currentValue, allowFloat)
+    if (currentValue = sanitizedValue)
+        return
+
+    isUpdating := true
+    GuiControl, Settings:, %A_GuiControl%, %sanitizedValue%
+    isUpdating := false
+
+    hintText := SUI_ValidateNumericControl(A_GuiControl, sanitizedValue)
+    SUI_SetValidationHint(hintText)
+}
+
+SUI_PositiveFloatEditChanged() {
+    SUI_SanitizeNumericControl(true)
+}
+
+SUI_NonNegativeIntEditChanged() {
+    SUI_SanitizeNumericControl(false)
+}
+
+SUI_EditorProviderChanged() {
+    global SUI_IsInitializing
+
+    if (SUI_IsInitializing)
+        return
+    SUI_RefreshEditorProviderControls()
+}
+
+SUI_SaveAdvancedSettings() {
+    SUI_SaveAdvancedSettingsFromGui("button")
+}
+
+SUI_ResetAdvancedSettings() {
+    SUI_LoadConfig()
+    PPT_CaptionInit()
+    SUI_LoadAdvancedSettingsIntoGui()
+    ToolTip, 詳細設定を再読込しました
+    SetTimer, CloseToolTip, -1200
+}
+
+SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
+    global SUI_IsInitializing, SUI_SettingsGuiHwnd
+    global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
+    global SaveDir, OutputFileName, Browser_URLExportPath
+    global Browser_PDFZoomTryShortcutFirst
+    global MouseWheel_ExplorerScrollBarRepeat
+    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
+    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global CursorConfig, CursorGridConfig
+    global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
+    global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
+    global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+
+    if (SUI_IsInitializing || !SUI_SettingsGuiHwnd)
+        return false
+
+    GuiControlGet, editorProvider,, SettingsEditorProvider
+    GuiControlGet, editorCustomPath,, SettingsEditorCustomPath
+    GuiControlGet, editorArgs,, SettingsEditorArgs
+    GuiControlGet, authSaveDir,, SettingsAuthSaveDir
+    GuiControlGet, authOutputPath,, SettingsAuthOutputPath
+    GuiControlGet, browserUrlExportPath,, SettingsBrowserUrlExportPath
+    GuiControlGet, pptCaptionGapH,, SettingsPPTCaptionGapH
+    GuiControlGet, pptCaptionGapV,, SettingsPPTCaptionGapV
+    GuiControlGet, browserTryShortcutFirst,, SettingsBrowserPdfZoomShortcutFirst
+    GuiControlGet, wheelExplorerRepeat,, SettingsMouseWheelExplorerRepeat
+    GuiControlGet, wheelDefaultMode,, SettingsMouseWheelDefaultMode
+    GuiControlGet, wheelExplorerMode,, SettingsMouseWheelExplorerMode
+    GuiControlGet, wheelPycharmMode,, SettingsMouseWheelPycharmMode
+    GuiControlGet, wheelWordMode,, SettingsMouseWheelWordMode
+    GuiControlGet, wheelExcelMode,, SettingsMouseWheelExcelMode
+    GuiControlGet, wheelPowerPointMode,, SettingsMouseWheelPowerPointMode
+    GuiControlGet, cursorBaseSpeed,, SettingsCursorBaseSpeed
+    GuiControlGet, cursorMaxSpeed,, SettingsCursorMaxSpeed
+    GuiControlGet, cursorAcceleration,, SettingsCursorAcceleration
+    GuiControlGet, cursorTimerInterval,, SettingsCursorTimerInterval
+    GuiControlGet, cursorGridCols,, SettingsCursorGridCols
+    GuiControlGet, cursorGridRows,, SettingsCursorGridRows
+    GuiControlGet, cursorEdgeInset,, SettingsCursorEdgeInset
+    GuiControlGet, indicatorDebug,, SettingsIndicatorDebug
+    GuiControlGet, mouseGestureDebug,, SettingsMouseGestureDebug
+    GuiControlGet, mouseWheelDebug,, SettingsMouseWheelDebug
+    GuiControlGet, browserPdfDebug,, SettingsBrowserPdfZoomDebug
+    GuiControlGet, pptSpacingDebug,, SettingsPPTSpacingDebug
+    GuiControlGet, pptCaptionDebug,, SettingsPPTCaptionDebug
+
+    TextEditorProvider := SUI_NormalizeTextEditorProvider(editorProvider, TextEditorProvider)
+    TextEditorCustomPath := Trim(editorCustomPath)
+    TextEditorArgsTemplate := editorArgs
+    SaveDir := SUI_NormalizeText(authSaveDir, SaveDir)
+    OutputFileName := SUI_NormalizeText(authOutputPath, OutputFileName)
+    Browser_URLExportPath := SUI_NormalizeText(browserUrlExportPath, Browser_URLExportPath)
+    Browser_PDFZoomTryShortcutFirst := SUI_NormalizeBool(browserTryShortcutFirst, Browser_PDFZoomTryShortcutFirst)
+
+    MouseWheel_ExplorerScrollBarRepeat := SUI_NormalizeInt(wheelExplorerRepeat, MouseWheel_ExplorerScrollBarRepeat, 1, 20)
+    MouseWheel_DefaultZoomMode := SUI_NormalizeZoomMode(wheelDefaultMode, MouseWheel_DefaultZoomMode)
+    MouseWheel_ExplorerZoomMode := SUI_NormalizeZoomMode(wheelExplorerMode, MouseWheel_ExplorerZoomMode)
+    MouseWheel_PyCharmZoomMode := SUI_NormalizeZoomMode(wheelPycharmMode, MouseWheel_PyCharmZoomMode)
+    MouseWheel_WordZoomMode := SUI_NormalizeZoomMode(wheelWordMode, MouseWheel_WordZoomMode)
+    MouseWheel_ExcelZoomMode := SUI_NormalizeZoomMode(wheelExcelMode, MouseWheel_ExcelZoomMode)
+    MouseWheel_PowerPointZoomMode := SUI_NormalizeZoomMode(wheelPowerPointMode, MouseWheel_PowerPointZoomMode)
+    if IsFunc("MouseWheel_RebuildZoomRules")
+        MouseWheel_RebuildZoomRules()
+
+    CursorConfig.BaseSpeed := SUI_NormalizeFloat(cursorBaseSpeed, CursorConfig.BaseSpeed, 0.25, 50, 2)
+    CursorConfig.MaxSpeed := SUI_NormalizeFloat(cursorMaxSpeed, CursorConfig.MaxSpeed, CursorConfig.BaseSpeed, 200, 2)
+    CursorConfig.Acceleration := SUI_NormalizeFloat(cursorAcceleration, CursorConfig.Acceleration, 1.01, 5, 2)
+    CursorConfig.TimerInterval := SUI_NormalizeInt(cursorTimerInterval, CursorConfig.TimerInterval, 1, 100)
+    CursorGridConfig.DefaultCols := SUI_NormalizeInt(cursorGridCols, CursorGridConfig.DefaultCols, 1, 12)
+    CursorGridConfig.DefaultRows := SUI_NormalizeInt(cursorGridRows, CursorGridConfig.DefaultRows, 1, 12)
+    CursorGridConfig.EdgeInset := SUI_NormalizeInt(cursorEdgeInset, CursorGridConfig.EdgeInset, 0, 100)
+
+    PPT_CaptionVisualGapHorizontal := SUI_NormalizeFloat(pptCaptionGapH, PPT_CaptionVisualGapHorizontal, 0, 20, 2)
+    PPT_CaptionVisualGapVertical := SUI_NormalizeFloat(pptCaptionGapV, PPT_CaptionVisualGapVertical, 0, 20, 2)
+
+    SUI_DebugEnabled := SUI_NormalizeBool(indicatorDebug, SUI_DebugEnabled)
+    MG_DebugEnabled := SUI_NormalizeBool(mouseGestureDebug, MG_DebugEnabled)
+    MouseWheel_DebugEnabled := SUI_NormalizeBool(mouseWheelDebug, MouseWheel_DebugEnabled)
+    Browser_PDFZoomDebugEnabled := SUI_NormalizeBool(browserPdfDebug, Browser_PDFZoomDebugEnabled)
+    PPT_SpacingLogEnabled := SUI_NormalizeBool(pptSpacingDebug, PPT_SpacingLogEnabled)
+    PPT_CaptionLogEnabled := SUI_NormalizeBool(pptCaptionDebug, PPT_CaptionLogEnabled)
+
+    SUI_SaveConfig()
+    SUI_LoadAdvancedSettingsIntoGui()
+    SUI_DebugLog("advanced_settings_save", "reason=" . reason)
+    return true
+}
+
+SUI_DefaultDetailMessage() {
+    return "機能を選ぶと、対応するホットキーの詳細を表示します。"
+}
+
+SUI_SetDetailPane(text, header := "詳細") {
+    global SettingsCodePreviewEdit
+
+    GuiControl, Settings:, SettingsCodePreviewLabel, %header%
+    text := StrReplace(text, "`r`n", "`n")
+    text := StrReplace(text, "`r", "`n")
+    GuiControl, Settings:, SettingsCodePreviewEdit, %text%
+}
+
+SUI_MakePreviewSpec(match, before := 2, after := 2, sourceFile := "") {
+    if (sourceFile = "")
+        sourceFile := A_ScriptDir . "\main.ahk"
+    return {Match: match, Before: before, After: after, SourceFile: sourceFile}
+}
+
+SUI_HelpItem(key, desc, action := "", when := "", note := "", sourceMatch := "", previewBefore := 1, previewAfter := 2, sourceFile := "") {
+    if (sourceFile = "")
+        sourceFile := A_ScriptDir . "\main.ahk"
+
+    return {Kind: "item"
+        , Key: key
+        , Desc: desc
+        , Action: action
+        , When: when
+        , Note: note
+        , SourceMatch: sourceMatch
+        , PreviewBefore: previewBefore
+        , PreviewAfter: previewAfter
+        , SourceFile: sourceFile}
+}
+
+SUI_HelpSection(title, note := "", when := "", sourceMatch := "", previewBefore := 0, previewAfter := 6, sourceFile := "") {
+    if (sourceFile = "")
+        sourceFile := A_ScriptDir . "\main.ahk"
+
+    return {Kind: "section"
+        , Key: title
+        , Desc: ""
+        , Action: ""
+        , When: when
+        , Note: note
+        , SourceMatch: sourceMatch
+        , PreviewBefore: previewBefore
+        , PreviewAfter: previewAfter
+        , SourceFile: sourceFile}
+}
+
+SUI_HelpSpacer() {
+    return {Kind: "spacer"
+        , Key: ""
+        , Desc: ""
+        , Action: ""
+        , When: ""
+        , Note: ""
+        , SourceMatch: ""
+        , PreviewBefore: ""
+        , PreviewAfter: ""
+        , SourceFile: ""}
+}
+
+SUI_GetHelpEntryValue(entry, fieldName, defaultValue := "") {
+    if (IsObject(entry) && entry.HasKey(fieldName))
+        return entry[fieldName]
+    return defaultValue
+}
+
+SUI_EntryHasPreview(entry) {
+    return (Trim(SUI_GetHelpEntryValue(entry, "SourceMatch")) != "")
+}
+
+SUI_BuildEntryPreviewSpec(entry) {
+    if !SUI_EntryHasPreview(entry)
+        return ""
+
+    before := SUI_GetHelpEntryValue(entry, "PreviewBefore", 1)
+    after := SUI_GetHelpEntryValue(entry, "PreviewAfter", 2)
+    sourceFile := SUI_GetHelpEntryValue(entry, "SourceFile", "")
+
+    if (before = "")
+        before := 1
+    if (after = "")
+        after := 2
+    return SUI_MakePreviewSpec(SUI_GetHelpEntryValue(entry, "SourceMatch"), before, after, sourceFile)
+}
+
+SUI_AppendDetailSection(ByRef text, title, body, preserveIndent := false) {
+    if (preserveIndent) {
+        if (Trim(body) = "")
+            return
+        bodyText := RTrim(body, "`r`n")
+    } else {
+        bodyText := Trim(body)
+        if (bodyText = "")
+            return
+    }
+
+    if (bodyText = "")
+        return
+
+    if (text != "")
+        text .= "`r`n`r`n"
+    text .= title . "`r`n" . bodyText
+}
+
+SUI_BuildHelpDetailText(entry, ByRef headerText := "") {
+    kind := SUI_GetHelpEntryValue(entry, "Kind", "item")
+    key := Trim(SUI_GetHelpEntryValue(entry, "Key"))
+    desc := Trim(SUI_GetHelpEntryValue(entry, "Desc"))
+    action := Trim(SUI_GetHelpEntryValue(entry, "Action"))
+    whenText := Trim(SUI_GetHelpEntryValue(entry, "When"))
+    note := Trim(SUI_GetHelpEntryValue(entry, "Note"))
+    text := ""
+
+    headerText := "詳細"
+    if (key != "")
+        headerText .= " (" . key . ")"
+
+    if (kind = "spacer")
+        return "区切り行です。"
+
+    if (kind = "section") {
+        if (note != "")
+            SUI_AppendDetailSection(text, "概要", note)
+        if (whenText != "")
+            SUI_AppendDetailSection(text, "条件", whenText)
+    } else {
+        if (desc != "")
+            SUI_AppendDetailSection(text, "説明", desc)
+        if (action != "")
+            SUI_AppendDetailSection(text, "動作", action)
+        if (whenText != "")
+            SUI_AppendDetailSection(text, "条件", whenText)
+        if (note != "")
+            SUI_AppendDetailSection(text, "補足", note)
+    }
+
+    if (SUI_EntryHasPreview(entry)) {
+        spec := SUI_BuildEntryPreviewSpec(entry)
+        sourceFile := spec.SourceFile
+        SplitPath, sourceFile, fileName
+        SUI_AppendDetailSection(text, "定義", fileName . " -> " . spec.Match)
+
+        previewText := SUI_BuildPreviewText(spec, previewHeader)
+        if (previewText != "")
+            SUI_AppendDetailSection(text, previewHeader, previewText, true)
+    }
+
+    if (text = "") {
+        if (kind = "section")
+            text := "このセクションの項目を選ぶと詳細を表示します。"
         else
-            this.EditorType := 2
-        SUI_SaveConfig()
+            text := "この行の追加情報はありません。"
     }
+    return text
+}
+
+SUI_GetPreviewLines(path) {
+    global _SUI_CodePreviewCachePath, _SUI_CodePreviewCacheLines
+
+    if (_SUI_CodePreviewCachePath != path || !IsObject(_SUI_CodePreviewCacheLines)) {
+        FileRead, fileText, %path%
+        if (ErrorLevel)
+            return ""
+        fileText := StrReplace(fileText, "`r`n", "`n")
+        fileText := StrReplace(fileText, "`r", "`n")
+        _SUI_CodePreviewCacheLines := StrSplit(fileText, "`n")
+        _SUI_CodePreviewCachePath := path
+    }
+    return _SUI_CodePreviewCacheLines
+}
+
+SUI_FindPreviewLine(lines, match) {
+    if !IsObject(lines)
+        return 0
+
+    for lineNo, lineText in lines {
+        if InStr(lineText, match)
+            return lineNo
+    }
+    return 0
+}
+
+SUI_PadLeft(value, width) {
+    text := value . ""
+    while (StrLen(text) < width)
+        text := " " . text
+    return text
+}
+
+SUI_BuildPreviewText(spec, ByRef headerText := "") {
+    lines := SUI_GetPreviewLines(spec.SourceFile)
+    sourcePath := spec.SourceFile
+    SplitPath, sourcePath, fileName
+
+    if !IsObject(lines) {
+        headerText := "コード抜粋 (" . fileName . ")"
+        return "; 抜粋元ファイルを読み込めませんでした。"
+    }
+
+    matchLine := SUI_FindPreviewLine(lines, spec.Match)
+    if (!matchLine) {
+        headerText := "コード抜粋 (" . fileName . ")"
+        return "; 対応するコード行が見つかりませんでした。`r`n; match: " . spec.Match
+    }
+
+    startLine := matchLine - spec.Before
+    if (startLine < 1)
+        startLine := 1
+    endLine := matchLine + spec.After
+    maxLine := lines.MaxIndex()
+    if (endLine > maxLine)
+        endLine := maxLine
+
+    width := StrLen(endLine . "")
+    previewText := ""
+    Loop % endLine - startLine + 1 {
+        currentLine := startLine + A_Index - 1
+        marker := (currentLine = matchLine) ? " >" : " |"
+        previewText .= marker . " " . SUI_PadLeft(currentLine, width) . " | " . lines[currentLine]
+        if (currentLine < endLine)
+            previewText .= "`r`n"
+    }
+
+    headerText := "コード抜粋 (" . fileName . ":" . matchLine . ")"
+    return previewText
+}
+
+SUI_GetSelectedHelpRow() {
+    Gui, Settings:Default
+    Gui, Settings:ListView, SettingsLV
+    row := LV_GetNext()
+    if (!row)
+        row := LV_GetNext(0, "Focused")
+    return row
+}
+
+SUI_GetRememberedHelpRow() {
+    global _SUI_LastHelpRow
+
+    row := SUI_GetSelectedHelpRow()
+    if (row)
+        return row
+    return _SUI_LastHelpRow
+}
+
+SUI_FindInitialHelpRow() {
+    global _SUI_HelpRowMap
+    Gui, Settings:Default
+    Gui, Settings:ListView, SettingsLV
+    rowCount := LV_GetCount()
+
+    Loop %rowCount% {
+        row := A_Index
+        if !_SUI_HelpRowMap.HasKey(row)
+            continue
+        if (SUI_GetHelpEntryValue(_SUI_HelpRowMap[row].Entry, "Kind", "item") = "item")
+            return row
+    }
+
+    return rowCount ? 1 : 0
+}
+
+SUI_IsSettingsWindowActive() {
+    global SUI_SettingsGuiHwnd
+
+    return (SUI_SettingsGuiHwnd && WinActive("ahk_id " . SUI_SettingsGuiHwnd))
+}
+
+SUI_HasHelpSelection() {
+    return !!SUI_GetRememberedHelpRow()
+}
+
+SUI_QueueHelpRefresh(reason := "") {
+    global _SUI_HelpRefreshPending
+    static refreshHelpFn := Func("SUI_RefreshSelectedHelpRow")
+
+    if (_SUI_HelpRefreshPending)
+        return
+
+    _SUI_HelpRefreshPending := true
+    if (reason != "")
+        SUI_DebugLog("help_refresh_queue", reason)
+    SetTimer, % refreshHelpFn, -10
+}
+
+SUI_RefreshSelectedHelpRow() {
+    global _SUI_HelpRefreshPending
+
+    _SUI_HelpRefreshPending := false
+    if !SUI_IsSettingsWindowActive()
+        return
+
+    selectedRow := SUI_GetSelectedHelpRow()
+    if (selectedRow)
+        SUI_RefreshHelpDetails(selectedRow)
+    SUI_DebugLog("help_refresh_apply", "row=" . selectedRow)
+}
+
+SUI_RefreshHelpDetails(helpRow := 0) {
+    global _SUI_HelpRowMap, _SUI_LastHelpRow
+
+    if (!helpRow)
+        helpRow := SUI_GetRememberedHelpRow()
+
+    if (!helpRow || !_SUI_HelpRowMap.HasKey(helpRow)) {
+        _SUI_LastHelpRow := 0
+        SUI_SetDetailPane(SUI_DefaultDetailMessage())
+        return
+    }
+
+    _SUI_LastHelpRow := helpRow
+    rowData := _SUI_HelpRowMap[helpRow]
+    detailText := SUI_BuildHelpDetailText(rowData.Entry, headerText)
+    SUI_SetDetailPane(detailText, headerText)
+}
+
+SUI_FormatHelpCopyText(entry) {
+    key := Trim(entry.Key)
+    desc := Trim(entry.Desc)
+
+    if (key = "" && desc = "")
+        return ""
+    if (desc = "")
+        return key
+    if (key = "")
+        return desc
+    return key . "    " . desc
+}
+
+SUI_CopySelectedHelpRow() {
+    global _SUI_HelpRowMap
+
+    row := SUI_GetRememberedHelpRow()
+    if (!row || !_SUI_HelpRowMap.HasKey(row))
+        return false
+
+    copyText := SUI_FormatHelpCopyText(_SUI_HelpRowMap[row].Entry)
+    if (copyText = "")
+        return false
+
+    Clipboard := copyText
+    SUI_DebugLog("help_copy", "row=" . row . " text=" . copyText)
+    return true
+}
+
+SUI_IsHelpListFocused() {
+    global SUI_SettingsGuiHwnd, SUI_SettingsLVHwnd
+
+    if !(SUI_SettingsGuiHwnd && SUI_SettingsLVHwnd)
+        return false
+    if !WinActive("ahk_id " . SUI_SettingsGuiHwnd)
+        return false
+    return (DllCall("GetFocus", "Ptr") = SUI_SettingsLVHwnd)
 }
 
 SUI_InitHelpData() {
     global _SUI_HelpData
     d := {}
+    mainFile := A_ScriptDir . "\main.ahk"
+    browserFile := A_ScriptDir . "\Plugins\Browser.ahk"
+    gestureMapFile := A_ScriptDir . "\Plugins\MouseGestureMap.ahk"
+
+    navWhen := "EnableNavLayer = ON"
+    winWhen := "EnableWinPlace = ON"
+    winIslandWhen := "EnableWinPlace = ON かつ Window Island を使用"
+    vdeskWhen := "EnableVDesk = ON"
+    mouseEmuWhen := "EnableMouseEmu = ON"
+    mouseBtnWhen := "EnableMouseBtn = ON"
+    mouseBtnExceptPptWhen := "EnableMouseBtn = ON かつ POWERPNT.EXE 以外"
+    gestureWhen := "EnableGestures = ON かつ GestureTargetGroup 上"
+    browserWhen := "EnableBrowser = ON かつ BrowserGroup がアクティブ"
+    pptWhen := "EnablePPT = ON かつ POWERPNT.EXE がアクティブ"
+    excelWhen := "EnableExcel = ON かつ EXCEL.EXE がアクティブ"
+    altWhen := "EnableAlt = ON"
+    altExceptPptWhen := "EnableAlt = ON かつ POWERPNT.EXE 以外"
+    othersWhen := "EnableOthers = ON"
 
     h := []
-    h.Push({Key: "無変換 + Q", Desc: "IME → 英語"})
-    h.Push({Key: "無変換 + W", Desc: "IME → 日本語"})
-    h.Push({Key: "無変換 + J / K / I / L", Desc: "カーソル移動 (←↓↑→)"})
-    h.Push({Key: "無変換 + U / O", Desc: "Home / End"})
-    h.Push({Key: "無変換 + P", Desc: "リネーム (F2)"})
-    h.Push({Key: "無変換 + 1", Desc: "Ctrl+Shift+6"})
-    h.Push({Key: "無変換 + 2", Desc: "Ctrl+Shift+2"})
-    h.Push({Key: "無変換 + N", Desc: "ペイント起動"})
-    h.Push({Key: "無変換 + M", Desc: "テキストエディタ起動"})
-    h.Push({Key: "無変換 + T", Desc: "日時挿入 (yyyy/MM/dd (ddd) HH:mm)"})
+    h.Push(SUI_HelpItem("無変換 + 1", "IME → 英語", "IME_ToEnglish()", navWhen, "", "vk1C & 1::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + 2", "IME → 日本語", "IME_ToJapanese()", navWhen, "", "vk1C & 2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + 3", "Ctrl+Shift+6", "Send {Blind}^+6", navWhen, "", "vk1C & 3::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + 4", "Ctrl+Shift+2", "Send {Blind}^+2", navWhen, "", "vk1C & 4::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + J / K / I / L", "カーソル移動 (←↓↑→)", "Send {Blind}{Left/Down/Up/Right}", navWhen, "", "vk1C & j::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("無変換 + U / O", "Home / End", "Send {Blind}{Home/End}", navWhen, "", "vk1C & u::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + P", "リネーム (F2)", "Send {Blind}{F2}", navWhen, "", "vk1C & p::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + N", "ペイント起動", "OpenWithMspaint(0)", navWhen, "", "vk1C & n::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + M", "テキストエディタ起動", "OpenTextEditor(0)", navWhen, "", "vk1C & m::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + T", "日時挿入 (yyyy/MM/dd (ddd) HH:mm)", "InsertDateTime(...)", navWhen, "", "vk1C & t::", 1, 1, mainFile))
     d["EnableNavLayer"] := h
 
     h := []
-    h.Push({Key: "Ctrl+Win+B", Desc: "ウィンドウ情報取得"})
-    h.Push({Key: "Shift+Win+K", Desc: "Bluetooth設定"})
-    h.Push({Key: "Ctrl+Win+1~4", Desc: "右側プリセット配置"})
-    h.Push({Key: "Ctrl+Shift+Win+1/2/4", Desc: "左側プリセット配置"})
-    h.Push({Key: "Ctrl+Win+8", Desc: "高さ最大化 (上寄せ)"})
-    h.Push({Key: "Ctrl+Shift+Win+8", Desc: "高さ最大化 (下寄せ)"})
-    h.Push({Key: "Ctrl+Win+G", Desc: "Gridモード切替"})
-    h.Push({Key: "Ctrl+Shift+Win+G", Desc: "Window Island 切替"})
-    h.Push({Key: "Ctrl+Win+J/K/I/L", Desc: "Grid移動 (←↓↑→)"})
-    h.Push({Key: "Ctrl+Shift+Win+J/K/I/L", Desc: "Gridリサイズ"})
-    h.Push({Key: "Ctrl+Win+F11", Desc: "Downloadsフォルダ"})
-    h.Push({Key: "Ctrl+Win+F12", Desc: "VSCode起動"})
-    h.Push({Key: "Ctrl+Shift+Win+F12", Desc: "スクリプトリロード"})
+    h.Push(SUI_HelpItem("Win+Ctrl+B", "ウィンドウ情報取得", "GetActiveWindowInfo()", winWhen, "", "^#b::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Shift+K", "Bluetooth設定", "Run ms-settings:bluetooth", winWhen, "", "+#k::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+1/2/3", "右側プリセット配置", "MoveWindowRatio(...)", winWhen, "", "^#1::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+1/2/3", "左側プリセット配置", "MoveWindowRatio(...)", winWhen, "", "^+#1::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+8", "高さ最大化 (上寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Top"")", winWhen, "", "^#8::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+8", "高さ最大化 (下寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Bottom"")", winWhen, "", "^+#8::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+9", "横幅最大化 (下寄せ)", "MoveWindowRatio(...)", winWhen, "", "^#9::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+G", "Gridモード切替", "Grid_ToggleMode()", winWhen, "", "^#g::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+G", "Window Island 切替", "WindowIsland_Toggle()", winWhen, "", "^+#g::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+J/K/I/L", "Grid移動 (←↓↑→)", "Grid_Move(dx, dy)", winWhen, "", "^#j::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+J/K/I/L", "Gridリサイズ", "Grid_Resize(...)", winWhen, "", "^+#j::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+F11", "Downloadsフォルダ", "OpenMoveExplorer(profilePath . ""\Downloads"", ...)", winWhen, "", "^#F11::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+F12", "VSCode起動", "OpenVSCode()", winWhen, "", "^#F12::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+F12", "スクリプトリロード", "Reload", winWhen, "", "^+#F12::", 1, 1, mainFile))
     d["EnableWinPlace"] := h
 
     h := []
-    h.Push({Key: "Win+Q", Desc: "左の仮想デスクトップへ"})
-    h.Push({Key: "Win+W", Desc: "右の仮想デスクトップへ"})
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+G", "Window Island 切替", "WindowIsland_Toggle()", winWhen, "", "^+#g::", 1, 1, mainFile))
+    h.Push(SUI_HelpSection("【概要】", "配置計算時に monitor 端とセル間へ余白を入れます。MoveWindowRatio / WindowGrid / CursorGrid に反映されます。", winIslandWhen, "WindowIsland_Toggle() {", 0, 4, A_ScriptDir . "\Plugins\WindowManager.ahk"))
+    d["EnableWinIsland"] := h
+
+    h := []
+    h.Push(SUI_HelpItem("Win+Q", "左の仮想デスクトップへ", "Send Win+Ctrl+Left", vdeskWhen, "", "#q::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+W", "右の仮想デスクトップへ", "Send Win+Ctrl+Right", vdeskWhen, "", "#w::", 1, 1, mainFile))
     d["EnableVDesk"] := h
 
     h := []
-    h.Push({Key: "F13 + O/K/L/;", Desc: "カーソル移動 (↑←↓→)"})
-    h.Push({Key: "Ctrl+F13 + O/K/L/;", Desc: "グリッドジャンプ"})
-    h.Push({Key: "F13 + I", Desc: "左クリック (押下/解放)"})
-    h.Push({Key: "F13 + .", Desc: "中クリック"})
-    h.Push({Key: "F13 + P", Desc: "右クリック (押下/解放)"})
+    h.Push(SUI_HelpItem("F13 + O/K/L/;", "カーソル移動 (↑←↓→)", "Cursor_MoveHotkeyDown() -> Cursor_StartContinuous()", mouseEmuWhen, "キー割当は Cursor_GetHotkeyConfig() で定義", "Cursor_GetHotkeyConfig() {", 0, 4, mainFile))
+    h.Push(SUI_HelpItem("F13 + Ctrl + O/K/L/;", "グリッドジャンプ", "Cursor_MoveHotkeyGrid() -> Cursor_GridMoveByDirection()", mouseEmuWhen, "Ctrl 同時押しでグリッドモード", "Cursor_MoveHotkeyGrid() {", 0, 4, A_ScriptDir . "\Plugins\MouseCursor.ahk"))
+    h.Push(SUI_HelpItem("F13 + I", "左クリック (押下/解放)", "Click Down / Click Up", mouseEmuWhen, "", "F13 & i::Click, Down", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("F13 + .", "中クリック", "Click, Middle", mouseEmuWhen, "", "F13 & .::Click, Middle", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F13 + P", "右クリック (押下/解放)", "Click, Right, Down / Up", mouseEmuWhen, "", "F13 & p::Click, Right, Down", 1, 2, mainFile))
     d["EnableMouseEmu"] := h
 
     h := []
-    h.Push({Key: "F15", Desc: "Ctrl+V (貼り付け)"})
-    h.Push({Key: "F16", Desc: "Ctrl+C (コピー)"})
-    h.Push({Key: "F17", Desc: "Ctrl+W (タブ閉じ)"})
-    h.Push({Key: "XButton1", Desc: "戻る"})
-    h.Push({Key: "XButton2", Desc: "進む"})
-    h.Push({Key: "F15 + MButton", Desc: "メディア再生/一時停止"})
-    h.Push({Key: "XButton1 + Wheel", Desc: "横スクロール"})
-    h.Push({Key: "XButton2 + Wheel", Desc: "ズーム (拡大/縮小)"})
-    h.Push({Key: "F15 + Wheel", Desc: "音量 (上げ/下げ)"})
-    h.Push({Key: "F16 + Wheel", Desc: "Alt+Tab (前/次)"})
+    h.Push(SUI_HelpItem("F15", "Ctrl+V (貼り付け)", "Send ^v", mouseBtnExceptPptWhen, "", "F15::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F16", "Ctrl+C (コピー)", "Send ^c", mouseBtnWhen, "", "F16::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F17", "Ctrl+W (タブ閉じ)", "Send ^w", mouseBtnWhen, "", "F17::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton1", "戻る", "XButton1", mouseBtnWhen, "", "XButton1::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton2", "進む", "XButton2", mouseBtnWhen, "", "XButton2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F15 + MButton", "メディア再生/一時停止", "SendInput {Media_Play_Pause}", mouseBtnWhen, "", "F15 & MButton::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton1 + Wheel", "横スクロール", "MouseWheel_HScroll(""Left/Right"")", mouseBtnWhen, "", "XButton1 & WheelUp::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton2 + Wheel", "ズーム (拡大/縮小)", "MouseWheel_Zoom(""In/Out"")", mouseBtnWhen, "", "XButton2 & WheelUp::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F15 + Wheel", "音量 (上げ/下げ)", "Send {Volume_Up/Volume_Down}", mouseBtnWhen, "", "F15 & WheelUp::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F16 + Wheel", "Alt+Tab (前/次)", "AltTabAction(""Prev/Next"")", mouseBtnWhen, "", "F16 & WheelDown::", 1, 2, mainFile))
     d["EnableMouseBtn"] := h
 
     h := []
-    h.Push({Key: "【基本】", Desc: ""})
-    h.Push({Key: "右ドラッグ", Desc: "8 方向ジェスチャー"})
-    h.Push({Key: "右 + WheelUp", Desc: "Ctrl+Home (先頭へ)"})
-    h.Push({Key: "右 + WheelDown", Desc: "Ctrl+End (末尾へ)"})
-    h.Push({Key: "", Desc: ""})
-    h.Push({Key: "【Browser】", Desc: ""})
-    h.Push({Key: "↗", Desc: "WinMinimize, A"})
-    h.Push({Key: "↙", Desc: "Send, ^+t"})
-    h.Push({Key: "↖", Desc: "Send, ^1"})
-    h.Push({Key: "↘", Desc: "Send, ^9"})
-    h.Push({Key: "→", Desc: "Send, ^{Tab}"})
-    h.Push({Key: "←", Desc: "Send, ^+{Tab}"})
-    h.Push({Key: "↓", Desc: "Send, ^w"})
-    h.Push({Key: "↑", Desc: "Send, ^t"})
-    h.Push({Key: "", Desc: ""})
-    h.Push({Key: "【Explorer】", Desc: ""})
-    h.Push({Key: "↗", Desc: "WinMinimize, A"})
-    h.Push({Key: "↙", Desc: "Send, ^z"})
-    h.Push({Key: "↖", Desc: "Send, ^1"})
-    h.Push({Key: "↘", Desc: "Send, ^1^+{Tab}"})
-    h.Push({Key: "→", Desc: "Send, ^{Tab}"})
-    h.Push({Key: "←", Desc: "Send, ^+{Tab}"})
-    h.Push({Key: "↓", Desc: "Send, ^w"})
-    h.Push({Key: "↑", Desc: "Send, ^t"})
-    h.Push({Key: "", Desc: ""})
-    h.Push({Key: "【Editor】", Desc: ""})
-    h.Push({Key: "→", Desc: "Send, ^{Tab}"})
-    h.Push({Key: "←", Desc: "Send, ^+{Tab}"})
-    h.Push({Key: "↓", Desc: "Send, ^w"})
-    h.Push({Key: "↑", Desc: "Send, ^t"})
-    h.Push({Key: "other", Desc: "Map_Default"})
-    h.Push({Key: "", Desc: ""})
-    h.Push({Key: "【Pycharm】", Desc: ""})
-    h.Push({Key: "→", Desc: "Send, !{Right}"})
-    h.Push({Key: "←", Desc: "Send, !{Left}"})
-    h.Push({Key: "↓", Desc: "Send, ^{F4}"})
-    h.Push({Key: "↑", Desc: "Send, ^!{Insert}"})
-    h.Push({Key: "other", Desc: "Map_Default"})
-    h.Push({Key: "", Desc: ""})
-    h.Push({Key: "【Default】", Desc: ""})
-    h.Push({Key: "↗", Desc: "WinMinimize, A"})
+    h.Push(SUI_HelpSection("【基本】", "右ボタン押下中に 8 方向ジェスチャを認識します。対象: Browser / Explorer / Editor / Office / Pycharm。", gestureWhen, "$RButton::", 1, 5, mainFile))
+    h.Push(SUI_HelpItem("右ドラッグ", "8 方向ジェスチャー", "MG_RecognizeGesture() -> MG_ExecuteAction()", gestureWhen, "", "$RButton::", 1, 5, mainFile))
+    h.Push(SUI_HelpItem("右 + WheelUp", "Ctrl+Home (先頭へ)", "MG_ScrollAction(""Up"")", gestureWhen, "右ボタン押下中のホイールで実行", "WheelUp::MG_ScrollAction(""Up"")", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("右 + WheelDown", "Ctrl+End (末尾へ)", "MG_ScrollAction(""Down"")", gestureWhen, "右ボタン押下中のホイールで実行", "WheelDown::MG_ScrollAction(""Down"")", 1, 1, mainFile))
+    h.Push(SUI_HelpSpacer())
+
+    h.Push(SUI_HelpSection("【Browser】", "BrowserGroup 用のジェスチャ割当です。", "BrowserGroup 上でジェスチャ実行", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↗", "WinMinimize, A", "WinMinimize, A", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↙", "Send, ^+t", "Send, ^+t", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↖", "Send, ^1", "Send, ^1", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↘", "Send, ^9", "Send, ^9", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("→", "Send, ^{Tab}", "Send, ^{Tab}", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("←", "Send, ^+{Tab}", "Send, ^+{Tab}", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↓", "Send, ^w", "Send, ^w", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↑", "Send, ^t", "Send, ^t", "BrowserGroup 上でジェスチャ実行", "", "Map_Browser(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpSpacer())
+
+    h.Push(SUI_HelpSection("【Explorer】", "ExplorerGroup 用のジェスチャ割当です。", "ExplorerGroup 上でジェスチャ実行", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↗", "WinMinimize, A", "WinMinimize, A", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↙", "Send, ^z", "Send, ^z", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↖", "Send, ^1", "Send, ^1", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↘", "Send, ^1^+{Tab}", "Send, ^1^+{Tab}", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("→", "Send, ^{Tab}", "Send, ^{Tab}", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("←", "Send, ^+{Tab}", "Send, ^+{Tab}", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↓", "Send, ^w", "Send, ^w", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpItem("↑", "Send, ^t", "Send, ^t", "ExplorerGroup 上でジェスチャ実行", "", "Map_Explorer(g) {", 0, 10, gestureMapFile))
+    h.Push(SUI_HelpSpacer())
+
+    h.Push(SUI_HelpSection("【Editor】", "EditorGroup 用のジェスチャ割当です。", "EditorGroup 上でジェスチャ実行", "Map_Editor(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("→", "Send, ^{Tab}", "Send, ^{Tab}", "EditorGroup 上でジェスチャ実行", "", "Map_Editor(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("←", "Send, ^+{Tab}", "Send, ^+{Tab}", "EditorGroup 上でジェスチャ実行", "", "Map_Editor(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("↓", "Send, ^w", "Send, ^w", "EditorGroup 上でジェスチャ実行", "", "Map_Editor(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("↑", "Send, ^t", "Send, ^t", "EditorGroup 上でジェスチャ実行", "", "Map_Editor(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("other", "Map_Default", "Default: Map_Default(g)", "EditorGroup 上でジェスチャ実行", "", "Map_Editor(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpSpacer())
+
+    h.Push(SUI_HelpSection("【Pycharm】", "JetBrains / Pycharm 用のジェスチャ割当です。", "pycharm64.exe 上でジェスチャ実行", "Map_Pycharm(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("→", "Send, !{Right}", "Send, !{Right}", "pycharm64.exe 上でジェスチャ実行", "", "Map_Pycharm(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("←", "Send, !{Left}", "Send, !{Left}", "pycharm64.exe 上でジェスチャ実行", "", "Map_Pycharm(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("↓", "Send, ^{F4}", "Send, ^{F4}", "pycharm64.exe 上でジェスチャ実行", "", "Map_Pycharm(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("↑", "Send, ^!{Insert}", "Send, ^!{Insert}", "pycharm64.exe 上でジェスチャ実行", "", "Map_Pycharm(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpItem("other", "Map_Default", "Default: Map_Default(g)", "pycharm64.exe 上でジェスチャ実行", "", "Map_Pycharm(g) {", 0, 9, gestureMapFile))
+    h.Push(SUI_HelpSpacer())
+
+    h.Push(SUI_HelpSection("【Default】", "共通フォールバックのジェスチャ割当です。", "個別マップで未定義のとき", "Map_Default(g) {", 0, 5, gestureMapFile))
+    h.Push(SUI_HelpItem("↗", "WinMinimize, A", "WinMinimize, A", "個別マップで未定義のとき", "", "Map_Default(g) {", 0, 5, gestureMapFile))
     d["EnableGestures"] := h
 
     h := []
-    h.Push({Key: "Alt+W", Desc: "ウィンドウを閉じる"})
-    h.Push({Key: "Ctrl+Alt+C", Desc: "選択内の \\ を / に置換"})
-    h.Push({Key: "Ctrl+Alt+N", Desc: "選択ファイルをペイントで開く"})
-    h.Push({Key: "Ctrl+Alt+M", Desc: "選択ファイルをエディタで開く"})
-    h.Push({Key: "Alt+Backspace", Desc: "Delete"})
+    h.Push(SUI_HelpItem("Alt+W", "ウィンドウを閉じる", "Send !{F4}", altWhen, "", "!w::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+C", "選択内の \\ を / に置換", "ReplaceEscapeToSlash()", altWhen, "", "^!c::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+N", "選択ファイルをペイントで開く", "OpenWithMspaint(1)", altWhen, "", "^!n::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+M", "選択ファイルをエディタで開く", "OpenTextEditor(1)", altExceptPptWhen, "", "^!m::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+Backspace", "Delete", "Send {Del}", altWhen, "", "!Backspace::", 1, 1, mainFile))
     d["EnableAlt"] := h
 
     h := []
-    h.Push({Key: "ScrollLock", Desc: "無効化"})
-    h.Push({Key: "\", Desc: "_ を入力"})
-    h.Push({Key: "Shift+\", Desc: "\ を入力"})
-    h.Push({Key: "無変換 + Z", Desc: "N 長押しトグル"})
-    h.Push({Key: "無変換 + X", Desc: "N 長押し解除"})
+    h.Push(SUI_HelpItem("ScrollLock", "無効化", "Return", othersWhen, "", "scrolllock::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("\", "_ を入力", "Send +{sc073}", othersWhen, "", "$sc073::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Shift+\", "\ を入力", "Send {sc073}", othersWhen, "", "$+sc073::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + Z", "N 長押しトグル", "Manage_N_Hold(""Toggle"")", othersWhen, "", "vk1C & z::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("無変換 + X", "N 長押し解除", "Manage_N_Hold(""Off"")", othersWhen, "", "vk1C & x::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Alt+Backspace", "CapsLock OFF", "CapsLock_SetState(false)", othersWhen, "", "^!#Backspace::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Alt+Delete", "CapsLock ON", "CapsLock_SetState(true)", othersWhen, "", "^!#Delete::", 1, 1, mainFile))
     d["EnableOthers"] := h
 
     h := []
-    h.Push({Key: "Ctrl+\", Desc: "PDFズーム切替"})
-    h.Push({Key: "F1", Desc: "サイト固有キー"})
-    h.Push({Key: "F2", Desc: "サイト固有キー"})
-    h.Push({Key: "Ctrl+Shift+C", Desc: "プレーンURLコピー"})
-    h.Push({Key: "F8", Desc: "全タブURL取得"})
+    h.Push(SUI_HelpItem("Ctrl+\", "PDFズーム切替", "TogglePDFZoom()", browserWhen, "", "$^sc073::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F1", "サイト固有キー", "RunSiteSpecificKey(""{F1}"", KeyActions[""F1""])", browserWhen, "", "$F1 Up::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F2", "サイト固有キー", "RunSiteSpecificKey(F2)", browserWhen, "", "F2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+C", "プレーンURLコピー", "CopyPlaneURL()", browserWhen, "", "^+c::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F8", "全タブURL取得", "GetAllEdgeURLs(false)", browserWhen, "", "F8::", 1, 1, mainFile))
     d["EnableBrowser"] := h
 
     h := []
-    h.Push({Key: "Ctrl+Alt+J/L/I/K", Desc: "左/右/上/下揃え"})
-    h.Push({Key: "Ctrl+Alt+U/O", Desc: "水平/垂直中央揃え"})
-    h.Push({Key: "Ctrl+Alt+M", Desc: "水平等間隔"})
-    h.Push({Key: "Ctrl+Alt+.", Desc: "垂直等間隔"})
-    h.Push({Key: "Ctrl+Alt+G/H", Desc: "グループ化/解除"})
-    h.Push({Key: "Ctrl+Shift+Alt+G/H", Desc: "前面/背面"})
-    h.Push({Key: "Ctrl+Alt+1/2/3/4", Desc: "上/下/左/右キャプションの設置/削除"})
-    h.Push({Key: "Ctrl+Alt+5/6", Desc: "上下キャプション gap 微調整"})
-    h.Push({Key: "Ctrl+Alt+7/8", Desc: "左右キャプション gap 微調整"})
-    h.Push({Key: "Ctrl+Shift+Alt+5/7", Desc: "キャプション gap 直接設定"})
-    h.Push({Key: "Alt+1", Desc: "テキストのみ貼り付け"})
-    h.Push({Key: "Alt+2", Desc: "枠線色"})
-    h.Push({Key: "Alt+3", Desc: "枠線太さ"})
-    h.Push({Key: "Alt+4", Desc: "書式設定パネル開閉"})
-    h.Push({Key: "Shift+Alt+4", Desc: "書式設定パネルを閉じる"})
-    h.Push({Key: "Ctrl+V / F15", Desc: "画像メタデータ付き貼付け"})
-    h.Push({Key: "Ctrl+Alt+E", Desc: "ソースエクスポート"})
-    h.Push({Key: "Ctrl+Alt+Q", Desc: "ソース情報表示"})
+    h.Push(SUI_HelpItem("Ctrl+Alt+J/L/I/K", "左/右/上/下揃え", "SetLeft() / SetRight() / SetTop() / SetBottom()", pptWhen, "", "^!l::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+U/O", "水平/垂直中央揃え", "SetHorizontalCenter() / SetVerticalCenter()", pptWhen, "", "^!u::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+M", "水平等間隔", "SetHorizontalSpacer()", pptWhen, "", "^!m::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+.", "垂直等間隔", "SetVerticalSpace()", pptWhen, "", "^!.::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+G/H", "グループ化/解除", "GroupSet() / GroupRelease()", pptWhen, "", "^!g::", 1, 6, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+G/H", "前面/背面", "SetFront() / SetBack()", pptWhen, "", "^!h::", 1, 2, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+1/2/3/4", "上/下/左/右キャプションの設置/削除", "PPT_AddEdgeCaption(edge)", pptWhen, "", "^!1::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+5/6", "上下キャプション gap 微調整", "PPT_CaptionAdjustGap(""H"", delta)", pptWhen, "", "^!5::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+7/8", "左右キャプション gap 微調整", "PPT_CaptionAdjustGap(""V"", delta)", pptWhen, "", "^!7::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+5/7", "キャプション gap 直接設定", "PPT_CaptionPromptGap(axis)", pptWhen, "", "^+!5::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+1", "テキストのみ貼り付け", "PasteTextOnly()", pptWhen, "", "!1::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+2", "枠線色", "PPT_CycleBlackBorder()", pptWhen, "", "!2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+3", "枠線太さ", "SetFrameSize()", pptWhen, "", "!3::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+4", "書式設定パネル開閉", "OpenFormatObject()", pptWhen, "", "!4::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Shift+Alt+4", "書式設定パネルを閉じる", "CloseFormatObject()", pptWhen, "", "+!4::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+V / F15", "画像メタデータ付き貼付け", "PasteImageWithMetadata()", pptWhen, "同じ機能を F15 にも割当", "^v::", 1, 2, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+E", "ソースエクスポート", "PPT_ExportSources()", pptWhen, "", "^!e::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+Q", "ソース情報表示", "PPT_ShowSourcePath()", pptWhen, "", "^!q::", 1, 1, mainFile))
     d["EnablePPT"] := h
 
     h := []
-    h.Push({Key: "Ctrl+Tab", Desc: "次のシート"})
-    h.Push({Key: "Ctrl+Shift+Tab", Desc: "前のシート"})
+    h.Push(SUI_HelpItem("Ctrl+Tab", "次のシート", "Send ^{PgDn}", excelWhen, "", "^Tab::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Tab", "前のシート", "Send ^{PgUp}", excelWhen, "", "^+Tab::", 1, 1, mainFile))
     d["EnableExcel"] := h
 
     _SUI_HelpData := d
@@ -507,6 +1854,7 @@ SUI_BuildItemList() {
 
     SUI_AddLeaf("キーボード拡張", "EnableNavLayer")
     SUI_AddLeaf("ウィンドウ配置", "EnableWinPlace")
+    SUI_AddLeaf("Window Island", "EnableWinIsland")
     SUI_AddLeaf("仮想デスクトップ", "EnableVDesk")
     SUI_AddLeaf("キーボードマウス", "EnableMouseEmu")
     SUI_AddLeaf("ボタン・ホイール", "EnableMouseBtn")
@@ -582,40 +1930,35 @@ SUI_ApplyPendingCheckChange() {
     SUI_ProcessItemCheckChange(itemID, source)
 }
 
-SUI_QueueHelpSelectionClear() {
-    static clearHelpSelectionFn := Func("SUI_ClearHelpSelection")
-    SetTimer, % clearHelpSelectionFn, -10
-}
-
-SUI_ClearHelpSelection() {
-    global SettingsLV
-
-    Gui, Settings:Default
-    Gui, Settings:ListView, SettingsLV
-    LV_Modify(0, "-Select -Focus")
-}
-
 SUI_ItemsHandler() {
-    global SUI_IsInitializing
+    global SUI_IsInitializing, SUI_SelectedItemID
 
     if (SUI_IsInitializing) {
         SUI_DebugLog("list_event_ignored_init")
         return
     }
 
-    evt := A_GuiEvent
-    info := A_EventInfo
-    flags := ErrorLevel
-    targetID := info ? info : SUI_GetSelectedItemID()
+    evt        := A_GuiEvent
+    info       := A_EventInfo
+    flags      := ErrorLevel
+    targetID   := info ? info : SUI_GetSelectedItemID()
     selectedID := SUI_GetSelectedItemID()
+    refreshID  := 0
 
-    if (selectedID)
-        SUI_RefreshLV(selectedID)
-    else if (targetID)
-        SUI_RefreshLV(targetID)
+    if (evt = "I" && info && InStr(flags, "S"))
+        refreshID := info
+    else if (evt = "Normal" && selectedID && selectedID != SUI_SelectedItemID)
+        refreshID := selectedID
+
+    if (refreshID && refreshID != SUI_SelectedItemID) {
+        SUI_SelectedItemID := refreshID
+        SUI_RefreshLV(refreshID)
+    } else if (!SUI_SelectedItemID && selectedID) {
+        SUI_SelectedItemID := selectedID
+    }
 
     if ((evt = "I" && info && (InStr(flags, "C") || InStr(flags, "c")))
-    ||  (evt = "C" && targetID)) {
+        ||  (evt = "C" && targetID)) {
         changedID := info ? info : targetID
         SUI_QueueCheckSync(changedID, "evt=" . evt)
     }
@@ -635,7 +1978,14 @@ SUI_HelpHandler() {
     if (SUI_IsInitializing)
         return
 
-    SUI_QueueHelpSelectionClear()
+    selectedRow := A_EventInfo ? A_EventInfo : SUI_GetSelectedHelpRow()
+
+    SUI_RefreshHelpDetails(selectedRow)
+    SUI_DebugLog("help_event"
+        , "evt=" . A_GuiEvent
+        . " info=" . A_EventInfo
+        . " flags=" . ErrorLevel
+        . " row=" . selectedRow)
 }
 
 SUI_ProcessItemCheckChange(clickedID, source := "manual") {
@@ -674,13 +2024,16 @@ SUI_FlushPendingChange(reason := "manual") {
 }
 
 SUI_RefreshLV(targetID) {
-    global _SUI_ItemMap, _SUI_HelpData, SettingsLV
+    global _SUI_ItemMap, _SUI_HelpData, _SUI_HelpRowMap, SettingsLV
     Gui, Settings:Default
     Gui, Settings:ListView, SettingsLV
     LV_Delete()
+    _SUI_HelpRowMap := {}
 
-    if (!targetID || !_SUI_ItemMap.HasKey(targetID))
+    if (!targetID || !_SUI_ItemMap.HasKey(targetID)) {
+        SUI_SetDetailPane(SUI_DefaultDetailMessage())
         return
+    }
 
     item := _SUI_ItemMap[targetID]
     vars := []
@@ -691,18 +2044,28 @@ SUI_RefreshLV(targetID) {
 
     for _, varName in vars {
         if (_SUI_HelpData.HasKey(varName)) {
-            for _, entry in _SUI_HelpData[varName]
-                LV_Add("", entry.Key, entry.Desc)
+            for _, entry in _SUI_HelpData[varName] {
+                row := LV_Add("", entry.Key, entry.Desc)
+                _SUI_HelpRowMap[row] := {Var: varName, Entry: entry}
+            }
         }
     }
 
-    LV_ModifyCol(1, 130)
-    LV_ModifyCol(2, 260)
+    LV_ModifyCol(1, 160)
+    LV_ModifyCol(2, 315)
+
+    firstRow := SUI_FindInitialHelpRow()
+    if (firstRow) {
+        LV_Modify(firstRow, "Select Vis")
+        SUI_RefreshHelpDetails(firstRow)
+    } else {
+        SUI_SetDetailPane("この機能に対応する詳細はありません。")
+    }
 }
 
 SUI_SyncVars() {
     global _SUI_ItemMap
-    global EnableNavLayer, EnableWinPlace, EnableVDesk
+    global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
     Gui, Settings:Default
@@ -716,6 +2079,8 @@ SUI_SyncVars() {
             EnableNavLayer := v
         else if (item.Var = "EnableWinPlace")
             EnableWinPlace := v
+        else if (item.Var = "EnableWinIsland")
+            EnableWinIsland := v
         else if (item.Var = "EnableVDesk")
             EnableVDesk := v
         else if (item.Var = "EnableMouseEmu")
@@ -740,7 +2105,7 @@ SUI_SyncVars() {
 }
 
 SUI_GetFlagValue(varName) {
-    global EnableNavLayer, EnableWinPlace, EnableVDesk
+    global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
 
@@ -748,6 +2113,8 @@ SUI_GetFlagValue(varName) {
         return EnableNavLayer
     if (varName = "EnableWinPlace")
         return EnableWinPlace
+    if (varName = "EnableWinIsland")
+        return EnableWinIsland
     if (varName = "EnableVDesk")
         return EnableVDesk
     if (varName = "EnableMouseEmu")

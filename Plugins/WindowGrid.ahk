@@ -11,9 +11,9 @@ GridModes.Push({Rows: 2, Cols: 4})
 ; GridModes.Push({Cols: 3, Rows: 3})
 ; GridModes.Push({Rows: 2, Cols: 3})
 
-global GridModeIndex := 1
-global GRID_COLS := GridModes[GridModeIndex].Cols
-global GRID_ROWS := GridModes[GridModeIndex].Rows
+global GridModeIndex  := 1
+global GRID_COLS      := GridModes[GridModeIndex].Cols
+global GRID_ROWS      := GridModes[GridModeIndex].Rows
 
 Grid_ToggleMode() {
     GridModeIndex += 1

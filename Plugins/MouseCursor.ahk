@@ -5,10 +5,10 @@
 ; - Grid jumps can cross monitors and keep edge positions slightly inset
 ; ==============================================================================
 
-global CursorConfig := Cursor_CreateConfig()
-global CursorGridConfig     := Cursor_CreateGridConfig()
-global CursorHotkeyConfig   := ""
-global CursorHotkeyState    := Cursor_CreateHotkeyState()
+global CursorConfig        := Cursor_CreateConfig()
+global CursorGridConfig    := Cursor_CreateGridConfig()
+global CursorHotkeyConfig  := ""
+global CursorHotkeyState   := Cursor_CreateHotkeyState()
 
 Cursor_CreateConfig() {
     return {BaseSpeed: 2.0

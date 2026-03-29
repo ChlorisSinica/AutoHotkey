@@ -128,6 +128,8 @@ WindowIsland_Toggle() {
     global EnableWinIsland
 
     EnableWinIsland := !EnableWinIsland
+    if IsFunc("SUI_SaveConfig")
+        SUI_SaveConfig()
     ToolTip, % EnableWinIsland ? "Window Island: ON" : "Window Island: OFF"
     SetTimer, CloseToolTip, -1500
 }

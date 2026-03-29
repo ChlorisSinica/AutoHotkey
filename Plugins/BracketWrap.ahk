@@ -5,16 +5,16 @@
 ; - Provide smart Ctrl+C / Ctrl+X / Ctrl+D in editor windows
 ; ==============================================================================
 
-global BW_UIA := ""
-global BW_ExcludeApps := Object()
-global BW_OpenToClose := Object()
-global BW_CloseToOpen := Object()
-global BW_SymmetricSet := Object()
-global BW_DebugEnabled := true
-global BW_DebugLogDir := A_ScriptDir . "\.claude"
-global BW_DebugLogPath := BW_DebugLogDir . "\bracket_wrap_debug.log"
-global BW_DebugMaxBytes := 262144
-global BW_SelectionProbeTimeout := 0.15
+global BW_UIA                      := ""
+global BW_ExcludeApps              := Object()
+global BW_OpenToClose              := Object()
+global BW_CloseToOpen              := Object()
+global BW_SymmetricSet             := Object()
+global BW_DebugEnabled             := true
+global BW_DebugLogDir              := A_ScriptDir . "\.claude"
+global BW_DebugLogPath             := BW_DebugLogDir . "\bracket_wrap_debug.log"
+global BW_DebugMaxBytes            := 262144
+global BW_SelectionProbeTimeout    := 0.15
 
 BW_Init() {
     global BW_UIA, BW_OpenToClose, BW_CloseToOpen, BW_SymmetricSet, BW_ExcludeApps

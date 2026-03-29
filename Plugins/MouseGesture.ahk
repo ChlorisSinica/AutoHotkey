@@ -7,14 +7,14 @@ GroupAdd, GestureTargetGroup, ahk_group EditorGroup
 GroupAdd, GestureTargetGroup, ahk_group OfficeGroup
 GroupAdd, GestureTargetGroup, ahk_exe pycharm64.exe
 
-global MG_IsActive := false     ; ジェスチャ認識中フラグ
-global MG_CancelMenu := false   ; 右クリックメニュー無効化フラグ
-global MG_WheelUsed := false    ; 右クリック中にホイール入力されたフラグ
-global MG_DebugEnabled := true
-global MG_DebugLogDir := A_ScriptDir . "\.claude"
-global MG_DebugLogPath := MG_DebugLogDir . "\mouse_gesture_debug.log"
-global MG_DebugMaxBytes := 262144
-global cUIA := new UIA_Interface()
+global MG_IsActive       := false    ; ジェスチャ認識中フラグ
+global MG_CancelMenu     := false    ; 右クリックメニュー無効化フラグ
+global MG_WheelUsed      := false    ; 右クリック中にホイール入力されたフラグ
+global MG_DebugEnabled   := true
+global MG_DebugLogDir    := A_ScriptDir . "\.claude"
+global MG_DebugLogPath   := MG_DebugLogDir . "\mouse_gesture_debug.log"
+global MG_DebugMaxBytes  := 262144
+global cUIA              := new UIA_Interface()
 
 MG_DebugInit() {
     global MG_DebugEnabled, MG_DebugLogDir

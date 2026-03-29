@@ -1,20 +1,20 @@
 ﻿; ============================================================================
 ; PowerPoint.ahk - COM + UIA ハイブリッド構成
 ; ============================================================================
-global _PPT_IMG_EXT   := "png|jpg|jpeg|bmp|tif|tiff|gif"
-global _PPT_MEDIA_EXT := "mp4|avi|wmv|mov|mkv|mp3|wav|wma|m4a|m4v|webm"
-global _PPT_ALL_EXT   := _PPT_IMG_EXT . "|" . _PPT_MEDIA_EXT
-global PPT_SpacingLogEnabled := true
-global PPT_SpacingLogDir := A_ScriptDir . "\.claude"
-global PPT_SpacingLogPath := PPT_SpacingLogDir . "\powerpoint_spacing_debug.log"
-global PPT_SpacingLogMaxBytes := 262144
-global PPT_CaptionLogEnabled := true
-global PPT_CaptionLogPath := PPT_SpacingLogDir . "\powerpoint_caption_debug.log"
-global PPT_CaptionLogMaxBytes := 262144
-global PPT_CaptionConfigPath := PPT_SpacingLogDir . "\powerpoint_caption.ini"
-global PPT_CaptionVisualGapHorizontal := 0.5
-global PPT_CaptionVisualGapVertical := 2.5
-global PPT_SpacingEpsilon := 0.05
+global _PPT_IMG_EXT                      := "png|jpg|jpeg|bmp|tif|tiff|gif"
+global _PPT_MEDIA_EXT                    := "mp4|avi|wmv|mov|mkv|mp3|wav|wma|m4a|m4v|webm"
+global _PPT_ALL_EXT                      := _PPT_IMG_EXT . "|" . _PPT_MEDIA_EXT
+global PPT_SpacingLogEnabled             := true
+global PPT_SpacingLogDir                 := A_ScriptDir . "\.claude"
+global PPT_SpacingLogPath                := PPT_SpacingLogDir . "\powerpoint_spacing_debug.log"
+global PPT_SpacingLogMaxBytes            := 262144
+global PPT_CaptionLogEnabled             := true
+global PPT_CaptionLogPath                := PPT_SpacingLogDir . "\powerpoint_caption_debug.log"
+global PPT_CaptionLogMaxBytes            := 262144
+global PPT_CaptionConfigPath             := PPT_SpacingLogDir . "\powerpoint_caption.ini"
+global PPT_CaptionVisualGapHorizontal    := 0.5
+global PPT_CaptionVisualGapVertical      := 2.5
+global PPT_SpacingEpsilon                := 0.05
 
 ; ============================================================================
 ;  COM ヘルパー
@@ -846,24 +846,56 @@ PPT_CaptionNormalizeGapValue(value) {
 
 PPT_CaptionSaveConfig() {
     global PPT_CaptionConfigPath, PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+    global SUI_ConfigPath
 
-    PPT_SpacingEnsureLogDir()
-    IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapHorizontal), %PPT_CaptionConfigPath%, Caption, HorizontalGap
-    IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapVertical), %PPT_CaptionConfigPath%, Caption, VerticalGap
+    configPath := ""
+    if (SUI_ConfigPath != "") {
+        configPath := SUI_ConfigPath
+        if IsFunc("SUI_EnsureConfigPath")
+            SUI_EnsureConfigPath()
+    } else {
+        PPT_SpacingEnsureLogDir()
+        configPath := PPT_CaptionConfigPath
+    }
+
+    IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapHorizontal), %configPath%, PowerPoint, CaptionHorizontalGap
+    IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapVertical), %configPath%, PowerPoint, CaptionVerticalGap
 }
 
 PPT_CaptionInit() {
     global PPT_CaptionConfigPath, PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+    global SUI_ConfigPath
 
-    PPT_SpacingEnsureLogDir()
+    horizontalGapRaw := "__MISSING__"
+    verticalGapRaw := "__MISSING__"
+    usedLegacyConfig := false
 
-    IniRead, horizontalGapRaw, %PPT_CaptionConfigPath%, Caption, HorizontalGap, % PPT_CaptionVisualGapHorizontal
-    IniRead, verticalGapRaw, %PPT_CaptionConfigPath%, Caption, VerticalGap, % PPT_CaptionVisualGapVertical
+    if (SUI_ConfigPath != "") {
+        if IsFunc("SUI_EnsureConfigPath")
+            SUI_EnsureConfigPath()
+        IniRead, horizontalGapRaw, %SUI_ConfigPath%, PowerPoint, CaptionHorizontalGap, __MISSING__
+        IniRead, verticalGapRaw, %SUI_ConfigPath%, PowerPoint, CaptionVerticalGap, __MISSING__
+    }
+
+    if (horizontalGapRaw = "__MISSING__" || verticalGapRaw = "__MISSING__") {
+        PPT_SpacingEnsureLogDir()
+        IniRead, legacyHorizontalGapRaw, %PPT_CaptionConfigPath%, Caption, HorizontalGap, % PPT_CaptionVisualGapHorizontal
+        IniRead, legacyVerticalGapRaw, %PPT_CaptionConfigPath%, Caption, VerticalGap, % PPT_CaptionVisualGapVertical
+        usedLegacyConfig := true
+
+        if (horizontalGapRaw = "__MISSING__")
+            horizontalGapRaw := legacyHorizontalGapRaw
+        if (verticalGapRaw = "__MISSING__")
+            verticalGapRaw := legacyVerticalGapRaw
+    }
 
     if PPT_CaptionTryParseGapValue(horizontalGapRaw, horizontalGap)
         PPT_CaptionVisualGapHorizontal := PPT_CaptionNormalizeGapValue(horizontalGap)
     if PPT_CaptionTryParseGapValue(verticalGapRaw, verticalGap)
         PPT_CaptionVisualGapVertical := PPT_CaptionNormalizeGapValue(verticalGap)
+
+    if (SUI_ConfigPath != "" && usedLegacyConfig)
+        PPT_CaptionSaveConfig()
 }
 
 PPT_CaptionShowGapStatus(prefix := "Caption gap") {
@@ -1289,23 +1321,29 @@ PPT_SpacingAdjust(axis, direction) {
     shp := PPT_GetSelectedShapes()
     if !shp {
         PPT_SpacingLog("adjust_no_selection", "axis=" . axis . " direction=" . direction . " " . PPT_SpacingDescribeSelection())
-        if (PPT_SpacingDebug >= 2)
+        if (PPT_SpacingDebug >= 2) {
             ToolTip, [DBG] no selection
+            SetTimer, CloseToolTip, -1500
+        }
         return
     }
     cnt := 0
     try cnt := shp.Count
     if (cnt < 2) {
         PPT_SpacingLog("adjust_too_few_shapes", "axis=" . axis . " direction=" . direction . " count=" . cnt)
-        if (PPT_SpacingDebug >= 2)
+        if (PPT_SpacingDebug >= 2) {
             ToolTip, % "[DBG] count=" . cnt
+            SetTimer, CloseToolTip, -1500
+        }
         return
     }
     slide := PPT_GetSlideSize()
     if !IsObject(slide) {
         PPT_SpacingLog("adjust_no_slide", "axis=" . axis . " direction=" . direction)
-        if (PPT_SpacingDebug >= 2)
+        if (PPT_SpacingDebug >= 2) {
             ToolTip, [DBG] no slide size
+            SetTimer, CloseToolTip, -1500
+        }
         return
     }
 
@@ -1345,8 +1383,10 @@ PPT_SpacingAdjust(axis, direction) {
                 , "axis=" . axis . " direction=" . direction . " index=" . i
                 . " current=" . Round(s[posKey], 3) . " target=" . Round(newPositions[i], 3)
                 . " clamped=" . Round(clamped, 3) . " size=" . Round(s[sizeKey], 3))
-            if (PPT_SpacingDebug >= 2)
+            if (PPT_SpacingDebug >= 2) {
                 ToolTip, % "[DBG] clamp-slide i=" . i . " pos=" . Round(newPositions[i], 1) . " clamped=" . Round(clamped, 1)
+                SetTimer, CloseToolTip, -1500
+            }
             return
         }
 
@@ -1361,8 +1401,10 @@ PPT_SpacingAdjust(axis, direction) {
             PPT_SpacingLog("adjust_clamp_overlap"
                 , "axis=" . axis . " direction=" . direction . " leftIndex=" . i
                 . " leftEdge=" . Round(rightEdge, 3) . " rightTarget=" . Round(newPositions[i + 1], 3))
-            if (PPT_SpacingDebug >= 2)
+            if (PPT_SpacingDebug >= 2) {
                 ToolTip, % "[DBG] clamp-overlap i=" . i . " edge=" . Round(rightEdge, 1) . " next=" . Round(newPositions[i + 1], 1)
+                SetTimer, CloseToolTip, -1500
+            }
             return
         }
     }
@@ -1384,8 +1426,11 @@ PPT_SpacingAdjust(axis, direction) {
     PPT_SpacingLog("adjust_applied"
         , "axis=" . axis . " direction=" . direction . " step=" . Round(step, 3) . " results=" . applyResults)
 
-    if (PPT_SpacingDebug >= 2)
+    if (PPT_SpacingDebug >= 2) {
         ToolTip, % "[DBG] applied " . axis . " dir=" . direction . " step=" . Round(step, 2)
+        if !PPT_SpacingState.IsRunning
+            SetTimer, CloseToolTip, -1500
+    }
 }
 
 ; 長押しリピート開始
@@ -1459,6 +1504,7 @@ PPT_SpacingRepeatStop() {
     PPT_SpacingState.IsRunning := false
     PPT_SpacingState.CurrentStep := PPT_SpacingState.StepSize
     PPT_SpacingState.DelayPending := false
+    ToolTip
 }
 
 ; グリッド配置のリピート用
@@ -1859,6 +1905,7 @@ PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := f
     try textBox.TextFrame.TextRange.Font.Size := 12
     try textBox.TextFrame.TextRange.Font.Name := "Arial"
     try textBox.TextFrame.TextRange.ParagraphFormat.Alignment := 2
+    try textBox.TextFrame.TextRange.ParagraphFormat.Bullet.Type := 0  ; ppBulletNone
 
     try {
         textBox.TextFrame2.AutoSize := 0
