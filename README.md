@@ -95,7 +95,7 @@
 winget install AutoHotkey.AutoHotkey --version 1.1.37.02
 
 # 2. .NET SDK のインストール（ビルド時のみ必要）
-winget install Microsoft.DotNet.SDK.9
+winget install Microsoft.DotNet.SDK.10
 
 # 3. UiaMonitor のビルド
 cd lib/CSharpUIA
