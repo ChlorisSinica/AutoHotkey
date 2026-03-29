@@ -2,8 +2,8 @@
 
 ## 概要
 
-C# 常駐プロセスが UI Automation でフォーカス要素・テキスト選択状態を監視し、
-共有メモリ（MemoryMappedFile）経由で AHK v1.1 スクリプトに即時提供します。
+C# 常駐プロセスが UI Automation でフォーカス要素・テキスト選択状態を監視し，
+共有メモリ（MemoryMappedFile）経由で AHK v1.1 スクリプトに即時提供します．
 
 ```
 [C# UiaMonitor.exe]                [AHK v1.1 UiaIntegration.ahk]
@@ -46,12 +46,12 @@ dotnet publish -c Release -r win-x64 --self-contained false -o ./publish
 dotnet publish -c Release -r win-x64 --self-contained true -o ./publish
 ```
 
-`./publish/UiaMonitor.exe` が生成されます。
+`./publish/UiaMonitor.exe` が生成されます．
 
 ## セットアップ
 
 1. `publish/` フォルダの中身を任意の場所に配置
-2. `ahk/UiaIntegration.ahk` を開き、`UIA_MONITOR_EXE` のパスを実際のパスに変更
+2. `ahk/UiaIntegration.ahk` を開き，`UIA_MONITOR_EXE` のパスを実際のパスに変更
 
 ```ahk
 global UIA_MONITOR_EXE := "C:\Tools\UiaMonitor\UiaMonitor.exe"
@@ -92,12 +92,12 @@ UiaGetState(isEd, hasSel, ctrlType)
 
 ### ポーリング間隔の調整
 
-`MonitorService.cs` の `SelectionPollIntervalMs` を変更（デフォルト: 60ms）。
-短くすると応答性向上、長くすると CPU 負荷軽減。
+`MonitorService.cs` の `SelectionPollIntervalMs` を変更（デフォルト: 60ms）．
+短くすると応答性向上，長くすると CPU 負荷軽減．
 
 ## トラブルシューティング
 
 - **共有メモリが開けない** → UiaMonitor.exe が起動しているか確認
-- **特定アプリで isEditable が 0 のまま** → そのアプリが UIA 非対応の可能性。`controlType = 0xFF` の場合はフォールバック処理を検討
+- **特定アプリで isEditable が 0 のまま** → そのアプリが UIA 非対応の可能性．`controlType = 0xFF` の場合はフォールバック処理を検討
 - **選択状態の反映が遅い** → `SelectionPollIntervalMs` を小さくする
-- **CPU 負荷が高い** → `SelectionPollIntervalMs` を大きくする、またはテキスト欄以外でポーリングが止まっているか確認
+- **CPU 負荷が高い** → `SelectionPollIntervalMs` を大きくする，またはテキスト欄以外でポーリングが止まっているか確認
