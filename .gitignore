@@ -20,8 +20,8 @@
 lib/CSharpUIA/bin/
 lib/CSharpUIA/obj/
 
-# UiaMonitor self-contained build (git管理対象)
-!lib/CSharpUIA/UiaMonitor/
+# UiaMonitor ビルド成果物は全て除外 (exe=147MB, pdb=デバッグシンボル)
+lib/CSharpUIA/UiaMonitor/
 
 # Zips
 __zip__/
