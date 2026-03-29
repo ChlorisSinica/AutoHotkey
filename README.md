@@ -91,11 +91,17 @@
 初回 / 別 PC への移行時:
 
 ```bash
+# 1. AutoHotkey v1.1 のインストール
+winget install AutoHotkey.AutoHotkey --version 1.1.37.02
+
+# 2. .NET SDK のインストール（ビルド時のみ必要）
+winget install Microsoft.DotNet.SDK.9
+
+# 3. UiaMonitor のビルド
 cd lib/CSharpUIA
 dotnet publish -c Release -r win-x64 --self-contained true -o ./UiaMonitor
 ```
 
-- .NET 6.0 SDK 以上が必要（ビルド時のみ）
 - 生成される `UiaMonitor/UiaMonitor.exe` は self-contained のため実行時に .NET 不要
 - `main.ahk` 起動時に `UiaInit()` で自動起動され，終了時に `UiaCleanup()` で停止
 
