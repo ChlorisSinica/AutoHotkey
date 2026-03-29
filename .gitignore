@@ -1,7 +1,7 @@
 ﻿# AutoHotkey compiled scripts
 *.exe
-!lib/CSharpUIA/UiaMonitor/*.exe
-!lib/CSharpUIA/UiaMonitor/**/*.exe
+# UiaMonitor.exe は 147MB (self-contained) のため GitHub 管理外
+# 別PCへの移行時は手動コピーまたは dotnet publish で再ビルド
 
 # Logs
 *.log
@@ -16,6 +16,9 @@
 .codex_tmp/
 .logs/
 
+# CSharpUIA: ソースとビルド成果物のみ管理、中間ファイルは除外
+lib/CSharpUIA/bin/
+lib/CSharpUIA/obj/
 
 # UiaMonitor self-contained build (git管理対象)
 !lib/CSharpUIA/UiaMonitor/

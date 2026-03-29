@@ -68,6 +68,10 @@ PPT_CaptionInit()
 
 vk1C & F1::Settings_Open()
 vk1C & F2::MG_DebugSnapshot("manual-hotkey")
+vk1C & F3::
+    ToolTip, % "UiaIsEditable=" . UiaIsEditable() . " UiaHasSel=" . UiaHasSelection() . " UiaCtrl=" . UiaControlType()
+    SetTimer, CloseToolTip, -3000
+return
 #If WinActive("機能設定") && SUI_HasHelpSelection()
     ^c::SUI_CopySelectedHelpRow()
 #If
