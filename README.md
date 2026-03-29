@@ -84,6 +84,21 @@
    - `execute_passthrough_right_click` まで到達しているか
 4. `execute_empty_gesture_cancelled` が出ていれば，ジェスチャ状態により右クリックが抑止されています．
 
+## CSharpUIA セットアップ
+
+`lib/CSharpUIA/` はフォーカス状態を共有メモリ経由で取得する C# 監視プロセスです。
+
+初回 / 別 PC への移行時:
+
+```bash
+cd lib/CSharpUIA
+dotnet publish -c Release -r win-x64 --self-contained true -o ./UiaMonitor
+```
+
+- .NET 6.0 SDK 以上が必要（ビルド時のみ）
+- 生成される `UiaMonitor/UiaMonitor.exe` は self-contained のため実行時に .NET 不要
+- `main.ahk` 起動時に `UiaInit()` で自動起動され，終了時に `UiaCleanup()` で停止
+
 ## Appendix
 
 - `Plugins\UIA_Interface.ahk` and `Plugins\UIA_Browser.ahk` are UI Automation dependency libraries.
