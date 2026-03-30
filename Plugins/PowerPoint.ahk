@@ -1,7 +1,7 @@
 ﻿; ============================================================================
 ; PowerPoint.ahk - COM + UIA ハイブリッド構成
 ; ============================================================================
-global _PPT_IMG_EXT                      := "png|jpg|jpeg|bmp|tif|tiff|gif"
+global _PPT_IMG_EXT                      := "png|jpg|jpeg|bmp|tif|tiff|gif|svg|emf|wmf|eps|ai"
 global _PPT_MEDIA_EXT                    := "mp4|avi|wmv|mov|mkv|mp3|wav|wma|m4a|m4v|webm"
 global _PPT_ALL_EXT                      := _PPT_IMG_EXT . "|" . _PPT_MEDIA_EXT
 global PPT_SpacingLogEnabled             := true
