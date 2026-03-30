@@ -33,7 +33,7 @@ DeleteTitle() {
 CopyURL() {
     Send, {Alt}{Tab}
     Sleep, 50
-    
+
     Send, ^l
     Sleep, 50
 

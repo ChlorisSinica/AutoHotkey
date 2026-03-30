@@ -47,14 +47,13 @@ global EnableBrowser              := 1
 global EnablePPT                  := 1
 global EnableExcel                := 1
 global EnableBracketWrap          := 1
-global CG_SameEventThreshold     := 50
-global CG_CrossEventThreshold    := 30
+global CG_SameEventThreshold      := 50
+global CG_CrossEventThreshold     := 30
 
 ; ==========================================================
 ; --- 初期化処理 ---
 ; ==========================================================
 App_Init()
-
 vk1C & F1::Settings_Open()
 vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 vk1C & F3::App_DebugUia()
@@ -266,27 +265,27 @@ Cursor_GetHotkeyConfig() {
 ; ==========================================================
 #If (EnableBracketWrap && UiaIsEditable() && UiaHasSelection())
     ; 対称文字 (wrap/unwrap トグル)
-    $"::BW_OnKey("""")
-    $'::BW_OnKey("'")
-    $$::BW_OnKey("$")
-    $%::BW_OnKey(Chr(37))
+    $":: BW_OnKey("""")
+    $':: BW_OnKey("'")
+    $$:: BW_OnKey("$")
+    $%:: BW_OnKey(Chr(37))
 
     ; 開き/閉じ括弧 (IME 連動)
-    $(::BW_OnKeyIME("(")
-    $)::BW_OnKeyIME(")")
-    $[::BW_OnKeyIME("[")
-    $]::BW_OnKeyIME("]")
-    $+[::BW_OnKeyIME(Chr(123))
-    $+]::BW_OnKeyIME(Chr(125))
+    $(::  BW_OnKeyIME("(")
+    $)::  BW_OnKeyIME(")")
+    $[::  BW_OnKeyIME("[")
+    $]::  BW_OnKeyIME("]")
+    $+[:: BW_OnKeyIME(Chr(123))
+    $+]:: BW_OnKeyIME(Chr(125))
 #If
 
 ; ==========================================================
 ; ----- BracketWrap: Smart 行操作 (テキスト未選択, EditorGroup) -----
 ; ==========================================================
 #If (EnableBracketWrap && UiaIsEditable() && !UiaHasSelection() && BW_SmartKeysEnabled())
-    $^c::BW_SmartCopy()
-    $^x::BW_SmartCut()
-    $^d::BW_SmartDuplicate()
+    $^c:: BW_SmartCopy()
+    $^x:: BW_SmartCut()
+    $^d:: BW_SmartDuplicate()
 #If
 
 ; ==========================================================
