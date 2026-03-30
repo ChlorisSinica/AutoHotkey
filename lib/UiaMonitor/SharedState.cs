@@ -27,6 +27,7 @@ namespace UiaMonitor
         private const int OffsetControlType = 2;
         private const int OffsetProcessId = 4;
         private const int OffsetShutdown = 8;
+        private const int OffsetRefreshRequest = 9;
 
         private readonly MemoryMappedFile _mmf;
         private readonly MemoryMappedViewAccessor _accessor;
@@ -69,6 +70,14 @@ namespace UiaMonitor
 
         public bool IsShutdownRequested
             => _accessor.ReadByte(OffsetShutdown) != 0;
+
+        // ── RefreshRequest (AHK → C#) ──
+
+        public bool ReadRefreshRequest()
+            => _accessor.ReadByte(OffsetRefreshRequest) != 0;
+
+        public void ClearRefreshRequest()
+            => _accessor.Write(OffsetRefreshRequest, (byte)0);
 
         /// <summary>外部から既存プロセスにシャットダウンを要求する</summary>
         public static void SignalShutdown(string name)

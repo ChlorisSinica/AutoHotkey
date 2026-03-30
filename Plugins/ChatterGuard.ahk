@@ -3,7 +3,7 @@
 ;
 ; 使い方:
 ;   #Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
-;   CG_Init(70, ["XButton1", "XButton2"])
+;   CG_Init(["XButton1", "XButton2"])
 ;   OnExit("CG_Cleanup")
 ;
 ; DOWN/UP を独立かつクロスでデバウンス:
@@ -13,7 +13,6 @@
 
 global CG_HookHandle   := 0
 global CG_CallbackPtr  := 0
-global CG_Threshold    := 70
 
 global CG_EnableXB1    := 0
 global CG_EnableXB2    := 0
@@ -38,9 +37,8 @@ global CG_WatchdogLastCursorY  := 0
 ; 公開 API
 ; ==============================================================================
 
-CG_Init(threshold := 70, keys := "") {
-    global CG_Threshold, CG_EnableXB1, CG_EnableXB2
-    CG_Threshold := threshold
+CG_Init(keys := "") {
+    global CG_EnableXB1, CG_EnableXB2
     CG_EnableXB1 := 0
     CG_EnableXB2 := 0
 
@@ -133,12 +131,12 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton1 DOWN ===
     if (wParam = 0x20B && xButton = 1) {
         elapsed := eventTime - CG_XB1_lastDown
-        if (elapsed >= 0 && elapsed < 50) {
+        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
             CG_DebugBlockCount += 1
             return 1
         }
         sinceUp := eventTime - CG_XB1_lastUp
-        if (sinceUp >= 0 && sinceUp < 30) {
+        if (sinceUp >= 0 && sinceUp < CG_CrossEventThreshold) {
             CG_DebugBlockCount += 1
             return 1
         }
@@ -149,7 +147,7 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton1 UP ===
     if (wParam = 0x20C && xButton = 1) {
         elapsed := eventTime - CG_XB1_lastUp
-        if (elapsed >= 0 && elapsed < 50) {
+        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
             CG_DebugBlockCount += 1
             return 1
         }
@@ -161,12 +159,12 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton2 DOWN ===
     if (wParam = 0x20B && xButton = 2) {
         elapsed := eventTime - CG_XB2_lastDown
-        if (elapsed >= 0 && elapsed < 50) {
+        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
             CG_DebugBlockCount += 1
             return 1
         }
         sinceUp := eventTime - CG_XB2_lastUp
-        if (sinceUp >= 0 && sinceUp < 30) {
+        if (sinceUp >= 0 && sinceUp < CG_CrossEventThreshold) {
             CG_DebugBlockCount += 1
             return 1
         }
@@ -177,7 +175,7 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton2 UP ===
     if (wParam = 0x20C && xButton = 2) {
         elapsed := eventTime - CG_XB2_lastUp
-        if (elapsed >= 0 && elapsed < 50) {
+        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
             CG_DebugBlockCount += 1
             return 1
         }

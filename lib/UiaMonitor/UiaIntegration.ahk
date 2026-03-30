@@ -176,6 +176,34 @@ UiaCleanup(ExitReason := "", ExitCode := 0) {
     }
 }
 
+; 共有メモリ Offset 9 に再チェック要求を書込み
+; Smart 行操作後に呼出し → C# 側 PollSelection で即時フォーカス再取得
+UiaRequestRefresh() {
+    global UIA_MMF_NAME
+
+    hWrite := DllCall("OpenFileMapping"
+        , "UInt", 0x0002
+        , "Int",  0
+        , "Str",  UIA_MMF_NAME
+        , "Ptr")
+    if (!hWrite)
+        return
+
+    pWrite := DllCall("MapViewOfFile"
+        , "Ptr",  hWrite
+        , "UInt", 0x0002
+        , "UInt", 0
+        , "UInt", 0
+        , "UInt", 16
+        , "Ptr")
+    if (pWrite) {
+        ; Offset 9 = refreshRequest, 1 = 再チェック要求
+        NumPut(1, pWrite + 9, 0, "UChar")
+        DllCall("UnmapViewOfFile", "Ptr", pWrite)
+    }
+    DllCall("CloseHandle", "Ptr", hWrite)
+}
+
 UiaSendShutdownSignal() {
     global UIA_MMF_NAME
 

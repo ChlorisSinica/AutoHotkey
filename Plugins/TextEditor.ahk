@@ -17,12 +17,13 @@
 ; ==============================================================================
 
 ; ── グローバル変数 ──────────────────────────────────────────
-global BW_OpenToClose   := Object()
-global BW_CloseToOpen   := Object()
-global BW_SymmetricSet  := Object()
+global BW_OpenToClose     := Object()
+global BW_CloseToOpen     := Object()
+global BW_SymmetricSet    := Object()
 global BW_IME_OpenToClose := Object()
 global BW_IME_CloseToOpen := Object()
-global BW_ExcludeApps   := Object()
+global BW_ExcludeApps     := Object()
+global BW_SmartKeyApps    := Object()
 
 ; デバッグ
 global BW_DebugEnabled  := true
@@ -74,12 +75,17 @@ BW_Init() {
 
     ; 除外アプリ
     BW_ExcludeApps["POWERPNT.EXE"] := true
+
+    ; Smart 行操作ホワイトリスト → SmartKeyGroup 動的生成
+    ; BW_SmartKeyApps は SUI_LoadConfig() で INI から展開済み
+    for exeName, _ in BW_SmartKeyApps
+        GroupAdd, SmartKeyGroup, ahk_exe %exeName%
 }
 
 ; ── ガード関数 ──────────────────────────────────────────────
 
 BW_SmartKeysEnabled() {
-    return WinActive("ahk_group EditorGroup") || WinActive("ahk_exe pycharm64.exe")
+    return WinActive("ahk_group SmartKeyGroup")
 }
 
 BW_Pair(open, close) {
@@ -280,11 +286,16 @@ BW_SmartCopy() {
         SendInput, ^c
         return
     }
-    KeyWait, Ctrl
+    Send, {Ctrl up}
     Send, {Home}+{End}^c{End}
-    Sleep, 50
+    ClipWait, 0.3
+    if (ErrorLevel) {
+        BW_DebugLog("smart_copy_fail", "ClipWait timeout")
+        return
+    }
     Clipboard := RTrim(Clipboard, "`r`n")
     BW_DebugLog("smart_copy", "clip=[" . SubStr(Clipboard, 1, 40) . "]")
+    UiaRequestRefresh()
 }
 
 BW_SmartCut() {
@@ -292,8 +303,13 @@ BW_SmartCut() {
         SendInput, ^x
         return
     }
-    KeyWait, Ctrl
+    Send, {Ctrl up}
     Send, {Home}+{Down}^x
+    ClipWait, 0.3
+    if (ErrorLevel) {
+        BW_DebugLog("smart_cut_fail", "ClipWait timeout")
+    }
+    UiaRequestRefresh()
 }
 
 BW_SmartDuplicate() {
@@ -301,10 +317,16 @@ BW_SmartDuplicate() {
         SendInput, ^d
         return
     }
-    KeyWait, Ctrl
+    Send, {Ctrl up}
     clipSaved := ClipboardAll
     Send, {Home}+{End}^c
-    Sleep, 100
+    ClipWait, 0.3
+    if (ErrorLevel) {
+        BW_DebugLog("smart_dup_fail", "ClipWait timeout")
+        Clipboard := clipSaved
+        VarSetCapacity(clipSaved, 0)
+        return
+    }
     lineText := RTrim(Clipboard, "`r`n")
     Clipboard := "`r`n" . lineText
     BW_DebugLog("smart_dup", "line=[" . lineText . "] clip_len=" . StrLen(Clipboard))
@@ -312,6 +334,7 @@ BW_SmartDuplicate() {
     Sleep, 200
     Clipboard := clipSaved
     VarSetCapacity(clipSaved, 0)
+    UiaRequestRefresh()
 }
 
 ; ── デバッグ ───────────────────────────────────────────────

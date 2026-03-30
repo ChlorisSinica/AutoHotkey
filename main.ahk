@@ -33,19 +33,21 @@ SetBatchLines, -1
 ; ==========================================================
 ; ----- Indicator用変数 -----
 ; ==========================================================
-global EnableNavLayer   := 1
-global EnableWinPlace   := 1
-global EnableWinIsland  := 0
-global EnableVDesk      := 1
-global EnableMouseEmu   := 1
-global EnableMouseBtn   := 1
-global EnableGestures   := 1
-global EnableAlt        := 1
-global EnableOthers     := 1
-global EnableBrowser    := 1
-global EnablePPT        := 1
-global EnableExcel      := 1
-global EnableBracketWrap := 1
+global EnableNavLayer             := 1
+global EnableWinPlace             := 1
+global EnableWinIsland            := 0
+global EnableVDesk                := 1
+global EnableMouseEmu             := 1
+global EnableMouseBtn             := 1
+global EnableGestures             := 1
+global EnableAlt                  := 1
+global EnableOthers               := 1
+global EnableBrowser              := 1
+global EnablePPT                  := 1
+global EnableExcel                := 1
+global EnableBracketWrap          := 1
+global CG_SameEventThreshold     := 50
+global CG_CrossEventThreshold    := 30
 
 ; ==========================================================
 ; --- 初期化処理 ---
@@ -57,7 +59,7 @@ Indicator_Init()
 TrayTip, AutoHotkey, Script Reloaded, 2 ;
 
 SUI_LoadConfig()
-CG_Init(70, ["XButton1", "XButton2"])
+CG_Init(["XButton1", "XButton2"])
 OnExit("CG_Cleanup")
 UiaInit()
 OnExit("UiaCleanup")
@@ -95,7 +97,7 @@ return
 #If
 
 ; ==========================================================
-; ----- vk1C(Non-Convert) -----
+; ----- vk1C(Convert) -----
 ; ==========================================================
 #If (EnableNavLayer)
     vk1C & 1::IME_ToEnglish()
@@ -156,8 +158,16 @@ Cursor_GetHotkeyConfig() {
 ; ----- Virtual Desktop -----
 ; ==========================================================
 #If (EnableVDesk)
-    #q::    Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
-    #w::    Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
+    #q::
+        Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
+        Sleep, 300
+        UiaRequestRefresh()
+    return
+    #w::
+        Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
+        Sleep, 300
+        UiaRequestRefresh()
+    return
 #If
 
 ; ==========================================================

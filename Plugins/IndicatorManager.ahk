@@ -435,6 +435,8 @@ SUI_LoadConfig() {
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
+    global BW_SmartKeyApps
+    global CG_SameEventThreshold, CG_CrossEventThreshold
 
     SUI_EnsureConfigPath()
 
@@ -536,6 +538,22 @@ SUI_LoadConfig() {
     Browser_PDFZoomDebugEnabled := SUI_NormalizeBool(browserDebugRaw, Browser_PDFZoomDebugEnabled)
     PPT_SpacingLogEnabled := SUI_NormalizeBool(pptSpacingDebugRaw, PPT_SpacingLogEnabled)
     PPT_CaptionLogEnabled := SUI_NormalizeBool(pptCaptionDebugRaw, PPT_CaptionLogEnabled)
+
+    ; [ChatterGuard] 閾値読込み
+    IniRead, sameThreshRaw, %SUI_ConfigPath%, ChatterGuard, SameEventThreshold, %CG_SameEventThreshold%
+    IniRead, crossThreshRaw, %SUI_ConfigPath%, ChatterGuard, CrossEventThreshold, %CG_CrossEventThreshold%
+    CG_SameEventThreshold := SUI_NormalizeInt(sameThreshRaw, 50, 10, 200)
+    CG_CrossEventThreshold := SUI_NormalizeInt(crossThreshRaw, 30, 5, 100)
+
+    ; [BracketWrap] SmartKeyApps 読込み (デフォルト保護付き)
+    IniRead, smartApps, %SUI_ConfigPath%, BracketWrap, SmartKeyApps, notepad.exe
+    if (smartApps = "")
+        smartApps := "notepad.exe"
+    Loop, Parse, smartApps, `,, %A_Space%
+    {
+        if (A_LoopField != "")
+            BW_SmartKeyApps[A_LoopField] := true
+    }
 
     SUI_DebugLog("config_load", "path=" . SUI_ConfigPath)
 }
@@ -756,7 +774,7 @@ SUI_HandleCtlColorEdit(wParam, lParam, msg, hwnd) {
 }
 
 SUI_HandleCtlColorStatic(wParam, lParam, msg, hwnd) {
-    global _SUI_Theme
+    global _SUI_Theme, SUI_UiaIndicatorHwnd, SUI_UiaIndicatorColor
 
     if (!IsObject(_SUI_Theme) || !SUI_IsSettingsGuiCtlColor(hwnd))
         return
@@ -766,6 +784,14 @@ SUI_HandleCtlColorStatic(wParam, lParam, msg, hwnd) {
         DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.TitleColor)
         DllCall("SetBkMode", "Ptr", wParam, "Int", 2)
         return SUI_GetThemeBrush(_SUI_Theme.TitleColor)
+    }
+
+    ; UIA インジケーター: 個別色適用
+    if (SUI_UiaIndicatorHwnd && lParam = SUI_UiaIndicatorHwnd) {
+        DllCall("SetTextColor", "Ptr", wParam, "UInt", SUI_UiaIndicatorColor)
+        DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.WindowColor)
+        DllCall("SetBkMode", "Ptr", wParam, "Int", 1)
+        return SUI_GetThemeBrush(_SUI_Theme.WindowColor)
     }
 
     DllCall("SetTextColor", "Ptr", wParam, "UInt", _SUI_Theme.ForegroundColor)
@@ -837,6 +863,9 @@ class SettingsUI {
         Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorEdgeInset
         Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
         Global SettingsBrowserPdfZoomDebug, SettingsPPTSpacingDebug, SettingsPPTCaptionDebug, SettingsValidationHint
+        Global SettingsUiaStatus, SettingsBWLabel, SettingsBWToggle, SUI_UiaIndicatorHwnd, SUI_UiaIndicatorColor
+        Global SettingsSameEvent, SettingsCrossEvent
+        Global EnableBracketWrap, CG_SameEventThreshold, CG_CrossEventThreshold, pBuf
         Global SUI_IsInitializing, SUI_SelectedItemID, _SUI_LastHelpRow
         SUI_IsInitializing := true
         SUI_SelectedItemID := 0
@@ -851,7 +880,7 @@ class SettingsUI {
         ; =========================================
         ; --- タブコントロールの追加 ---
         ; =========================================
-        Gui, Settings:Add, Tab3, x10 y10 w750 h510 HwndhSettingsTab, 基本設定|詳細設定
+        Gui, Settings:Add, Tab3, x10 y10 w750 h520 HwndhSettingsTab, 基本設定|詳細設定
         SUI_SettingsTabHwnd := hSettingsTab
 
         ; -----------------------------------------
@@ -946,6 +975,30 @@ class SettingsUI {
         Gui, Settings:Add, Button, x150 y403 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
         Gui, Settings:Add, Text, x20 y437 w330 h18 vSettingsValidationHint,
 
+        ; ステータス表示 (左列下部、ChatterGuard と並列)
+        uiaConnected := (pBuf != 0)
+        uiaIcon := uiaConnected ? "●" : "○"
+        uiaDesc := uiaConnected ? "接続済み" : "未検出"
+        Gui, Settings:Add, Text, x20 y465 w80 h18 +0x200, UiaMonitor:
+        Gui, Settings:Add, Text, x100 y465 w14 h18 +0x200 HwndhUiaIndicator, %uiaIcon%
+        SUI_UiaIndicatorHwnd := hUiaIndicator
+        SUI_UiaIndicatorColor := uiaConnected ? 0x00AA00 : 0x888888
+        Gui, Settings:Add, Text, x114 y465 w120 h18 +0x200 vSettingsUiaStatus, %uiaDesc%
+
+        Gui, Settings:Add, Text, x20 y487 w80 h18 +0x200 vSettingsBWLabel, BracketWrap:
+        Gui, Settings:Add, CheckBox, x100 y485 w60 h20 vSettingsBWToggle gSUI_BWToggleChanged, 有効
+        if (EnableBracketWrap)
+            GuiControl, Settings:, SettingsBWToggle, 1
+
+        ; ChatterGuard 閾値セクション
+        Gui, Settings:Add, GroupBox, x370 y460 w370 h52, ChatterGuard
+        Gui, Settings:Add, Text, x388 y480 w36 h20 +0x200, 同種
+        Gui, Settings:Add, Edit, x426 y479 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
+        Gui, Settings:Add, Text, x470 y480 w18 h20 +0x200, ms
+        Gui, Settings:Add, Text, x500 y480 w36 h20 +0x200, 交差
+        Gui, Settings:Add, Edit, x538 y479 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
+        Gui, Settings:Add, Text, x582 y480 w18 h20 +0x200, ms
+
         ; -----------------------------------------
         ; ▼ タブの配置指定を終了 (以降はタブ外の要素)
         ; -----------------------------------------
@@ -975,7 +1028,7 @@ class SettingsUI {
         }
 
         ; 全体のウィンドウサイズを表示
-        Gui, Settings:Show, w770 h540 xCenter yCenter
+        Gui, Settings:Show, w770 h550 xCenter yCenter
         SUI_IsInitializing := false
         SUI_DebugLog("settings_show")
     }
@@ -1212,6 +1265,12 @@ SUI_ResetAdvancedSettings() {
     SetTimer, CloseToolTip, -1200
 }
 
+SUI_BWToggleChanged() {
+    global EnableBracketWrap
+    GuiControlGet, bwState, Settings:, SettingsBWToggle
+    EnableBracketWrap := bwState
+}
+
 SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SUI_IsInitializing, SUI_SettingsGuiHwnd
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
@@ -1224,6 +1283,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+    global CG_SameEventThreshold, CG_CrossEventThreshold
 
     if (SUI_IsInitializing || !SUI_SettingsGuiHwnd)
         return false
@@ -1293,6 +1353,14 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     Browser_PDFZoomDebugEnabled := SUI_NormalizeBool(browserPdfDebug, Browser_PDFZoomDebugEnabled)
     PPT_SpacingLogEnabled := SUI_NormalizeBool(pptSpacingDebug, PPT_SpacingLogEnabled)
     PPT_CaptionLogEnabled := SUI_NormalizeBool(pptCaptionDebug, PPT_CaptionLogEnabled)
+
+    ; ChatterGuard 閾値
+    GuiControlGet, sameThresh, Settings:, SettingsSameEvent
+    GuiControlGet, crossThresh, Settings:, SettingsCrossEvent
+    CG_SameEventThreshold := SUI_NormalizeInt(sameThresh, 50, 10, 200)
+    CG_CrossEventThreshold := SUI_NormalizeInt(crossThresh, 30, 5, 100)
+    IniWrite, %CG_SameEventThreshold%, %SUI_ConfigPath%, ChatterGuard, SameEventThreshold
+    IniWrite, %CG_CrossEventThreshold%, %SUI_ConfigPath%, ChatterGuard, CrossEventThreshold
 
     SUI_SaveConfig()
     SUI_LoadAdvancedSettingsIntoGui()
@@ -1682,16 +1750,16 @@ SUI_InitHelpData() {
     othersWhen := "EnableOthers = ON"
 
     h := []
-    h.Push(SUI_HelpItem("無変換 + 1", "IME → 英語", "IME_ToEnglish()", navWhen, "", "vk1C & 1::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + 2", "IME → 日本語", "IME_ToJapanese()", navWhen, "", "vk1C & 2::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + 3", "Ctrl+Shift+6", "Send {Blind}^+6", navWhen, "", "vk1C & 3::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + 4", "Ctrl+Shift+2", "Send {Blind}^+2", navWhen, "", "vk1C & 4::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + J / K / I / L", "カーソル移動 (←↓↑→)", "Send {Blind}{Left/Down/Up/Right}", navWhen, "", "vk1C & j::", 1, 3, mainFile))
-    h.Push(SUI_HelpItem("無変換 + U / O", "Home / End", "Send {Blind}{Home/End}", navWhen, "", "vk1C & u::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + P", "リネーム (F2)", "Send {Blind}{F2}", navWhen, "", "vk1C & p::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + N", "ペイント起動", "OpenWithMspaint(0)", navWhen, "", "vk1C & n::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + M", "テキストエディタ起動", "OpenTextEditor(0)", navWhen, "", "vk1C & m::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + T", "日時挿入 (yyyy/MM/dd (ddd) HH:mm)", "InsertDateTime(...)", navWhen, "", "vk1C & t::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + 1", "IME → 英語", "IME_ToEnglish()", navWhen, "", "vk1C & 1::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + 2", "IME → 日本語", "IME_ToJapanese()", navWhen, "", "vk1C & 2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + 3", "Ctrl+Shift+6", "Send {Blind}^+6", navWhen, "", "vk1C & 3::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + 4", "Ctrl+Shift+2", "Send {Blind}^+2", navWhen, "", "vk1C & 4::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + J / K / I / L", "カーソル移動 (←↓↑→)", "Send {Blind}{Left/Down/Up/Right}", navWhen, "", "vk1C & j::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("変換 + U / O", "Home / End", "Send {Blind}{Home/End}", navWhen, "", "vk1C & u::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + P", "リネーム (F2)", "Send {Blind}{F2}", navWhen, "", "vk1C & p::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + N", "ペイント起動", "OpenWithMspaint(0)", navWhen, "", "vk1C & n::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + M", "テキストエディタ起動", "OpenTextEditor(0)", navWhen, "", "vk1C & m::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + T", "日時挿入 (yyyy/MM/dd (ddd) HH:mm)", "InsertDateTime(...)", navWhen, "", "vk1C & t::", 1, 1, mainFile))
     d["EnableNavLayer"] := h
 
     h := []
@@ -1709,12 +1777,8 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Win+Ctrl+F11", "Downloadsフォルダ", "OpenMoveExplorer(profilePath . ""\Downloads"", ...)", winWhen, "", "^#F11::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+F12", "VSCode起動", "OpenVSCode()", winWhen, "", "^#F12::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+F12", "スクリプトリロード", "Reload", winWhen, "", "^+#F12::", 1, 1, mainFile))
+    h.Push(SUI_HelpSection("【Window Island】", "配置計算時に monitor 端とセル間へ余白を入れます。MoveWindowRatio / WindowGrid / CursorGrid に反映されます。", winIslandWhen, "WindowIsland_Toggle() {", 0, 4, A_ScriptDir . "\Plugins\WindowManager.ahk"))
     d["EnableWinPlace"] := h
-
-    h := []
-    h.Push(SUI_HelpItem("Win+Ctrl+Shift+G", "Window Island 切替", "WindowIsland_Toggle()", winWhen, "", "^+#g::", 1, 1, mainFile))
-    h.Push(SUI_HelpSection("【概要】", "配置計算時に monitor 端とセル間へ余白を入れます。MoveWindowRatio / WindowGrid / CursorGrid に反映されます。", winIslandWhen, "WindowIsland_Toggle() {", 0, 4, A_ScriptDir . "\Plugins\WindowManager.ahk"))
-    d["EnableWinIsland"] := h
 
     h := []
     h.Push(SUI_HelpItem("Win+Q", "左の仮想デスクトップへ", "Send Win+Ctrl+Left", vdeskWhen, "", "#q::", 1, 1, mainFile))
@@ -1803,8 +1867,8 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("ScrollLock", "無効化", "Return", othersWhen, "", "scrolllock::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("\", "_ を入力", "Send +{sc073}", othersWhen, "", "$sc073::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Shift+\", "\ を入力", "Send {sc073}", othersWhen, "", "$+sc073::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + Z", "N 長押しトグル", "Manage_N_Hold(""Toggle"")", othersWhen, "", "vk1C & z::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("無変換 + X", "N 長押し解除", "Manage_N_Hold(""Off"")", othersWhen, "", "vk1C & x::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + Z", "N 長押しトグル", "Manage_N_Hold(""Toggle"")", othersWhen, "", "vk1C & z::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + X", "N 長押し解除", "Manage_N_Hold(""Off"")", othersWhen, "", "vk1C & x::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Alt+Backspace", "CapsLock OFF", "CapsLock_SetState(false)", othersWhen, "", "^!#Backspace::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Alt+Delete", "CapsLock ON", "CapsLock_SetState(true)", othersWhen, "", "^!#Delete::", 1, 1, mainFile))
     d["EnableOthers"] := h
@@ -1855,7 +1919,6 @@ SUI_BuildItemList() {
 
     SUI_AddLeaf("キーボード拡張", "EnableNavLayer")
     SUI_AddLeaf("ウィンドウ配置", "EnableWinPlace")
-    SUI_AddLeaf("Window Island", "EnableWinIsland")
     SUI_AddLeaf("仮想デスクトップ", "EnableVDesk")
     SUI_AddLeaf("キーボードマウス", "EnableMouseEmu")
     SUI_AddLeaf("ボタン・ホイール", "EnableMouseBtn")

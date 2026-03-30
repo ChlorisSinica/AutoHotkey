@@ -17,12 +17,14 @@ namespace UiaMonitor
         private const int SlowPollMs = 200;
         private const int SlowdownThresholdMs = 3000;
         private const int SelectionCheckTimeoutMs = 200;
+        private const int WatchdogIntervalMs = 3000;
 
         private readonly SharedState _state;
         private readonly UIA3Automation _automation;
 
         private FocusChangedEventHandlerBase? _focusHandler;
         private Timer? _selectionTimer;
+        private Timer? _watchdogTimer;
 
         // 現在フォーカス中の要素（ポーリング用に保持）
         private AutomationElement? _currentElement;
@@ -32,6 +34,9 @@ namespace UiaMonitor
         private bool _lastHasSelection;
         private long _lastChangeTickMs;
         private int _currentIntervalMs = FastPollMs;
+
+        // ウォッチドッグ: FocusChanged 最終発火時刻
+        private long _lastFocusEventTick;
 
         private bool _disposed;
 
@@ -48,6 +53,10 @@ namespace UiaMonitor
         {
             // フォーカス変更イベントを登録
             _focusHandler = _automation.RegisterFocusChangedEvent(OnFocusChanged);
+            _lastFocusEventTick = Environment.TickCount64;
+
+            // ウォッチドッグタイマー開始
+            _watchdogTimer = new Timer(OnWatchdog, null, WatchdogIntervalMs, WatchdogIntervalMs);
 
             // 初回：現在のフォーカス要素を取得
             try
@@ -64,6 +73,9 @@ namespace UiaMonitor
 
         public void Stop()
         {
+            var watchdog = Interlocked.Exchange(ref _watchdogTimer, null);
+            watchdog?.Dispose();
+
             StopSelectionPolling();
 
             if (_focusHandler != null)
@@ -78,6 +90,7 @@ namespace UiaMonitor
 
         private void OnFocusChanged(AutomationElement element)
         {
+            _lastFocusEventTick = Environment.TickCount64;
             try
             {
                 ProcessFocusChange(element);
@@ -132,6 +145,30 @@ namespace UiaMonitor
             }
         }
 
+        // ── ウォッチドッグ: FocusChanged 未発火時の回復 ──
+
+        private void OnWatchdog(object? _)
+        {
+            long elapsed = Environment.TickCount64 - _lastFocusEventTick;
+            if (elapsed < WatchdogIntervalMs)
+                return;
+
+            Debug.WriteLine($"[UiaMonitor] ウォッチドッグ: {elapsed}ms FocusChanged 未発火。回復試行。");
+            try
+            {
+                var focused = _automation.FocusedElement();
+                if (focused != null)
+                {
+                    _lastFocusEventTick = Environment.TickCount64;
+                    ProcessFocusChange(focused);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[UiaMonitor] ウォッチドッグ回復失敗: {ex.Message}");
+            }
+        }
+
         // ── テキスト編集可能判定 ──
 
         private bool IsEditableElement(AutomationElement element, ControlType ct)
@@ -165,6 +202,23 @@ namespace UiaMonitor
                 }
                 catch { }
             }
+
+            // Layer 2: パターンベースフォールバック
+            // TextPattern をサポートし、キーボードフォーカス可能で、ReadOnly でない要素は
+            // 編集可能と判定 (PPT テキストボックス等の非標準 ControlType に対応)
+            try
+            {
+                if (element.Patterns.Text.IsSupported)
+                {
+                    bool focusable = false;
+                    try { focusable = element.Properties.IsKeyboardFocusable.ValueOrDefault; }
+                    catch { focusable = true; }
+
+                    if (focusable && !IsReadOnly(element))
+                        return true;
+                }
+            }
+            catch { }
 
             return false;
         }
@@ -245,6 +299,27 @@ namespace UiaMonitor
 
         private void PollSelection(object? _)
         {
+            // RefreshRequest チェック: AHK から再チェック要求があれば即時回復
+            if (_state.ReadRefreshRequest())
+            {
+                _state.ClearRefreshRequest();
+                Debug.WriteLine("[UiaMonitor] RefreshRequest 受信。フォーカス再取得。");
+                try
+                {
+                    var focused = _automation.FocusedElement();
+                    if (focused != null)
+                    {
+                        _lastFocusEventTick = Environment.TickCount64;
+                        ProcessFocusChange(focused);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[UiaMonitor] RefreshRequest 再取得失敗: {ex.Message}");
+                }
+                return;
+            }
+
             AutomationElement? el;
             lock (_elementLock)
             {

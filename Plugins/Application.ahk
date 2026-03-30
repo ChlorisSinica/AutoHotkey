@@ -49,6 +49,8 @@ ReplaceEscapeToSlash() {
     Clipboard := ""
     Send, +^c
     ClipWait, 2
+    if (ErrorLevel)
+        return
     text := Clipboard
     StringReplace, text, text, \, /, All
     Clipboard := text
