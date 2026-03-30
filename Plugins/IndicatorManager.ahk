@@ -807,6 +807,7 @@ class SettingsUI {
         Menu, Tray, Add, スタートアップで実行する, Startup_Toggle
         Menu, Tray, Add, 機能設定 (Settings), Settings_Open
         Menu, Tray, Add, 設定ログを開く, SUI_DebugOpenLog
+        Menu, Tray, Add
         Menu, Tray, Add, PPT 間隔ログを開く, PPT_SpacingOpenLog
         Menu, Tray, Add, PPT キャプションログを開く, PPT_CaptionOpenLog
         Menu, Tray, Add
@@ -1864,6 +1865,7 @@ SUI_BuildItemList() {
     SUI_AddLeaf("ブラウザ", "EnableBrowser")
     SUI_AddLeaf("PowerPoint", "EnablePPT")
     SUI_AddLeaf("Excel", "EnableExcel")
+    SUI_AddLeaf("括弧ラップ", "EnableBracketWrap")
 }
 
 SUI_AddLeaf(name, varName) {

@@ -37,12 +37,37 @@ IME_GetOpenStatusForHwnd(hwnd) {
     return isOpen ? 1 : 0
 }
 
+IME_GetOpenStatusViaDefaultImeWindow(hwnd) {
+    if !hwnd
+        return ""
+    imeHwnd := DllCall("imm32\ImmGetDefaultIMEWnd", "Ptr", hwnd, "Ptr")
+    if !imeHwnd
+        return ""
+    prevDetectHiddenWindows := A_DetectHiddenWindows
+    DetectHiddenWindows, On
+    SendMessage, 0x0283, 0x0005, 0,, ahk_id %imeHwnd%
+    DetectHiddenWindows, %prevDetectHiddenWindows%
+    if (ErrorLevel = "FAIL")
+        return ""
+    return ErrorLevel ? 1 : 0
+}
+
 IME_GetVerifiedOpenStatus(targetHwnd, activeHwnd := 0) {
+    ; 1) ImmGetContext 方式 (Win32 アプリ)
     status := IME_GetOpenStatusForHwnd(targetHwnd)
     if (status != "")
         return status
+    if (activeHwnd && activeHwnd != targetHwnd) {
+        status := IME_GetOpenStatusForHwnd(activeHwnd)
+        if (status != "")
+            return status
+    }
+    ; 2) DefaultIMEWnd 方式 (UWP/ApplicationFrameHost 等)
+    status := IME_GetOpenStatusViaDefaultImeWindow(targetHwnd)
+    if (status != "")
+        return status
     if (activeHwnd && activeHwnd != targetHwnd)
-        return IME_GetOpenStatusForHwnd(activeHwnd)
+        return IME_GetOpenStatusViaDefaultImeWindow(activeHwnd)
     return ""
 }
 

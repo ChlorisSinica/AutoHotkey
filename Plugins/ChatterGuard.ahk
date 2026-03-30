@@ -23,6 +23,9 @@ global CG_XB1_lastUp   := 0
 global CG_XB2_lastDown := 0
 global CG_XB2_lastUp   := 0
 
+; デバッグ用
+global CG_DebugBlockCount := 0
+
 ; フック生存監視用
 global CG_WatchdogTimer       := ""
 global CG_HookEventCount      := 0
@@ -130,11 +133,15 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton1 DOWN ===
     if (wParam = 0x20B && xButton = 1) {
         elapsed := eventTime - CG_XB1_lastDown
-        if (elapsed >= 0 && elapsed < 70)
+        if (elapsed >= 0 && elapsed < 50) {
+            CG_DebugBlockCount += 1
             return 1
+        }
         sinceUp := eventTime - CG_XB1_lastUp
-        if (sinceUp >= 0 && sinceUp < 70)
+        if (sinceUp >= 0 && sinceUp < 30) {
+            CG_DebugBlockCount += 1
             return 1
+        }
         CG_XB1_lastDown := eventTime
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
     }
@@ -142,11 +149,11 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton1 UP ===
     if (wParam = 0x20C && xButton = 1) {
         elapsed := eventTime - CG_XB1_lastUp
-        if (elapsed >= 0 && elapsed < 70)
+        if (elapsed >= 0 && elapsed < 50) {
+            CG_DebugBlockCount += 1
             return 1
-        sinceDown := eventTime - CG_XB1_lastDown
-        if (sinceDown >= 0 && sinceDown < 70)
-            return 1
+        }
+        ; sinceDown cross-check 削除: DOWN→UP 間隔は正常クリック持続時間 (30-80ms)
         CG_XB1_lastUp := eventTime
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
     }
@@ -154,11 +161,15 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton2 DOWN ===
     if (wParam = 0x20B && xButton = 2) {
         elapsed := eventTime - CG_XB2_lastDown
-        if (elapsed >= 0 && elapsed < 70)
+        if (elapsed >= 0 && elapsed < 50) {
+            CG_DebugBlockCount += 1
             return 1
+        }
         sinceUp := eventTime - CG_XB2_lastUp
-        if (sinceUp >= 0 && sinceUp < 70)
+        if (sinceUp >= 0 && sinceUp < 30) {
+            CG_DebugBlockCount += 1
             return 1
+        }
         CG_XB2_lastDown := eventTime
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
     }
@@ -166,11 +177,11 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     ; === XButton2 UP ===
     if (wParam = 0x20C && xButton = 2) {
         elapsed := eventTime - CG_XB2_lastUp
-        if (elapsed >= 0 && elapsed < 70)
+        if (elapsed >= 0 && elapsed < 50) {
+            CG_DebugBlockCount += 1
             return 1
-        sinceDown := eventTime - CG_XB2_lastDown
-        if (sinceDown >= 0 && sinceDown < 70)
-            return 1
+        }
+        ; sinceDown cross-check 削除: DOWN→UP 間隔は正常クリック持続時間 (30-80ms)
         CG_XB2_lastUp := eventTime
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
     }

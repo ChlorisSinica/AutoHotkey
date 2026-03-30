@@ -18,7 +18,7 @@
 
 ; ── 設定 ──────────────────────────────────────────────────────
 ; UiaMonitor.exe のパス（環境に合わせて変更）
-global UIA_MONITOR_EXE := A_ScriptDir . "\lib\CSharpUIA\UiaMonitor\UiaMonitor.exe"
+global UIA_MONITOR_EXE := A_ScriptDir . "\lib\UiaMonitor\UiaMonitor\UiaMonitor.exe"
 
 ; 共有メモリ名（C# 側と一致させること）
 global UIA_MMF_NAME := "AhkUiaState"
@@ -49,7 +49,8 @@ UiaStartMonitor() {
         return  ; 既に起動中
 
     if !FileExist(UIA_MONITOR_EXE) {
-        MsgBox, 16, UiaIntegration, UiaMonitor.exe が見つかりません。`n%UIA_MONITOR_EXE%
+        ToolTip, UiaMonitor.exe が見つかりません。BracketWrap は無効です。
+        SetTimer, CloseToolTip, -3000
         return
     }
 

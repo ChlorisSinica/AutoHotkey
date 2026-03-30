@@ -27,7 +27,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
-#Include %A_ScriptDir%\lib\CSharpUIA\UiaIntegration.ahk
+#Include %A_ScriptDir%\lib\UiaMonitor\UiaIntegration.ahk
 #Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
 
 ; ==========================================================
@@ -45,6 +45,7 @@ global EnableOthers     := 1
 global EnableBrowser    := 1
 global EnablePPT        := 1
 global EnableExcel      := 1
+global EnableBracketWrap := 1
 
 ; ==========================================================
 ; --- 初期化処理 ---
@@ -61,6 +62,7 @@ OnExit("CG_Cleanup")
 UiaInit()
 OnExit("UiaCleanup")
 
+BW_Init()
 MG_DebugInit()
 Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
 PPT_SpacingLog("startup", "script=" . A_ScriptFullPath)
@@ -71,6 +73,19 @@ vk1C & F2::MG_DebugSnapshot("manual-hotkey")
 vk1C & F3::
     ToolTip, % "UiaIsEditable=" . UiaIsEditable() . " UiaHasSel=" . UiaHasSelection() . " UiaCtrl=" . UiaControlType()
     SetTimer, CloseToolTip, -3000
+return
+vk1C & F4::
+    hTarget := IME_GetTargetHwnd(activeHwnd)
+    imeOn := IME_GetVerifiedOpenStatus(hTarget, activeHwnd)
+    WinGet, procName, ProcessName, A
+    debugMsg := "ChatterGuard: Blocks=" . CG_DebugBlockCount . " DD/UU=50ms UD=30ms DU=removed"
+        . "`nBracketWrap: UiaEditable=" . UiaIsEditable() . " UiaSelection=" . UiaHasSelection()
+        . " EnableBW=" . EnableBracketWrap . " Excluded=" . BW_IsExcluded()
+        . "`nIME=" . imeOn . " hTarget=" . hTarget . " activeHwnd=" . activeHwnd
+        . "`npBuf=" . pBuf . " proc=" . procName
+    FileAppend, % A_Now . " " . debugMsg . "`n", %A_ScriptDir%\.claude\debug_f4.log
+    ToolTip, %debugMsg%
+    SetTimer, CloseToolTip, -5000
 return
 #If WinActive("機能設定") && SUI_HasHelpSelection()
     ^c::SUI_CopySelectedHelpRow()
@@ -264,6 +279,34 @@ Cursor_GetHotkeyConfig() {
 #If (EnableExcel && WinActive("ahk_exe EXCEL.EXE"))
     ^Tab::Send ^{PgDn}
     ^+Tab::Send ^{PgUp}
+#If
+
+; ==========================================================
+; ----- BracketWrap: 括弧ラップ (テキスト選択中) -----
+; ==========================================================
+#If (EnableBracketWrap && UiaIsEditable() && UiaHasSelection())
+    ; 対称文字 (wrap/unwrap トグル)
+    $"::BW_OnKey("""")
+    $'::BW_OnKey("'")
+    $$::BW_OnKey("$")
+    $%::BW_OnKey(Chr(37))
+
+    ; 開き/閉じ括弧 (IME 連動)
+    $(::BW_OnKeyIME("(")
+    $)::BW_OnKeyIME(")")
+    $[::BW_OnKeyIME("[")
+    $]::BW_OnKeyIME("]")
+    $+[::BW_OnKeyIME(Chr(123))
+    $+]::BW_OnKeyIME(Chr(125))
+#If
+
+; ==========================================================
+; ----- BracketWrap: Smart 行操作 (テキスト未選択, EditorGroup) -----
+; ==========================================================
+#If (EnableBracketWrap && UiaIsEditable() && !UiaHasSelection() && BW_SmartKeysEnabled())
+    $^c::BW_SmartCopy()
+    $^x::BW_SmartCut()
+    $^d::BW_SmartDuplicate()
 #If
 
 ; ==========================================================

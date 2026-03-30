@@ -16,12 +16,12 @@
 .codex_tmp/
 .logs/
 
-# CSharpUIA: ソースとビルド成果物のみ管理、中間ファイルは除外
-lib/CSharpUIA/bin/
-lib/CSharpUIA/obj/
+# UiaMonitor: ソースとビルド成果物のみ管理、中間ファイルは除外
+lib/UiaMonitor/bin/
+lib/UiaMonitor/obj/
 
 # UiaMonitor ビルド成果物は全て除外 (exe=147MB, pdb=デバッグシンボル)
-lib/CSharpUIA/UiaMonitor/
+lib/UiaMonitor/UiaMonitor/
 
 # Zips
 __zip__/

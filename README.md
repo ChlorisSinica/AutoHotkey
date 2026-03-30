@@ -84,9 +84,10 @@
    - `execute_passthrough_right_click` まで到達しているか
 4. `execute_empty_gesture_cancelled` が出ていれば，ジェスチャ状態により右クリックが抑止されています．
 
-## CSharpUIA セットアップ
+## UiaMonitor セットアップ
 
-`lib/CSharpUIA/` はフォーカス状態を共有メモリ経由で取得する C# 監視プロセスです。
+`lib/UiaMonitor/` はフォーカス状態を共有メモリ経由で取得する C# 監視プロセスです。
+未ビルドの場合、BracketWrap 等の UIA 依存機能は自動的に無効化されます。
 
 初回 / 別 PC への移行時:
 
@@ -98,7 +99,7 @@ winget install AutoHotkey.AutoHotkey --version 1.1.37.02
 winget install Microsoft.DotNet.SDK.10
 
 # 3. UiaMonitor のビルド
-cd lib/CSharpUIA
+cd lib/UiaMonitor
 dotnet publish -c Release -r win-x64 --self-contained true -o ./UiaMonitor
 ```
 
