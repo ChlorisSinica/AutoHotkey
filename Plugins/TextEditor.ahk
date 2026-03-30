@@ -287,6 +287,7 @@ BW_SmartCopy() {
         return
     }
     Send, {Ctrl up}
+    Clipboard := ""
     Send, {Home}+{End}^c{End}
     ClipWait, 0.3
     if (ErrorLevel) {
@@ -304,6 +305,7 @@ BW_SmartCut() {
         return
     }
     Send, {Ctrl up}
+    Clipboard := ""
     Send, {Home}+{Down}^x
     ClipWait, 0.3
     if (ErrorLevel) {
@@ -319,6 +321,7 @@ BW_SmartDuplicate() {
     }
     Send, {Ctrl up}
     clipSaved := ClipboardAll
+    Clipboard := ""
     Send, {Home}+{End}^c
     ClipWait, 0.3
     if (ErrorLevel) {
