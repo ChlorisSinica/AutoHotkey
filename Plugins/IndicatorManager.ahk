@@ -2,69 +2,69 @@
 ; Indicator / settings UI
 ; ListView (checkboxes + labels) + ListView (hotkey help) + Edit (details)
 ; ==============================================================================
-global _SUI_ItemMap                := {}
-global _SUI_HelpData               := {}
-global _SUI_HelpRowMap             := {}
-global _SUI_Theme                  := {}
-global _SUI_ThemeBrushMap          := {}
-global _SUI_CheckStateMap          := {}
-global SUI_SettingsGuiHwnd         := 0
-global SUI_SettingsTabHwnd         := 0
-global SUI_SettingsItemsLabelHwnd  := 0
-global SUI_SettingsItemsLVHwnd     := 0
-global SUI_SettingsHelpLabelHwnd   := 0
-global SUI_SettingsLVHwnd          := 0
-global SUI_CodePreviewLabelHwnd    := 0
-global SUI_CodePreviewEditHwnd     := 0
-global SettingsItemsLV             := ""
-global SettingsLV                  := ""
-global SettingsCodePreviewLabel    := ""
-global SettingsCodePreviewEdit     := ""
-global SettingsEditorProvider      := ""
-global SettingsEditorCustomPath    := ""
-global SettingsEditorArgs          := ""
-global SettingsAuthSaveDir         := ""
-global SettingsAuthOutputPath      := ""
-global SettingsBrowserUrlExportPath := ""
-global SettingsPPTCaptionGapH      := ""
-global SettingsPPTCaptionGapV      := ""
+global _SUI_ItemMap                        := {}
+global _SUI_HelpData                       := {}
+global _SUI_HelpRowMap                     := {}
+global _SUI_Theme                          := {}
+global _SUI_ThemeBrushMap                  := {}
+global _SUI_CheckStateMap                  := {}
+global SUI_SettingsGuiHwnd                 := 0
+global SUI_SettingsTabHwnd                 := 0
+global SUI_SettingsItemsLabelHwnd          := 0
+global SUI_SettingsItemsLVHwnd             := 0
+global SUI_SettingsHelpLabelHwnd           := 0
+global SUI_SettingsLVHwnd                  := 0
+global SUI_CodePreviewLabelHwnd            := 0
+global SUI_CodePreviewEditHwnd             := 0
+global SettingsItemsLV                     := ""
+global SettingsLV                          := ""
+global SettingsCodePreviewLabel            := ""
+global SettingsCodePreviewEdit             := ""
+global SettingsEditorProvider              := ""
+global SettingsEditorCustomPath            := ""
+global SettingsEditorArgs                  := ""
+global SettingsAuthSaveDir                 := ""
+global SettingsAuthOutputPath              := ""
+global SettingsBrowserUrlExportPath        := ""
+global SettingsPPTCaptionGapH              := ""
+global SettingsPPTCaptionGapV              := ""
 global SettingsBrowserPdfZoomShortcutFirst := ""
-global SettingsMouseWheelExplorerRepeat := ""
-global SettingsMouseWheelDefaultMode := ""
-global SettingsMouseWheelExplorerMode := ""
-global SettingsMouseWheelPycharmMode := ""
-global SettingsMouseWheelWordMode  := ""
-global SettingsMouseWheelExcelMode := ""
-global SettingsMouseWheelPowerPointMode := ""
-global SettingsCursorBaseSpeed     := ""
-global SettingsCursorMaxSpeed      := ""
-global SettingsCursorAcceleration  := ""
-global SettingsCursorTimerInterval := ""
-global SettingsCursorGridCols      := ""
-global SettingsCursorGridRows      := ""
-global SettingsCursorEdgeInset     := ""
-global SettingsIndicatorDebug      := ""
-global SettingsMouseGestureDebug   := ""
-global SettingsMouseWheelDebug     := ""
-global SettingsBrowserPdfZoomDebug := ""
-global SettingsPPTSpacingDebug     := ""
-global SettingsPPTCaptionDebug     := ""
-global SettingsValidationHint      := ""
-global _SUI_CodePreviewCachePath   := ""
-global _SUI_CodePreviewCacheLines  := ""
-global SUI_IsInitializing          := false
-global SUI_SelectedItemID          := 0
-global _SUI_LastHelpRow            := 0
-global _SUI_HelpRefreshPending     := false
-global _SUI_PendingCheckItemID     := 0
-global _SUI_PendingCheckSource     := ""
-global SUI_DebugEnabled            := true
-global SUI_DebugLogDir             := A_ScriptDir . "\.claude"
-global SUI_DebugLogPath            := SUI_DebugLogDir . "\indicator_manager_debug.log"
-global SUI_DebugMaxBytes           := 262144
-global SUI_ConfigDir               := A_ScriptDir . "\config"
-global SUI_LegacyConfigPath        := A_ScriptDir . "\Plugins\indicator_settings.ini"
-global SUI_ConfigPath              := SUI_ConfigDir . "\indicator_settings.ini"
+global SettingsMouseWheelExplorerRepeat    := ""
+global SettingsMouseWheelDefaultMode       := ""
+global SettingsMouseWheelExplorerMode      := ""
+global SettingsMouseWheelPycharmMode       := ""
+global SettingsMouseWheelWordMode          := ""
+global SettingsMouseWheelExcelMode         := ""
+global SettingsMouseWheelPowerPointMode    := ""
+global SettingsCursorBaseSpeed             := ""
+global SettingsCursorMaxSpeed              := ""
+global SettingsCursorAcceleration          := ""
+global SettingsCursorTimerInterval         := ""
+global SettingsCursorGridCols              := ""
+global SettingsCursorGridRows              := ""
+global SettingsCursorEdgeInset             := ""
+global SettingsIndicatorDebug              := ""
+global SettingsMouseGestureDebug           := ""
+global SettingsMouseWheelDebug             := ""
+global SettingsBrowserPdfZoomDebug         := ""
+global SettingsPPTSpacingDebug             := ""
+global SettingsPPTCaptionDebug             := ""
+global SettingsValidationHint              := ""
+global _SUI_CodePreviewCachePath           := ""
+global _SUI_CodePreviewCacheLines          := ""
+global SUI_IsInitializing                  := false
+global SUI_SelectedItemID                  := 0
+global _SUI_LastHelpRow                    := 0
+global _SUI_HelpRefreshPending             := false
+global _SUI_PendingCheckItemID             := 0
+global _SUI_PendingCheckSource             := ""
+global SUI_DebugEnabled                    := true
+global SUI_DebugLogDir                     := A_ScriptDir . "\.claude"
+global SUI_DebugLogPath                    := SUI_DebugLogDir . "\indicator_manager_debug.log"
+global SUI_DebugMaxBytes                   := 262144
+global SUI_ConfigDir                       := A_ScriptDir . "\config"
+global SUI_LegacyConfigPath                := A_ScriptDir . "\Plugins\indicator_settings.ini"
+global SUI_ConfigPath                      := SUI_ConfigDir . "\indicator_settings.ini"
 
 Indicator_Init() {
     SUI_DebugInit()
@@ -1910,6 +1910,17 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Ctrl+Shift+Tab", "前のシート", "Send ^{PgUp}", excelWhen, "", "^+Tab::", 1, 1, mainFile))
     d["EnableExcel"] := h
 
+    bwWhen := "EnableBracketWrap = ON かつ UIA 編集可能"
+    bwSmartWhen := "EnableBracketWrap = ON かつ SmartKeyApps (notepad.exe 等)"
+    textEditorFile := A_ScriptDir . "\Plugins\TextEditor.ahk"
+    h := []
+    h.Push(SUI_HelpItem("( ) [ ] { }", "選択テキストを括弧で囲む", "BW_OnKeyIME(char)", bwWhen, "IME ON 時は全角括弧", "$(::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem(""" ' $ %", "選択テキストを引用符で囲む/外す", "BW_OnKey(char)", bwWhen, "既にラップ済みなら解除", "$""::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+C", "行コピー (未選択時)", "BW_SmartCopy()", bwSmartWhen, "対象: INI [BracketWrap] SmartKeyApps", "$^c::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+X", "行カット (未選択時)", "BW_SmartCut()", bwSmartWhen, "", "$^x::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+D", "行複製 (未選択時)", "BW_SmartDuplicate()", bwSmartWhen, "", "$^d::", 1, 1, mainFile))
+    d["EnableBracketWrap"] := h
+
     _SUI_HelpData := d
 }
 
@@ -1931,7 +1942,7 @@ SUI_BuildItemList() {
     SUI_AddLeaf("ブラウザ", "EnableBrowser")
     SUI_AddLeaf("PowerPoint", "EnablePPT")
     SUI_AddLeaf("Excel", "EnableExcel")
-    SUI_AddLeaf("括弧ラップ", "EnableBracketWrap")
+    SUI_AddLeaf("BracketWrap", "EnableBracketWrap")
 }
 
 SUI_AddLeaf(name, varName) {
@@ -2136,6 +2147,7 @@ SUI_SyncVars() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableBracketWrap
     Gui, Settings:Default
 
     for itemID, item in _SUI_ItemMap {
@@ -2167,6 +2179,8 @@ SUI_SyncVars() {
             EnablePPT := v
         else if (item.Var = "EnableExcel")
             EnableExcel := v
+        else if (item.Var = "EnableBracketWrap")
+            EnableBracketWrap := v
     }
 
     SUI_DebugLog("sync_vars")
@@ -2176,6 +2190,7 @@ SUI_GetFlagValue(varName) {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableBracketWrap
 
     if (varName = "EnableNavLayer")
         return EnableNavLayer
@@ -2201,6 +2216,8 @@ SUI_GetFlagValue(varName) {
         return EnablePPT
     if (varName = "EnableExcel")
         return EnableExcel
+    if (varName = "EnableBracketWrap")
+        return EnableBracketWrap
     return 0
 }
 
