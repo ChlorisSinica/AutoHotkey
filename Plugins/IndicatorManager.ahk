@@ -1046,6 +1046,7 @@ SUI_LoadAdvancedSettingsIntoGui() {
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+    global CG_SameEventThreshold, CG_CrossEventThreshold
 
     GuiControl, Settings:ChooseString, SettingsEditorProvider, %TextEditorProvider%
     GuiControl, Settings:, SettingsEditorCustomPath, %TextEditorCustomPath%
@@ -1081,6 +1082,8 @@ SUI_LoadAdvancedSettingsIntoGui() {
     GuiControl, Settings:, SettingsBrowserPdfZoomDebug, % Browser_PDFZoomDebugEnabled ? 1 : 0
     GuiControl, Settings:, SettingsPPTSpacingDebug, % PPT_SpacingLogEnabled ? 1 : 0
     GuiControl, Settings:, SettingsPPTCaptionDebug, % PPT_CaptionLogEnabled ? 1 : 0
+    GuiControl, Settings:, SettingsSameEvent, %CG_SameEventThreshold%
+    GuiControl, Settings:, SettingsCrossEvent, %CG_CrossEventThreshold%
     GuiControl, Settings:, SettingsValidationHint,
 
     SUI_RefreshEditorProviderControls()
