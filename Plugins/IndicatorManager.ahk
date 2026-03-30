@@ -145,6 +145,7 @@ SUI_DebugFlagsText() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableChatterGuard
 
     return "EnableNavLayer="  . EnableNavLayer
         . " EnableWinPlace="  . EnableWinPlace
@@ -158,6 +159,7 @@ SUI_DebugFlagsText() {
         . " EnableBrowser="   . EnableBrowser
         . " EnablePPT="       . EnablePPT
         . " EnableExcel="     . EnableExcel
+        . " EnableChatterGuard=" . EnableChatterGuard
 }
 
 SUI_DebugDescribeItem(itemID) {
@@ -426,6 +428,7 @@ SUI_LoadConfig() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableChatterGuard
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
@@ -440,31 +443,33 @@ SUI_LoadConfig() {
 
     SUI_EnsureConfigPath()
 
-    IniRead, navLayerRaw,  %SUI_ConfigPath%, Indicators, EnableNavLayer,  %EnableNavLayer%
-    IniRead, winPlaceRaw,  %SUI_ConfigPath%, Indicators, EnableWinPlace,  %EnableWinPlace%
-    IniRead, winIslandRaw, %SUI_ConfigPath%, Indicators, EnableWinIsland, %EnableWinIsland%
-    IniRead, vdeskRaw,     %SUI_ConfigPath%, Indicators, EnableVDesk,     %EnableVDesk%
-    IniRead, mouseEmuRaw,  %SUI_ConfigPath%, Indicators, EnableMouseEmu,  %EnableMouseEmu%
-    IniRead, mouseBtnRaw,  %SUI_ConfigPath%, Indicators, EnableMouseBtn,  %EnableMouseBtn%
-    IniRead, gesturesRaw,  %SUI_ConfigPath%, Indicators, EnableGestures,  %EnableGestures%
-    IniRead, altRaw,       %SUI_ConfigPath%, Indicators, EnableAlt,       %EnableAlt%
-    IniRead, othersRaw,    %SUI_ConfigPath%, Indicators, EnableOthers,    %EnableOthers%
-    IniRead, browserRaw,   %SUI_ConfigPath%, Indicators, EnableBrowser,   %EnableBrowser%
-    IniRead, pptRaw,       %SUI_ConfigPath%, Indicators, EnablePPT,       %EnablePPT%
-    IniRead, excelRaw,     %SUI_ConfigPath%, Indicators, EnableExcel,     %EnableExcel%
+    IniRead, navLayerRaw,       %SUI_ConfigPath%, Indicators, EnableNavLayer,      %EnableNavLayer%
+    IniRead, winPlaceRaw,       %SUI_ConfigPath%, Indicators, EnableWinPlace,      %EnableWinPlace%
+    IniRead, winIslandRaw,      %SUI_ConfigPath%, Indicators, EnableWinIsland,     %EnableWinIsland%
+    IniRead, vdeskRaw,          %SUI_ConfigPath%, Indicators, EnableVDesk,         %EnableVDesk%
+    IniRead, mouseEmuRaw,       %SUI_ConfigPath%, Indicators, EnableMouseEmu,      %EnableMouseEmu%
+    IniRead, mouseBtnRaw,       %SUI_ConfigPath%, Indicators, EnableMouseBtn,      %EnableMouseBtn%
+    IniRead, gesturesRaw,       %SUI_ConfigPath%, Indicators, EnableGestures,      %EnableGestures%
+    IniRead, altRaw,            %SUI_ConfigPath%, Indicators, EnableAlt,           %EnableAlt%
+    IniRead, othersRaw,         %SUI_ConfigPath%, Indicators, EnableOthers,        %EnableOthers%
+    IniRead, browserRaw,        %SUI_ConfigPath%, Indicators, EnableBrowser,       %EnableBrowser%
+    IniRead, pptRaw,            %SUI_ConfigPath%, Indicators, EnablePPT,           %EnablePPT%
+    IniRead, excelRaw,          %SUI_ConfigPath%, Indicators, EnableExcel,         %EnableExcel%
+    IniRead, chatterGuardRaw,   %SUI_ConfigPath%, Indicators, EnableChatterGuard,  %EnableChatterGuard%
 
-    EnableNavLayer   := SUI_NormalizeBool(navLayerRaw, EnableNavLayer)
-    EnableWinPlace   := SUI_NormalizeBool(winPlaceRaw, EnableWinPlace)
-    EnableWinIsland  := SUI_NormalizeBool(winIslandRaw, EnableWinIsland)
-    EnableVDesk      := SUI_NormalizeBool(vdeskRaw, EnableVDesk)
-    EnableMouseEmu   := SUI_NormalizeBool(mouseEmuRaw, EnableMouseEmu)
-    EnableMouseBtn   := SUI_NormalizeBool(mouseBtnRaw, EnableMouseBtn)
-    EnableGestures   := SUI_NormalizeBool(gesturesRaw, EnableGestures)
-    EnableAlt        := SUI_NormalizeBool(altRaw, EnableAlt)
-    EnableOthers     := SUI_NormalizeBool(othersRaw, EnableOthers)
-    EnableBrowser    := SUI_NormalizeBool(browserRaw, EnableBrowser)
-    EnablePPT        := SUI_NormalizeBool(pptRaw, EnablePPT)
-    EnableExcel      := SUI_NormalizeBool(excelRaw, EnableExcel)
+    EnableNavLayer    := SUI_NormalizeBool(navLayerRaw, EnableNavLayer)
+    EnableWinPlace    := SUI_NormalizeBool(winPlaceRaw, EnableWinPlace)
+    EnableWinIsland   := SUI_NormalizeBool(winIslandRaw, EnableWinIsland)
+    EnableVDesk       := SUI_NormalizeBool(vdeskRaw, EnableVDesk)
+    EnableMouseEmu    := SUI_NormalizeBool(mouseEmuRaw, EnableMouseEmu)
+    EnableMouseBtn    := SUI_NormalizeBool(mouseBtnRaw, EnableMouseBtn)
+    EnableGestures    := SUI_NormalizeBool(gesturesRaw, EnableGestures)
+    EnableAlt         := SUI_NormalizeBool(altRaw, EnableAlt)
+    EnableOthers      := SUI_NormalizeBool(othersRaw, EnableOthers)
+    EnableBrowser     := SUI_NormalizeBool(browserRaw, EnableBrowser)
+    EnablePPT         := SUI_NormalizeBool(pptRaw, EnablePPT)
+    EnableExcel       := SUI_NormalizeBool(excelRaw, EnableExcel)
+    EnableChatterGuard := SUI_NormalizeBool(chatterGuardRaw, EnableChatterGuard)
 
     IniRead, editorProviderRaw,    %SUI_ConfigPath%, TextEditor, Provider, %TextEditorProvider%
     IniRead, editorCustomPathRaw,  %SUI_ConfigPath%, TextEditor, CustomPath, __EMPTY__
@@ -563,6 +568,7 @@ SUI_SaveConfig() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableChatterGuard
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
@@ -576,17 +582,18 @@ SUI_SaveConfig() {
 
     SUI_EnsureConfigPath()
 
-    IniWrite, % EnableNavLayer   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableNavLayer
-    IniWrite, % EnableWinPlace   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinPlace
-    IniWrite, % EnableWinIsland  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinIsland
-    IniWrite, % EnableVDesk      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableVDesk
-    IniWrite, % EnableMouseEmu   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseEmu
-    IniWrite, % EnableMouseBtn   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseBtn
-    IniWrite, % EnableGestures   ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableGestures
-    IniWrite, % EnableAlt        ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableAlt
-    IniWrite, % EnableOthers     ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableOthers
-    IniWrite, % EnableBrowser    ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
-    IniWrite, % EnablePPT        ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
+    IniWrite, % EnableNavLayer      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableNavLayer
+    IniWrite, % EnableWinPlace      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinPlace
+    IniWrite, % EnableWinIsland     ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinIsland
+    IniWrite, % EnableVDesk         ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableVDesk
+    IniWrite, % EnableMouseEmu      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseEmu
+    IniWrite, % EnableMouseBtn      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableMouseBtn
+    IniWrite, % EnableGestures      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableGestures
+    IniWrite, % EnableAlt           ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableAlt
+    IniWrite, % EnableOthers        ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableOthers
+    IniWrite, % EnableBrowser       ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
+    IniWrite, % EnablePPT           ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
+    IniWrite, % EnableChatterGuard  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableChatterGuard
     IniWrite, % EnableExcel      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
     SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
     IniWrite, % SettingsUI.EditorType, %SUI_ConfigPath%, SettingsUI, EditorType
@@ -1858,6 +1865,14 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("↗", "WinMinimize, A", "WinMinimize, A", "個別マップで未定義のとき", "", "Map_Default(g) {", 0, 5, gestureMapFile))
     d["EnableGestures"] := h
 
+    cgWhen := "EnableChatterGuard = ON"
+    cgFile := A_ScriptDir . "\Plugins\ChatterGuard.ahk"
+    h := []
+    h.Push(SUI_HelpSection("【チャタリング防止】", "WH_MOUSE_LL フックで XButton1/XButton2 の誤連打を抑制します。閾値は設定画面の ChatterGuard セクションで調整可能。", cgWhen, "CG_LowLevelMouseProc()", 0, 0, cgFile))
+    h.Push(SUI_HelpItem("XButton1", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
+    h.Push(SUI_HelpItem("XButton2", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
+    d["EnableChatterGuard"] := h
+
     h := []
     h.Push(SUI_HelpItem("Alt+W", "ウィンドウを閉じる", "Send !{F4}", altWhen, "", "!w::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+C", "選択内の \\ を / に置換", "ReplaceEscapeToSlash()", altWhen, "", "^!c::", 1, 1, mainFile))
@@ -1937,6 +1952,7 @@ SUI_BuildItemList() {
     SUI_AddLeaf("キーボードマウス", "EnableMouseEmu")
     SUI_AddLeaf("ボタン・ホイール", "EnableMouseBtn")
     SUI_AddLeaf("マウスジェスチャー", "EnableGestures")
+    SUI_AddLeaf("チャタリング防止", "EnableChatterGuard")
     SUI_AddLeaf("Alt", "EnableAlt")
     SUI_AddLeaf("その他", "EnableOthers")
     SUI_AddLeaf("ブラウザ", "EnableBrowser")
@@ -2147,7 +2163,7 @@ SUI_SyncVars() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableBracketWrap
+    global EnableBracketWrap, EnableChatterGuard
     Gui, Settings:Default
 
     for itemID, item in _SUI_ItemMap {
@@ -2181,6 +2197,13 @@ SUI_SyncVars() {
             EnableExcel := v
         else if (item.Var = "EnableBracketWrap")
             EnableBracketWrap := v
+        else if (item.Var = "EnableChatterGuard") {
+            EnableChatterGuard := v
+            if (v)
+                CG_Init(["XButton1", "XButton2"])
+            else
+                CG_Cleanup()
+        }
     }
 
     SUI_DebugLog("sync_vars")
@@ -2190,7 +2213,7 @@ SUI_GetFlagValue(varName) {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableBracketWrap
+    global EnableBracketWrap, EnableChatterGuard
 
     if (varName = "EnableNavLayer")
         return EnableNavLayer
@@ -2218,6 +2241,8 @@ SUI_GetFlagValue(varName) {
         return EnableExcel
     if (varName = "EnableBracketWrap")
         return EnableBracketWrap
+    if (varName = "EnableChatterGuard")
+        return EnableChatterGuard
     return 0
 }
 

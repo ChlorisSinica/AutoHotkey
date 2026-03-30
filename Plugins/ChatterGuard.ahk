@@ -1,4 +1,4 @@
-; ==============================================================================
+﻿; ==============================================================================
 ; ChatterGuard — WH_MOUSE_LL 低レベルマウスフックによるチャタリング防止
 ;
 ; 使い方:
@@ -11,27 +11,23 @@
 ;   UP:   前回UP・前回DOWNの両方から閾値未満ならブロック
 ; ==============================================================================
 
-global CG_HookHandle   := 0
-global CG_CallbackPtr  := 0
-
-global CG_EnableXB1    := 0
-global CG_EnableXB2    := 0
-
-global CG_XB1_lastDown := 0
-global CG_XB1_lastUp   := 0
-global CG_XB2_lastDown := 0
-global CG_XB2_lastUp   := 0
-
+global CG_HookHandle            := 0
+global CG_CallbackPtr           := 0
+global CG_EnableXB1             := 0
+global CG_EnableXB2             := 0
+global CG_XB1_lastDown          := 0
+global CG_XB1_lastUp            := 0
+global CG_XB2_lastDown          := 0
+global CG_XB2_lastUp            := 0
 ; デバッグ用
-global CG_DebugBlockCount := 0
-
+global CG_DebugBlockCount       := 0
 ; フック生存監視用
-global CG_WatchdogTimer       := ""
-global CG_HookEventCount      := 0
-global CG_LastCheckCount       := 0
-global CG_LastEventTick        := 0
-global CG_WatchdogLastCursorX  := 0
-global CG_WatchdogLastCursorY  := 0
+global CG_WatchdogTimer         := ""
+global CG_HookEventCount        := 0
+global CG_LastCheckCount        := 0
+global CG_LastEventTick         := 0
+global CG_WatchdogLastCursorX   := 0
+global CG_WatchdogLastCursorY   := 0
 
 ; ==============================================================================
 ; 公開 API

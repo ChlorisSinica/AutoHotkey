@@ -7,12 +7,13 @@ SetBatchLines, -1
 ; ==========================================================
 ; --- https://github.com/Descolada/UIAutomation ---
 ; ==========================================================
-#Include %A_ScriptDir%\Plugins\UIA_Interface.ahk
-#Include %A_ScriptDir%\Plugins\UIA_Browser.ahk
+#Include %A_ScriptDir%\lib\UIA_Interface.ahk
+#Include %A_ScriptDir%\lib\UIA_Browser.ahk
 
 ; ==========================================================
 ; --- Pluginsファイルの読み込み ---
 ; ==========================================================
+#Include %A_ScriptDir%\lib\UiaMonitor\UiaIntegration.ahk
 #Include %A_ScriptDir%\Plugins\UIA_Utils.ahk
 #Include %A_ScriptDir%\Plugins\Application.ahk
 #Include %A_ScriptDir%\Plugins\AppInit.ahk
@@ -28,7 +29,6 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
-#Include %A_ScriptDir%\lib\UiaMonitor\UiaIntegration.ahk
 #Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
 
 ; ==========================================================
@@ -47,6 +47,7 @@ global EnableBrowser              := 1
 global EnablePPT                  := 1
 global EnableExcel                := 1
 global EnableBracketWrap          := 1
+global EnableChatterGuard         := 1
 global CG_SameEventThreshold      := 50
 global CG_CrossEventThreshold     := 30
 

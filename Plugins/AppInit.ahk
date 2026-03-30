@@ -15,7 +15,8 @@ App_Init() {
     TrayTip, AutoHotkey, Script Reloaded, 2
 
     SUI_LoadConfig()
-    CG_Init(["XButton1", "XButton2"])
+    if (EnableChatterGuard)
+        CG_Init(["XButton1", "XButton2"])
     OnExit("CG_Cleanup")
     UiaInit()
     OnExit("UiaCleanup")
