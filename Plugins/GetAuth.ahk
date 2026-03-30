@@ -29,7 +29,7 @@ get_auth(cBrowser) {
     ClipWait, 2
     if ErrorLevel
     {
-        Clipboard := ClipSaved
+        ClipboardWrite(ClipSaved)
         ClipSaved =
         MsgBox, データの取得に失敗しました。
         return
@@ -42,7 +42,7 @@ get_auth(cBrowser) {
         FileDelete, %OutputFileName%
     FileAppend, %AuthData%, %OutputFileName%, UTF-8
 
-    Clipboard := ClipSaved
+    ClipboardWrite(ClipSaved)
     ClipSaved =
 
     MsgBox, 成功！認証情報を保存しました。`n保存先: %OutputFileName%
@@ -86,7 +86,7 @@ get_auth_debug(cBrowser) {
     if ErrorLevel
     {
         MsgBox, エラー: クリップボードに来ませんでした。
-        Clipboard := ClipSaved
+        ClipboardWrite(ClipSaved)
         return
     }
 
@@ -100,7 +100,7 @@ get_auth_debug(cBrowser) {
         FileDelete, %OutputFileName%
     FileAppend, %AuthData%, %OutputFileName%, UTF-8
 
-    Clipboard := ClipSaved
+    ClipboardWrite(ClipSaved)
     ClipSaved =
     MsgBox, 成功！ %OutputFileName% を作成しました。
 }
@@ -174,13 +174,13 @@ SaveCookiesCurrentSite(cBrowser, currentUrl) {
 
         if (ErrorLevel || StrLen(Clipboard) == 0) {
             MsgBox, 16, エラー, データの取得に失敗しました
-            Clipboard := ClipSaved
+            ClipboardWrite(ClipSaved)
             Send, {Esc}
             return
         }
 
         rawContent := Clipboard
-        Clipboard := ClipSaved
+        ClipboardWrite(ClipSaved)
         Send, {Esc} ; ポップアップを閉じる
 
         ; ========================================================

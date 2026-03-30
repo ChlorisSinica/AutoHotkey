@@ -53,7 +53,7 @@ ReplaceEscapeToSlash() {
         return
     text := Clipboard
     StringReplace, text, text, \, /, All
-    Clipboard := text
+    ClipboardWrite(text)
 }
 
 OpenWithMspaint(withFile = 1) {

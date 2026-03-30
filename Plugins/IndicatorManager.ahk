@@ -1712,7 +1712,7 @@ SUI_CopySelectedHelpRow() {
     if (copyText = "")
         return false
 
-    Clipboard := copyText
+    ClipboardWrite(copyText)
     SUI_DebugLog("help_copy", "row=" . row . " text=" . copyText)
     return true
 }

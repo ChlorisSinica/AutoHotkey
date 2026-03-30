@@ -51,14 +51,14 @@ CopyPlaneURL() {
     ClipWait, 0.5
     if ErrorLevel
     {
-        Clipboard := ClipSaved
+        ClipboardWrite(ClipSaved)
         return
     }
 
     ; 変数経由で書き戻すことで、HTML情報を削除してテキストのみにする
     UrlText := Clipboard
     Clipboard := ""
-    Clipboard := UrlText
+    ClipboardWrite(UrlText)
 
     ClipSaved := ""
 }

@@ -242,7 +242,7 @@ GetActiveWindowInfo() {
         .  "【比率コマンド (クリップボードにコピー済)】`n" . ratioCommand
 
     ; 5. 出力
-    Clipboard := ratioCommand
+    ClipboardWrite(ratioCommand)
     MsgBox, 64, ウィンドウ情報解析, %infoText%
 }
 

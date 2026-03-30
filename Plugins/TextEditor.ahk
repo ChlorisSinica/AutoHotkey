@@ -60,17 +60,16 @@ BW_Init() {
     ; 全角括弧マッピング (IME ON 用: 開き括弧)
     BW_IME_OpenToClose["("] := BW_Pair("（", "）")
     BW_IME_OpenToClose["["] := BW_Pair("「", "」")
-    BW_IME_OpenToClose[lBrace] := BW_Pair("『", "』")
+    BW_IME_OpenToClose[lBrace] := BW_Pair("【", "】")
 
     ; 全角括弧マッピング (IME ON 用: 閉じ括弧)
     BW_IME_CloseToOpen[")"] := BW_Pair("", "")
-    BW_IME_CloseToOpen["]"] := BW_Pair("【", "】")
+    BW_IME_CloseToOpen["]"] := BW_Pair("", "")
     BW_IME_CloseToOpen[rBrace] := BW_Pair("", "")
 
     ; unwrap 対象の全角ペア (IME 状態不問で検出)
     BW_CloseToOpen["）"] := "（"
     BW_CloseToOpen["」"] := "「"
-    BW_CloseToOpen["』"] := "『"
     BW_CloseToOpen["】"] := "【"
 
     ; 除外アプリ
@@ -111,12 +110,12 @@ BW_GetSelectionByClipboard(ByRef outText) {
     ClipWait, 0.3
     if (ErrorLevel || Clipboard = "") {
         BW_DebugLog("clipboard_fail", "ErrorLevel=" . ErrorLevel)
-        Clipboard := clipSaved
+        ClipboardWrite(clipSaved)
         VarSetCapacity(clipSaved, 0)
         return false
     }
     outText := Clipboard
-    Clipboard := clipSaved
+    ClipboardWrite(clipSaved)
     VarSetCapacity(clipSaved, 0)
     return true
 }
@@ -259,19 +258,19 @@ BW_ReplaceSelection(newText) {
     BW_DebugLog("replace", "len=" . StrLen(newText))
     prefix := Chr(123) . "Text" . Chr(125)
     SendInput, % prefix . newText
-    Sleep, 30
-    BW_ReselectInsertedText(StrLen(newText))
+    Sleep, 100
+    ; \r\n は {Left} 1回で跨ぐため、\r を除外してカーソル移動数を算出
+    StringReplace, _noR, newText, `r,, All
+    BW_ReselectInsertedText(StrLen(_noR))
 }
 
 BW_ReselectInsertedText(length) {
     if (length < 1)
         return
     BW_DebugLog("reselect", "len=" . length)
-    keys := "{Shift down}"
-    Loop, %length%
-        keys .= "{Left}"
-    keys .= "{Shift up}"
-    SendInput, % keys
+    SetKeyDelay, 10, -1
+    SendEvent, {Shift down}{Left %length%}{Shift up}
+    SetKeyDelay, -1, -1
 }
 
 BW_SendChar(char) {
@@ -294,8 +293,9 @@ BW_SmartCopy() {
         BW_DebugLog("smart_copy_fail", "ClipWait timeout")
         return
     }
-    Clipboard := RTrim(Clipboard, "`r`n")
-    BW_DebugLog("smart_copy", "clip=[" . SubStr(Clipboard, 1, 40) . "]")
+    _trimmed := RTrim(Clipboard, "`r`n")
+    ClipboardWrite(_trimmed)
+    BW_DebugLog("smart_copy", "clip=[" . SubStr(_trimmed, 1, 40) . "]")
     UiaRequestRefresh()
 }
 
@@ -326,16 +326,22 @@ BW_SmartDuplicate() {
     ClipWait, 0.3
     if (ErrorLevel) {
         BW_DebugLog("smart_dup_fail", "ClipWait timeout")
-        Clipboard := clipSaved
+        ClipboardWrite(clipSaved)
         VarSetCapacity(clipSaved, 0)
         return
     }
     lineText := RTrim(Clipboard, "`r`n")
-    Clipboard := "`r`n" . lineText
-    BW_DebugLog("smart_dup", "line=[" . lineText . "] clip_len=" . StrLen(Clipboard))
+    _dupText := "`r`n" . lineText
+    if !ClipboardWrite(_dupText) {
+        BW_DebugLog("smart_dup_fail", "ClipboardWrite failed")
+        ClipboardWrite(clipSaved)
+        VarSetCapacity(clipSaved, 0)
+        return
+    }
+    BW_DebugLog("smart_dup", "line=[" . lineText . "] clip_len=" . StrLen(_dupText))
     Send, {End}^v
     Sleep, 200
-    Clipboard := clipSaved
+    ClipboardWrite(clipSaved)
     VarSetCapacity(clipSaved, 0)
     UiaRequestRefresh()
 }
