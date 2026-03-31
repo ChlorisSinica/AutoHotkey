@@ -30,7 +30,6 @@ global SettingsPPTCaptionGapH              := ""
 global SettingsPPTCaptionGapV              := ""
 global SettingsBrowserPdfZoomShortcutFirst := ""
 global SettingsMouseWheelExplorerRepeat    := ""
-global SettingsMouseWheelDefaultMode       := ""
 global SettingsCursorBaseSpeed             := ""
 global SettingsCursorMaxSpeed              := ""
 global SettingsCursorAcceleration          := ""
@@ -866,7 +865,6 @@ class SettingsUI {
         Global SettingsAuthSaveDir, SettingsAuthOutputPath, SettingsBrowserUrlExportPath
         Global SettingsPPTCaptionGapH, SettingsPPTCaptionGapV
         Global SettingsBrowserPdfZoomShortcutFirst, SettingsMouseWheelExplorerRepeat
-        Global SettingsMouseWheelDefaultMode
         Global SettingsCursorBaseSpeed, SettingsCursorMaxSpeed, SettingsCursorAcceleration, SettingsCursorTimerInterval
         Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorEdgeInset
         Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
@@ -938,59 +936,57 @@ class SettingsUI {
         Gui, Settings:Add, Text, x190 y341 w70 h20 +0x200, Caption V
         Gui, Settings:Add, Edit, x260 y339 w70 h21 vSettingsPPTCaptionGapV gSUI_PositiveFloatEditChanged
 
-        Gui, Settings:Add, GroupBox, x370 y45 w370 h112, Advanced
+        Gui, Settings:Add, GroupBox, x370 y45 w370 h82, Advanced
         Gui, Settings:Add, CheckBox, x388 y68 w190 h20 vSettingsBrowserPdfZoomShortcutFirst, PDF zoom: 先に Ctrl+\ を試す
         Gui, Settings:Add, Text, x388 y97 w112 h20 +0x200, Explorer repeat
         Gui, Settings:Add, Edit, x497 y95 w44 h21 Number vSettingsMouseWheelExplorerRepeat gSUI_NonNegativeIntEditChanged
-        Gui, Settings:Add, Text, x560 y97 w48 h20 +0x200, Default
-        Gui, Settings:Add, DropDownList, x612 y95 w110 vSettingsMouseWheelDefaultMode, CtrlNumpad|CtrlWheel
-        Gui, Settings:Add, Text, x388 y127 w36 h20 +0x200, Base
-        Gui, Settings:Add, Edit, x425 y125 w46 h21 vSettingsCursorBaseSpeed gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x479 y127 w30 h20 +0x200, Max
-        Gui, Settings:Add, Edit, x510 y125 w46 h21 vSettingsCursorMaxSpeed gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x564 y127 w36 h20 +0x200, Accel
-        Gui, Settings:Add, Edit, x602 y125 w46 h21 vSettingsCursorAcceleration gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x656 y127 w26 h20 +0x200, ms
-        Gui, Settings:Add, Edit, x683 y125 w39 h21 Number vSettingsCursorTimerInterval gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x560 y97 w36 h20 +0x200, Base
+        Gui, Settings:Add, Edit, x597 y95 w46 h21 vSettingsCursorBaseSpeed gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x651 y97 w30 h20 +0x200, Max
+        Gui, Settings:Add, Edit, x682 y95 w40 h21 vSettingsCursorMaxSpeed gSUI_PositiveFloatEditChanged
 
-        Gui, Settings:Add, GroupBox, x370 y164 w370 h62, Cursor Grid
-        Gui, Settings:Add, Text, x388 y189 w34 h20 +0x200, Cols
-        Gui, Settings:Add, Edit, x424 y187 w48 h21 Number vSettingsCursorGridCols gSUI_NonNegativeIntEditChanged
-        Gui, Settings:Add, Text, x486 y189 w34 h20 +0x200, Rows
-        Gui, Settings:Add, Edit, x522 y187 w48 h21 Number vSettingsCursorGridRows gSUI_NonNegativeIntEditChanged
-        Gui, Settings:Add, Text, x584 y189 w36 h20 +0x200, Inset
-        Gui, Settings:Add, Edit, x622 y187 w48 h21 Number vSettingsCursorEdgeInset gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, GroupBox, x370 y134 w370 h82, Cursor
+        Gui, Settings:Add, Text, x388 y159 w36 h20 +0x200, Accel
+        Gui, Settings:Add, Edit, x425 y157 w46 h21 vSettingsCursorAcceleration gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x479 y159 w26 h20 +0x200, ms
+        Gui, Settings:Add, Edit, x506 y157 w39 h21 Number vSettingsCursorTimerInterval gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x560 y159 w34 h20 +0x200, Cols
+        Gui, Settings:Add, Edit, x596 y157 w40 h21 Number vSettingsCursorGridCols gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x644 y159 w34 h20 +0x200, Rows
+        Gui, Settings:Add, Edit, x680 y157 w42 h21 Number vSettingsCursorGridRows gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x388 y186 w36 h20 +0x200, Inset
+        Gui, Settings:Add, Edit, x425 y184 w46 h21 Number vSettingsCursorEdgeInset gSUI_NonNegativeIntEditChanged
 
-        Gui, Settings:Add, GroupBox, x370 y234 w370 h108, Debug
-        Gui, Settings:Add, CheckBox, x388 y259 w145 h20 vSettingsIndicatorDebug, IndicatorManager
-        Gui, Settings:Add, CheckBox, x548 y259 w145 h20 vSettingsMouseGestureDebug, MouseGesture
-        Gui, Settings:Add, CheckBox, x388 y285 w145 h20 vSettingsMouseWheelDebug, MouseWheel
-        Gui, Settings:Add, CheckBox, x548 y285 w145 h20 vSettingsBrowserPdfZoomDebug, Browser PDF
-        Gui, Settings:Add, CheckBox, x388 y311 w145 h20 vSettingsPPTSpacingDebug, PPT spacing
-        Gui, Settings:Add, CheckBox, x548 y311 w145 h20 vSettingsPPTCaptionDebug, PPT caption
+        Gui, Settings:Add, GroupBox, x370 y224 w370 h108, Debug
+        Gui, Settings:Add, CheckBox, x388 y249 w145 h20 vSettingsIndicatorDebug, IndicatorManager
+        Gui, Settings:Add, CheckBox, x548 y249 w145 h20 vSettingsMouseGestureDebug, MouseGesture
+        Gui, Settings:Add, CheckBox, x388 y275 w145 h20 vSettingsMouseWheelDebug, MouseWheel
+        Gui, Settings:Add, CheckBox, x548 y275 w145 h20 vSettingsBrowserPdfZoomDebug, Browser PDF
+        Gui, Settings:Add, CheckBox, x388 y301 w145 h20 vSettingsPPTSpacingDebug, PPT spacing
+        Gui, Settings:Add, CheckBox, x548 y301 w145 h20 vSettingsPPTCaptionDebug, PPT caption
 
-        Gui, Settings:Add, Button, x20 y393 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
-        Gui, Settings:Add, Button, x150 y393 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
-        Gui, Settings:Add, Text, x20 y423 w330 h18 vSettingsValidationHint,
+        ; ChatterGuard
+        Gui, Settings:Add, GroupBox, x370 y340 w370 h52, ChatterGuard
+        Gui, Settings:Add, Text, x388 y360 w36 h20 +0x200, 同種
+        Gui, Settings:Add, Edit, x426 y359 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
+        Gui, Settings:Add, Text, x470 y360 w18 h20 +0x200, ms
+        Gui, Settings:Add, Text, x500 y360 w36 h20 +0x200, 交差
+        Gui, Settings:Add, Edit, x538 y359 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
+        Gui, Settings:Add, Text, x582 y360 w18 h20 +0x200, ms
 
         ; ステータス表示
         uiaConnected := (pBuf != 0)
         uiaIcon := "●"
         uiaDesc := uiaConnected ? "接続済み" : "未検出"
-        Gui, Settings:Add, Text, x20 y445 w80 h18 +0x200, UiaMonitor:
-        Gui, Settings:Add, Text, x100 y445 w14 h18 +0x200 HwndhUiaIndicator, %uiaIcon%
+        Gui, Settings:Add, Text, x370 y402 w80 h18 +0x200, UiaMonitor:
+        Gui, Settings:Add, Text, x450 y402 w14 h18 +0x200 HwndhUiaIndicator, %uiaIcon%
         SUI_UiaIndicatorHwnd := hUiaIndicator
         SUI_UiaIndicatorColor := uiaConnected ? 0x00AA00 : 0x0000CC
-        Gui, Settings:Add, Text, x114 y445 w120 h18 +0x200 vSettingsUiaStatus, %uiaDesc%
+        Gui, Settings:Add, Text, x464 y402 w120 h18 +0x200 vSettingsUiaStatus, %uiaDesc%
 
-        ; ChatterGuard 閾値セクション
-        Gui, Settings:Add, GroupBox, x20 y467 w330 h52, ChatterGuard
-        Gui, Settings:Add, Text, x38 y487 w36 h20 +0x200, 同種
-        Gui, Settings:Add, Edit, x76 y486 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
-        Gui, Settings:Add, Text, x120 y487 w18 h20 +0x200, ms
-        Gui, Settings:Add, Text, x150 y487 w36 h20 +0x200, 交差
-        Gui, Settings:Add, Edit, x188 y486 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
-        Gui, Settings:Add, Text, x232 y487 w18 h20 +0x200, ms
+        Gui, Settings:Add, Button, x20 y393 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
+        Gui, Settings:Add, Button, x150 y393 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
+        Gui, Settings:Add, Text, x20 y423 w330 h18 vSettingsValidationHint,
 
         ; -----------------------------------------
         ; ▼ タブの配置指定を終了 (以降はタブ外の要素)
@@ -1033,7 +1029,6 @@ SUI_LoadAdvancedSettingsIntoGui() {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
@@ -1053,7 +1048,6 @@ SUI_LoadAdvancedSettingsIntoGui() {
 
     GuiControl, Settings:, SettingsBrowserPdfZoomShortcutFirst, % Browser_PDFZoomTryShortcutFirst ? 1 : 0
     GuiControl, Settings:, SettingsMouseWheelExplorerRepeat, %MouseWheel_ExplorerScrollBarRepeat%
-    GuiControl, Settings:ChooseString, SettingsMouseWheelDefaultMode, %MouseWheel_DefaultZoomMode%
 
     GuiControl, Settings:, SettingsCursorBaseSpeed, % SUI_FormatNumber(CursorConfig.BaseSpeed, 2)
     GuiControl, Settings:, SettingsCursorMaxSpeed, % SUI_FormatNumber(CursorConfig.MaxSpeed, 2)
@@ -1263,7 +1257,6 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
@@ -1283,7 +1276,6 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     GuiControlGet, pptCaptionGapV,, SettingsPPTCaptionGapV
     GuiControlGet, browserTryShortcutFirst,, SettingsBrowserPdfZoomShortcutFirst
     GuiControlGet, wheelExplorerRepeat,, SettingsMouseWheelExplorerRepeat
-    GuiControlGet, wheelDefaultMode,, SettingsMouseWheelDefaultMode
     GuiControlGet, cursorBaseSpeed,, SettingsCursorBaseSpeed
     GuiControlGet, cursorMaxSpeed,, SettingsCursorMaxSpeed
     GuiControlGet, cursorAcceleration,, SettingsCursorAcceleration
@@ -1307,7 +1299,6 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     Browser_PDFZoomTryShortcutFirst := SUI_NormalizeBool(browserTryShortcutFirst, Browser_PDFZoomTryShortcutFirst)
 
     MouseWheel_ExplorerScrollBarRepeat := SUI_NormalizeInt(wheelExplorerRepeat, MouseWheel_ExplorerScrollBarRepeat, 1, 20)
-    MouseWheel_DefaultZoomMode := SUI_NormalizeZoomMode(wheelDefaultMode, MouseWheel_DefaultZoomMode)
     if IsFunc("MouseWheel_RebuildZoomRules")
         MouseWheel_RebuildZoomRules()
 

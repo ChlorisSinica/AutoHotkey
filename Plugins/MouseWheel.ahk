@@ -10,7 +10,7 @@ global MouseWheel_DebugEnabled             := false
 global MouseWheel_DebugLogDir              := A_ScriptDir . "\.claude"
 global MouseWheel_DebugLogPath             := MouseWheel_DebugLogDir . "\mouse_wheel_debug.log"
 global MouseWheel_DefaultZoomMode          := "CtrlNumpad"
-global MouseWheel_CtrlWheelApps            := "explorer.exe,pycharm64.exe,WINWORD.EXE,EXCEL.EXE,POWERPNT.EXE"
+global MouseWheel_CtrlWheelApps            := "explorer.exe,WINWORD.EXE,EXCEL.EXE,POWERPNT.EXE"
 
 MouseWheel_RebuildZoomRules() {
     global MouseWheel_ZoomRules, MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
