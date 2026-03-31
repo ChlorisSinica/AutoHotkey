@@ -11,7 +11,6 @@ global MouseWheel_DebugLogDir              := A_ScriptDir . "\.claude"
 global MouseWheel_DebugLogPath             := MouseWheel_DebugLogDir . "\mouse_wheel_debug.log"
 global MouseWheel_DefaultZoomMode          := "CtrlNumpad"
 global MouseWheel_CtrlWheelApps            := "explorer.exe,pycharm64.exe,WINWORD.EXE,EXCEL.EXE,POWERPNT.EXE"
-global MouseWheel_CtrlInjected             := false
 
 MouseWheel_RebuildZoomRules() {
     global MouseWheel_ZoomRules, MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
@@ -66,28 +65,12 @@ MouseWheel_SendHorizontalWheel(direction) {
 }
 
 MouseWheel_SendCtrlWheel(action) {
-    global MouseWheel_CtrlInjected
-    static releaseTimer := Func("MouseWheel_ReleaseCtrl")
-
-    if !MouseWheel_CtrlInjected {
-        SendInput, {Ctrl down}
-        MouseWheel_CtrlInjected := true
-    }
-
+    ; SendInput は Ctrl down + Wheel + Ctrl up をアトミックに注入するため
+    ; PyCharm の「Ctrl 二度押し = Run Anything」が誤発火しない
     if (action = "In")
-        SendInput, {WheelUp}
+        SendInput, ^{WheelUp}
     else
-        SendInput, {WheelDown}
-
-    SetTimer, % releaseTimer, -200
-}
-
-MouseWheel_ReleaseCtrl() {
-    global MouseWheel_CtrlInjected
-    if (MouseWheel_CtrlInjected) {
-        SendInput, {Ctrl up}
-        MouseWheel_CtrlInjected := false
-    }
+        SendInput, ^{WheelDown}
 }
 
 MouseWheel_SendCtrlNumpad(action) {
