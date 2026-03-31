@@ -10,25 +10,20 @@ global MouseWheel_DebugEnabled             := false
 global MouseWheel_DebugLogDir              := A_ScriptDir . "\.claude"
 global MouseWheel_DebugLogPath             := MouseWheel_DebugLogDir . "\mouse_wheel_debug.log"
 global MouseWheel_DefaultZoomMode          := "CtrlNumpad"
-global MouseWheel_ExplorerZoomMode         := "CtrlWheel"
-global MouseWheel_PyCharmZoomMode          := "CtrlWheel"
-global MouseWheel_WordZoomMode             := "CtrlWheel"
-global MouseWheel_ExcelZoomMode            := "CtrlWheel"
-global MouseWheel_PowerPointZoomMode       := "CtrlWheel"
+global MouseWheel_CtrlWheelApps            := "explorer.exe,pycharm64.exe,WINWORD.EXE,EXCEL.EXE,POWERPNT.EXE"
+global MouseWheel_CtrlInjected             := false
 
 MouseWheel_RebuildZoomRules() {
-    global MouseWheel_ZoomRules
-    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode
-    global MouseWheel_PyCharmZoomMode, MouseWheel_WordZoomMode
-    global MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global MouseWheel_ZoomRules, MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
 
     MouseWheel_ZoomRules := {}
-    MouseWheel_ZoomRules["default"]       := {Mode: MouseWheel_DefaultZoomMode}
-    MouseWheel_ZoomRules["explorer.exe"]  := {Mode: MouseWheel_ExplorerZoomMode}
-    MouseWheel_ZoomRules["pycharm64.exe"] := {Mode: MouseWheel_PyCharmZoomMode}
-    MouseWheel_ZoomRules["WINWORD.EXE"]   := {Mode: MouseWheel_WordZoomMode}
-    MouseWheel_ZoomRules["EXCEL.EXE"]     := {Mode: MouseWheel_ExcelZoomMode}
-    MouseWheel_ZoomRules["POWERPNT.EXE"]  := {Mode: MouseWheel_PowerPointZoomMode}
+    MouseWheel_ZoomRules["default"] := {Mode: MouseWheel_DefaultZoomMode}
+
+    Loop, Parse, MouseWheel_CtrlWheelApps, `,, %A_Space%
+    {
+        if (A_LoopField != "")
+            MouseWheel_ZoomRules[A_LoopField] := {Mode: "CtrlWheel"}
+    }
 }
 
 MouseWheel_RebuildZoomRules()
@@ -71,10 +66,28 @@ MouseWheel_SendHorizontalWheel(direction) {
 }
 
 MouseWheel_SendCtrlWheel(action) {
+    global MouseWheel_CtrlInjected
+    static releaseTimer := Func("MouseWheel_ReleaseCtrl")
+
+    if !MouseWheel_CtrlInjected {
+        SendInput, {Ctrl down}
+        MouseWheel_CtrlInjected := true
+    }
+
     if (action = "In")
-        Send, ^{WheelUp}
+        SendInput, {WheelUp}
     else
-        Send, ^{WheelDown}
+        SendInput, {WheelDown}
+
+    SetTimer, % releaseTimer, -200
+}
+
+MouseWheel_ReleaseCtrl() {
+    global MouseWheel_CtrlInjected
+    if (MouseWheel_CtrlInjected) {
+        SendInput, {Ctrl up}
+        MouseWheel_CtrlInjected := false
+    }
 }
 
 MouseWheel_SendCtrlNumpad(action) {

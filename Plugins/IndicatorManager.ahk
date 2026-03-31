@@ -31,11 +31,7 @@ global SettingsPPTCaptionGapV              := ""
 global SettingsBrowserPdfZoomShortcutFirst := ""
 global SettingsMouseWheelExplorerRepeat    := ""
 global SettingsMouseWheelDefaultMode       := ""
-global SettingsMouseWheelExplorerMode      := ""
-global SettingsMouseWheelPycharmMode       := ""
-global SettingsMouseWheelWordMode          := ""
-global SettingsMouseWheelExcelMode         := ""
-global SettingsMouseWheelPowerPointMode    := ""
+global SettingsMouseWheelCtrlWheelApps     := ""
 global SettingsCursorBaseSpeed             := ""
 global SettingsCursorMaxSpeed              := ""
 global SettingsCursorAcceleration          := ""
@@ -433,12 +429,12 @@ SUI_LoadConfig() {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
-    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
     global BW_SmartKeyApps
+    global EnableBracketWrap
     global CG_SameEventThreshold, CG_CrossEventThreshold
 
     SUI_EnsureConfigPath()
@@ -471,6 +467,9 @@ SUI_LoadConfig() {
     EnableExcel       := SUI_NormalizeBool(excelRaw, EnableExcel)
     EnableChatterGuard := SUI_NormalizeBool(chatterGuardRaw, EnableChatterGuard)
 
+    IniRead, bracketWrapRaw,    %SUI_ConfigPath%, Indicators, EnableBracketWrap, %EnableBracketWrap%
+    EnableBracketWrap := SUI_NormalizeBool(bracketWrapRaw, EnableBracketWrap)
+
     IniRead, editorProviderRaw,    %SUI_ConfigPath%, TextEditor, Provider, %TextEditorProvider%
     IniRead, editorCustomPathRaw,  %SUI_ConfigPath%, TextEditor, CustomPath, __EMPTY__
     IniRead, editorArgsRaw,        %SUI_ConfigPath%, TextEditor, CustomArgs, __EMPTY__
@@ -501,18 +500,10 @@ SUI_LoadConfig() {
 
     IniRead, explorerRepeatRaw,       %SUI_ConfigPath%, MouseWheel, ExplorerScrollBarRepeat, %MouseWheel_ExplorerScrollBarRepeat%
     IniRead, defaultZoomModeRaw,      %SUI_ConfigPath%, MouseWheel, DefaultZoomMode, %MouseWheel_DefaultZoomMode%
-    IniRead, explorerZoomModeRaw,     %SUI_ConfigPath%, MouseWheel, ExplorerZoomMode, %MouseWheel_ExplorerZoomMode%
-    IniRead, pycharmZoomModeRaw,      %SUI_ConfigPath%, MouseWheel, PyCharmZoomMode, %MouseWheel_PyCharmZoomMode%
-    IniRead, wordZoomModeRaw,         %SUI_ConfigPath%, MouseWheel, WordZoomMode, %MouseWheel_WordZoomMode%
-    IniRead, excelZoomModeRaw,        %SUI_ConfigPath%, MouseWheel, ExcelZoomMode, %MouseWheel_ExcelZoomMode%
-    IniRead, powerpointZoomModeRaw,   %SUI_ConfigPath%, MouseWheel, PowerPointZoomMode, %MouseWheel_PowerPointZoomMode%
+    IniRead, ctrlWheelAppsRaw,        %SUI_ConfigPath%, MouseWheel, CtrlWheelApps, %MouseWheel_CtrlWheelApps%
     MouseWheel_ExplorerScrollBarRepeat := SUI_NormalizeInt(explorerRepeatRaw, MouseWheel_ExplorerScrollBarRepeat, 1, 20)
     MouseWheel_DefaultZoomMode := SUI_NormalizeZoomMode(defaultZoomModeRaw, MouseWheel_DefaultZoomMode)
-    MouseWheel_ExplorerZoomMode := SUI_NormalizeZoomMode(explorerZoomModeRaw, MouseWheel_ExplorerZoomMode)
-    MouseWheel_PyCharmZoomMode := SUI_NormalizeZoomMode(pycharmZoomModeRaw, MouseWheel_PyCharmZoomMode)
-    MouseWheel_WordZoomMode := SUI_NormalizeZoomMode(wordZoomModeRaw, MouseWheel_WordZoomMode)
-    MouseWheel_ExcelZoomMode := SUI_NormalizeZoomMode(excelZoomModeRaw, MouseWheel_ExcelZoomMode)
-    MouseWheel_PowerPointZoomMode := SUI_NormalizeZoomMode(powerpointZoomModeRaw, MouseWheel_PowerPointZoomMode)
+    MouseWheel_CtrlWheelApps := Trim(ctrlWheelAppsRaw)
     if IsFunc("MouseWheel_RebuildZoomRules")
         MouseWheel_RebuildZoomRules()
 
@@ -573,8 +564,8 @@ SUI_SaveConfig() {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
-    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global EnableBracketWrap
+    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
@@ -594,7 +585,8 @@ SUI_SaveConfig() {
     IniWrite, % EnableBrowser       ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
     IniWrite, % EnablePPT           ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
     IniWrite, % EnableChatterGuard  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableChatterGuard
-    IniWrite, % EnableExcel      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
+    IniWrite, % EnableExcel         ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
+    IniWrite, % EnableBracketWrap  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBracketWrap
     SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
     IniWrite, % SettingsUI.EditorType, %SUI_ConfigPath%, SettingsUI, EditorType
 
@@ -610,11 +602,7 @@ SUI_SaveConfig() {
 
     IniWrite, %MouseWheel_ExplorerScrollBarRepeat%, %SUI_ConfigPath%, MouseWheel, ExplorerScrollBarRepeat
     IniWrite, %MouseWheel_DefaultZoomMode%, %SUI_ConfigPath%, MouseWheel, DefaultZoomMode
-    IniWrite, %MouseWheel_ExplorerZoomMode%, %SUI_ConfigPath%, MouseWheel, ExplorerZoomMode
-    IniWrite, %MouseWheel_PyCharmZoomMode%, %SUI_ConfigPath%, MouseWheel, PyCharmZoomMode
-    IniWrite, %MouseWheel_WordZoomMode%, %SUI_ConfigPath%, MouseWheel, WordZoomMode
-    IniWrite, %MouseWheel_ExcelZoomMode%, %SUI_ConfigPath%, MouseWheel, ExcelZoomMode
-    IniWrite, %MouseWheel_PowerPointZoomMode%, %SUI_ConfigPath%, MouseWheel, PowerPointZoomMode
+    IniWrite, %MouseWheel_CtrlWheelApps%, %SUI_ConfigPath%, MouseWheel, CtrlWheelApps
 
     IniWrite, % SUI_FormatNumber(CursorConfig.BaseSpeed, 2), %SUI_ConfigPath%, Cursor, BaseSpeed
     IniWrite, % SUI_FormatNumber(CursorConfig.MaxSpeed, 2), %SUI_ConfigPath%, Cursor, MaxSpeed
@@ -864,13 +852,12 @@ class SettingsUI {
         Global SettingsAuthSaveDir, SettingsAuthOutputPath, SettingsBrowserUrlExportPath
         Global SettingsPPTCaptionGapH, SettingsPPTCaptionGapV
         Global SettingsBrowserPdfZoomShortcutFirst, SettingsMouseWheelExplorerRepeat
-        Global SettingsMouseWheelDefaultMode, SettingsMouseWheelExplorerMode, SettingsMouseWheelPycharmMode
-        Global SettingsMouseWheelWordMode, SettingsMouseWheelExcelMode, SettingsMouseWheelPowerPointMode
+        Global SettingsMouseWheelDefaultMode, SettingsMouseWheelCtrlWheelApps
         Global SettingsCursorBaseSpeed, SettingsCursorMaxSpeed, SettingsCursorAcceleration, SettingsCursorTimerInterval
         Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorEdgeInset
         Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
         Global SettingsBrowserPdfZoomDebug, SettingsPPTSpacingDebug, SettingsPPTCaptionDebug, SettingsValidationHint
-        Global SettingsUiaStatus, SettingsBWLabel, SettingsBWToggle, SUI_UiaIndicatorHwnd, SUI_UiaIndicatorColor
+        Global SettingsUiaStatus, SUI_UiaIndicatorHwnd, SUI_UiaIndicatorColor
         Global SettingsSameEvent, SettingsCrossEvent
         Global EnableBracketWrap, CG_SameEventThreshold, CG_CrossEventThreshold, pBuf
         Global SUI_IsInitializing, SUI_SelectedItemID, _SUI_LastHelpRow
@@ -937,74 +924,61 @@ class SettingsUI {
         Gui, Settings:Add, Text, x190 y341 w70 h20 +0x200, Caption V
         Gui, Settings:Add, Edit, x260 y339 w70 h21 vSettingsPPTCaptionGapV gSUI_PositiveFloatEditChanged
 
-        Gui, Settings:Add, GroupBox, x370 y45 w370 h222, Advanced
+        Gui, Settings:Add, GroupBox, x370 y45 w370 h142, Advanced
         Gui, Settings:Add, CheckBox, x388 y68 w190 h20 vSettingsBrowserPdfZoomShortcutFirst, PDF zoom: 先に Ctrl+\ を試す
         Gui, Settings:Add, Text, x388 y97 w112 h20 +0x200, Explorer repeat
         Gui, Settings:Add, Edit, x497 y95 w44 h21 Number vSettingsMouseWheelExplorerRepeat gSUI_NonNegativeIntEditChanged
         Gui, Settings:Add, Text, x560 y97 w48 h20 +0x200, Default
         Gui, Settings:Add, DropDownList, x612 y95 w110 vSettingsMouseWheelDefaultMode, CtrlNumpad|CtrlWheel
-        Gui, Settings:Add, Text, x388 y127 w60 h20 +0x200, Explorer
-        Gui, Settings:Add, DropDownList, x448 y125 w92 vSettingsMouseWheelExplorerMode, CtrlNumpad|CtrlWheel
-        Gui, Settings:Add, Text, x554 y127 w58 h20 +0x200, Pycharm
-        Gui, Settings:Add, DropDownList, x612 y125 w110 vSettingsMouseWheelPycharmMode, CtrlNumpad|CtrlWheel
-        Gui, Settings:Add, Text, x388 y157 w60 h20 +0x200, Word
-        Gui, Settings:Add, DropDownList, x448 y155 w92 vSettingsMouseWheelWordMode, CtrlNumpad|CtrlWheel
-        Gui, Settings:Add, Text, x554 y157 w58 h20 +0x200, Excel
-        Gui, Settings:Add, DropDownList, x612 y155 w110 vSettingsMouseWheelExcelMode, CtrlNumpad|CtrlWheel
-        Gui, Settings:Add, Text, x388 y187 w60 h20 +0x200, PPT
-        Gui, Settings:Add, DropDownList, x448 y185 w92 vSettingsMouseWheelPowerPointMode, CtrlNumpad|CtrlWheel
-        Gui, Settings:Add, Text, x388 y222 w36 h20 +0x200, Base
-        Gui, Settings:Add, Edit, x425 y220 w46 h21 vSettingsCursorBaseSpeed gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x479 y222 w30 h20 +0x200, Max
-        Gui, Settings:Add, Edit, x510 y220 w46 h21 vSettingsCursorMaxSpeed gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x564 y222 w36 h20 +0x200, Accel
-        Gui, Settings:Add, Edit, x602 y220 w46 h21 vSettingsCursorAcceleration gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x656 y222 w26 h20 +0x200, ms
-        Gui, Settings:Add, Edit, x683 y220 w39 h21 Number vSettingsCursorTimerInterval gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x388 y127 w110 h20 +0x200, CtrlWheel apps
+        Gui, Settings:Add, Edit, x500 y125 w222 h21 vSettingsMouseWheelCtrlWheelApps
+        Gui, Settings:Add, Text, x388 y157 w36 h20 +0x200, Base
+        Gui, Settings:Add, Edit, x425 y155 w46 h21 vSettingsCursorBaseSpeed gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x479 y157 w30 h20 +0x200, Max
+        Gui, Settings:Add, Edit, x510 y155 w46 h21 vSettingsCursorMaxSpeed gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x564 y157 w36 h20 +0x200, Accel
+        Gui, Settings:Add, Edit, x602 y155 w46 h21 vSettingsCursorAcceleration gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x656 y157 w26 h20 +0x200, ms
+        Gui, Settings:Add, Edit, x683 y155 w39 h21 Number vSettingsCursorTimerInterval gSUI_NonNegativeIntEditChanged
 
-        Gui, Settings:Add, GroupBox, x370 y274 w370 h62, Cursor Grid
-        Gui, Settings:Add, Text, x388 y299 w34 h20 +0x200, Cols
-        Gui, Settings:Add, Edit, x424 y297 w48 h21 Number vSettingsCursorGridCols gSUI_NonNegativeIntEditChanged
-        Gui, Settings:Add, Text, x486 y299 w34 h20 +0x200, Rows
-        Gui, Settings:Add, Edit, x522 y297 w48 h21 Number vSettingsCursorGridRows gSUI_NonNegativeIntEditChanged
-        Gui, Settings:Add, Text, x584 y299 w36 h20 +0x200, Inset
-        Gui, Settings:Add, Edit, x622 y297 w48 h21 Number vSettingsCursorEdgeInset gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, GroupBox, x370 y194 w370 h62, Cursor Grid
+        Gui, Settings:Add, Text, x388 y219 w34 h20 +0x200, Cols
+        Gui, Settings:Add, Edit, x424 y217 w48 h21 Number vSettingsCursorGridCols gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x486 y219 w34 h20 +0x200, Rows
+        Gui, Settings:Add, Edit, x522 y217 w48 h21 Number vSettingsCursorGridRows gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x584 y219 w36 h20 +0x200, Inset
+        Gui, Settings:Add, Edit, x622 y217 w48 h21 Number vSettingsCursorEdgeInset gSUI_NonNegativeIntEditChanged
 
-        Gui, Settings:Add, GroupBox, x370 y344 w370 h108, Debug
-        Gui, Settings:Add, CheckBox, x388 y369 w145 h20 vSettingsIndicatorDebug, IndicatorManager
-        Gui, Settings:Add, CheckBox, x548 y369 w145 h20 vSettingsMouseGestureDebug, MouseGesture
-        Gui, Settings:Add, CheckBox, x388 y395 w145 h20 vSettingsMouseWheelDebug, MouseWheel
-        Gui, Settings:Add, CheckBox, x548 y395 w145 h20 vSettingsBrowserPdfZoomDebug, Browser PDF
-        Gui, Settings:Add, CheckBox, x388 y421 w145 h20 vSettingsPPTSpacingDebug, PPT spacing
-        Gui, Settings:Add, CheckBox, x548 y421 w145 h20 vSettingsPPTCaptionDebug, PPT caption
+        Gui, Settings:Add, GroupBox, x370 y264 w370 h108, Debug
+        Gui, Settings:Add, CheckBox, x388 y289 w145 h20 vSettingsIndicatorDebug, IndicatorManager
+        Gui, Settings:Add, CheckBox, x548 y289 w145 h20 vSettingsMouseGestureDebug, MouseGesture
+        Gui, Settings:Add, CheckBox, x388 y315 w145 h20 vSettingsMouseWheelDebug, MouseWheel
+        Gui, Settings:Add, CheckBox, x548 y315 w145 h20 vSettingsBrowserPdfZoomDebug, Browser PDF
+        Gui, Settings:Add, CheckBox, x388 y341 w145 h20 vSettingsPPTSpacingDebug, PPT spacing
+        Gui, Settings:Add, CheckBox, x548 y341 w145 h20 vSettingsPPTCaptionDebug, PPT caption
 
         Gui, Settings:Add, Button, x20 y403 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
         Gui, Settings:Add, Button, x150 y403 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
         Gui, Settings:Add, Text, x20 y437 w330 h18 vSettingsValidationHint,
 
-        ; ステータス表示 (左列下部、ChatterGuard と並列)
+        ; ステータス表示
         uiaConnected := (pBuf != 0)
         uiaIcon := uiaConnected ? "●" : "○"
         uiaDesc := uiaConnected ? "接続済み" : "未検出"
         Gui, Settings:Add, Text, x20 y465 w80 h18 +0x200, UiaMonitor:
         Gui, Settings:Add, Text, x100 y465 w14 h18 +0x200 HwndhUiaIndicator, %uiaIcon%
         SUI_UiaIndicatorHwnd := hUiaIndicator
-        SUI_UiaIndicatorColor := uiaConnected ? 0x00AA00 : 0x888888
+        SUI_UiaIndicatorColor := uiaConnected ? 0x00AA00 : 0x0000CC
         Gui, Settings:Add, Text, x114 y465 w120 h18 +0x200 vSettingsUiaStatus, %uiaDesc%
 
-        Gui, Settings:Add, Text, x20 y487 w80 h18 +0x200 vSettingsBWLabel, BracketWrap:
-        Gui, Settings:Add, CheckBox, x100 y485 w60 h20 vSettingsBWToggle gSUI_BWToggleChanged, 有効
-        if (EnableBracketWrap)
-            GuiControl, Settings:, SettingsBWToggle, 1
-
         ; ChatterGuard 閾値セクション
-        Gui, Settings:Add, GroupBox, x370 y460 w370 h52, ChatterGuard
-        Gui, Settings:Add, Text, x388 y480 w36 h20 +0x200, 同種
-        Gui, Settings:Add, Edit, x426 y479 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
-        Gui, Settings:Add, Text, x470 y480 w18 h20 +0x200, ms
-        Gui, Settings:Add, Text, x500 y480 w36 h20 +0x200, 交差
-        Gui, Settings:Add, Edit, x538 y479 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
-        Gui, Settings:Add, Text, x582 y480 w18 h20 +0x200, ms
+        Gui, Settings:Add, GroupBox, x370 y380 w370 h52, ChatterGuard
+        Gui, Settings:Add, Text, x388 y400 w36 h20 +0x200, 同種
+        Gui, Settings:Add, Edit, x426 y399 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
+        Gui, Settings:Add, Text, x470 y400 w18 h20 +0x200, ms
+        Gui, Settings:Add, Text, x500 y400 w36 h20 +0x200, 交差
+        Gui, Settings:Add, Edit, x538 y399 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
+        Gui, Settings:Add, Text, x582 y400 w18 h20 +0x200, ms
 
         ; -----------------------------------------
         ; ▼ タブの配置指定を終了 (以降はタブ外の要素)
@@ -1047,8 +1021,7 @@ SUI_LoadAdvancedSettingsIntoGui() {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
-    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
@@ -1069,11 +1042,7 @@ SUI_LoadAdvancedSettingsIntoGui() {
     GuiControl, Settings:, SettingsBrowserPdfZoomShortcutFirst, % Browser_PDFZoomTryShortcutFirst ? 1 : 0
     GuiControl, Settings:, SettingsMouseWheelExplorerRepeat, %MouseWheel_ExplorerScrollBarRepeat%
     GuiControl, Settings:ChooseString, SettingsMouseWheelDefaultMode, %MouseWheel_DefaultZoomMode%
-    GuiControl, Settings:ChooseString, SettingsMouseWheelExplorerMode, %MouseWheel_ExplorerZoomMode%
-    GuiControl, Settings:ChooseString, SettingsMouseWheelPycharmMode, %MouseWheel_PyCharmZoomMode%
-    GuiControl, Settings:ChooseString, SettingsMouseWheelWordMode, %MouseWheel_WordZoomMode%
-    GuiControl, Settings:ChooseString, SettingsMouseWheelExcelMode, %MouseWheel_ExcelZoomMode%
-    GuiControl, Settings:ChooseString, SettingsMouseWheelPowerPointMode, %MouseWheel_PowerPointZoomMode%
+    GuiControl, Settings:, SettingsMouseWheelCtrlWheelApps, %MouseWheel_CtrlWheelApps%
 
     GuiControl, Settings:, SettingsCursorBaseSpeed, % SUI_FormatNumber(CursorConfig.BaseSpeed, 2)
     GuiControl, Settings:, SettingsCursorMaxSpeed, % SUI_FormatNumber(CursorConfig.MaxSpeed, 2)
@@ -1275,11 +1244,7 @@ SUI_ResetAdvancedSettings() {
     SetTimer, CloseToolTip, -1200
 }
 
-SUI_BWToggleChanged() {
-    global EnableBracketWrap
-    GuiControlGet, bwState, Settings:, SettingsBWToggle
-    EnableBracketWrap := bwState
-}
+
 
 SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SUI_IsInitializing, SUI_SettingsGuiHwnd
@@ -1287,8 +1252,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode, MouseWheel_ExplorerZoomMode, MouseWheel_PyCharmZoomMode
-    global MouseWheel_WordZoomMode, MouseWheel_ExcelZoomMode, MouseWheel_PowerPointZoomMode
+    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
@@ -1309,11 +1273,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     GuiControlGet, browserTryShortcutFirst,, SettingsBrowserPdfZoomShortcutFirst
     GuiControlGet, wheelExplorerRepeat,, SettingsMouseWheelExplorerRepeat
     GuiControlGet, wheelDefaultMode,, SettingsMouseWheelDefaultMode
-    GuiControlGet, wheelExplorerMode,, SettingsMouseWheelExplorerMode
-    GuiControlGet, wheelPycharmMode,, SettingsMouseWheelPycharmMode
-    GuiControlGet, wheelWordMode,, SettingsMouseWheelWordMode
-    GuiControlGet, wheelExcelMode,, SettingsMouseWheelExcelMode
-    GuiControlGet, wheelPowerPointMode,, SettingsMouseWheelPowerPointMode
+    GuiControlGet, ctrlWheelApps,, SettingsMouseWheelCtrlWheelApps
     GuiControlGet, cursorBaseSpeed,, SettingsCursorBaseSpeed
     GuiControlGet, cursorMaxSpeed,, SettingsCursorMaxSpeed
     GuiControlGet, cursorAcceleration,, SettingsCursorAcceleration
@@ -1338,11 +1298,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
 
     MouseWheel_ExplorerScrollBarRepeat := SUI_NormalizeInt(wheelExplorerRepeat, MouseWheel_ExplorerScrollBarRepeat, 1, 20)
     MouseWheel_DefaultZoomMode := SUI_NormalizeZoomMode(wheelDefaultMode, MouseWheel_DefaultZoomMode)
-    MouseWheel_ExplorerZoomMode := SUI_NormalizeZoomMode(wheelExplorerMode, MouseWheel_ExplorerZoomMode)
-    MouseWheel_PyCharmZoomMode := SUI_NormalizeZoomMode(wheelPycharmMode, MouseWheel_PyCharmZoomMode)
-    MouseWheel_WordZoomMode := SUI_NormalizeZoomMode(wheelWordMode, MouseWheel_WordZoomMode)
-    MouseWheel_ExcelZoomMode := SUI_NormalizeZoomMode(wheelExcelMode, MouseWheel_ExcelZoomMode)
-    MouseWheel_PowerPointZoomMode := SUI_NormalizeZoomMode(wheelPowerPointMode, MouseWheel_PowerPointZoomMode)
+    MouseWheel_CtrlWheelApps := Trim(ctrlWheelApps)
     if IsFunc("MouseWheel_RebuildZoomRules")
         MouseWheel_RebuildZoomRules()
 
@@ -1958,19 +1914,30 @@ SUI_BuildItemList() {
     SUI_AddLeaf("ブラウザ", "EnableBrowser")
     SUI_AddLeaf("PowerPoint", "EnablePPT")
     SUI_AddLeaf("Excel", "EnableExcel")
-    SUI_AddLeaf("BracketWrap", "EnableBracketWrap")
+    SUI_AddLeaf("BracketWrap", "EnableBracketWrap", pBuf = 0)
 }
 
-SUI_AddLeaf(name, varName) {
-    global _SUI_ItemMap, SettingsItemsLV
+SUI_AddLeaf(name, varName, disabled := false) {
+    global _SUI_ItemMap, SettingsItemsLV, SUI_SettingsItemsLVHwnd
     Gui, Settings:Default
     Gui, Settings:ListView, SettingsItemsLV
-    val := SUI_GetFlagValue(varName)
+
+    displayName := disabled ? name . " (UIA未接続)" : name
+    val := disabled ? 0 : SUI_GetFlagValue(varName)
     opts := ""
     if (val)
         opts := "Check"
-    row := LV_Add(opts, "", name)
-    _SUI_ItemMap[row] := {Var: varName, Row: row, Name: name}
+    row := LV_Add(opts, "", displayName)
+    _SUI_ItemMap[row] := {Var: varName, Row: row, Name: name, Disabled: disabled}
+
+    if (disabled && SUI_SettingsItemsLVHwnd) {
+        ; LVM_SETITEMSTATE (0x102B): wParam = item index, lParam = &LVITEM
+        VarSetCapacity(lvi, 60, 0)
+        NumPut(0, lvi, 12, "UInt")           ; state = 0 (no state image)
+        NumPut(0xF000, lvi, 16, "UInt")      ; stateMask = LVIS_STATEIMAGEMASK
+        SendMessage, 0x102B, % (row - 1), % &lvi,, ahk_id %SUI_SettingsItemsLVHwnd%
+    }
+
     return row
 }
 
@@ -2167,7 +2134,7 @@ SUI_SyncVars() {
     Gui, Settings:Default
 
     for itemID, item in _SUI_ItemMap {
-        if (item.Var = "")
+        if (item.Var = "" || item.Disabled)
             continue
 
         v := SUI_IsItemChecked(itemID) ? 1 : 0

@@ -32,29 +32,25 @@ global pBuf := 0
 ; ═══════════════════════════════════════════════════════════════
 
 UiaInit() {
-    ; C# 監視プロセスを起動
-    UiaStartMonitor()
-    Sleep, 500  ; 起動待ち
+    if !UiaStartMonitor()
+        return
 
-    ; 共有メモリを開く
+    Sleep, 500  ; 起動待ち
     UiaOpenSharedMemory()
 }
 
 UiaStartMonitor() {
     global UIA_MONITOR_EXE
 
-    ; 既に起動しているか確認
     Process, Exist, UiaMonitor.exe
     if (ErrorLevel != 0)
-        return  ; 既に起動中
+        return true
 
-    if !FileExist(UIA_MONITOR_EXE) {
-        ToolTip, UiaMonitor.exe が見つかりません。BracketWrap は無効です。
-        SetTimer, CloseToolTip, -3000
-        return
-    }
+    if !FileExist(UIA_MONITOR_EXE)
+        return false
 
     Run, %UIA_MONITOR_EXE%, , Hide
+    return true
 }
 
 UiaOpenSharedMemory() {

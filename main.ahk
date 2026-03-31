@@ -95,9 +95,9 @@ Cursor_GetHotkeyConfig() {
         , Grid: {o: "Up", k: "Left", l: "Down", sc027: "Right"}}
 }
 #If (EnableMouseEmu)
-    F13 & i::Click, Down
-    F13 & .::Click, Middle
-    F13 & p::Click, Right, Down
+    F13 & i::   Click, Down
+    F13 & .::   Click, Middle
+    F13 & p::   Click, Right, Down
     F13 & i Up::Click, Up
     F13 & p Up::Click, Right, Up
 #If
@@ -257,8 +257,8 @@ Cursor_GetHotkeyConfig() {
 ; ----- Excel -----
 ; ==========================================================
 #If (EnableExcel && WinActive("ahk_exe EXCEL.EXE"))
-    ^Tab::Send ^{PgDn}
-    ^+Tab::Send ^{PgUp}
+    ^Tab::  Send ^{PgDn}
+    ^+Tab:: Send ^{PgUp}
 #If
 
 ; ==========================================================
