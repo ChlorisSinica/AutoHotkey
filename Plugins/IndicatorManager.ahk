@@ -651,16 +651,31 @@ SUI_HandleWmClose(wParam, lParam, msg, hwnd) {
 }
 
 SUI_HandleNotify(wParam, lParam, msg, hwnd) {
-    global SUI_SettingsGuiHwnd, SUI_SettingsLVHwnd
+    global SUI_SettingsGuiHwnd, SUI_SettingsLVHwnd, SUI_SettingsItemsLVHwnd
+    global _SUI_ItemMap
 
-    if (!SUI_SettingsGuiHwnd || hwnd != SUI_SettingsGuiHwnd || !SUI_SettingsLVHwnd)
+    if (!SUI_SettingsGuiHwnd || hwnd != SUI_SettingsGuiHwnd)
         return
 
     hwndFrom := NumGet(lParam + 0, 0, "Ptr")
+    code := NumGet(lParam + 0, A_PtrSize * 2, "Int")
+
+    ; LVN_ITEMCHANGING (-100): disabled 行のチェックボックス変更をブロック
+    if (code = -100 && hwndFrom = SUI_SettingsItemsLVHwnd) {
+        static NMHDR_SIZE := (A_PtrSize = 8 ? 24 : 12)
+        row := NumGet(lParam + 0, NMHDR_SIZE + 0, "Int") + 1
+        uNewState := NumGet(lParam + 0, NMHDR_SIZE + 8, "UInt")
+        uOldState := NumGet(lParam + 0, NMHDR_SIZE + 12, "UInt")
+        uChanged := NumGet(lParam + 0, NMHDR_SIZE + 16, "UInt")
+        if (uChanged & 0x0008) && ((uOldState ^ uNewState) & 0xF000) {
+            if (_SUI_ItemMap.HasKey(row) && _SUI_ItemMap[row].Disabled)
+                return 1
+        }
+    }
+
     if (hwndFrom != SUI_SettingsLVHwnd)
         return
 
-    code := NumGet(lParam + 0, A_PtrSize * 2, "Int")
     if (code = -101 || code = -2 || code = -3 || code = -155)
         SUI_QueueHelpRefresh("notify code=" . code)
 }
@@ -954,28 +969,28 @@ class SettingsUI {
         Gui, Settings:Add, CheckBox, x388 y311 w145 h20 vSettingsPPTSpacingDebug, PPT spacing
         Gui, Settings:Add, CheckBox, x548 y311 w145 h20 vSettingsPPTCaptionDebug, PPT caption
 
-        Gui, Settings:Add, Button, x20 y403 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
-        Gui, Settings:Add, Button, x150 y403 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
-        Gui, Settings:Add, Text, x20 y437 w330 h18 vSettingsValidationHint,
+        Gui, Settings:Add, Button, x20 y393 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
+        Gui, Settings:Add, Button, x150 y393 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
+        Gui, Settings:Add, Text, x20 y423 w330 h18 vSettingsValidationHint,
 
         ; ステータス表示
         uiaConnected := (pBuf != 0)
         uiaIcon := "●"
         uiaDesc := uiaConnected ? "接続済み" : "未検出"
-        Gui, Settings:Add, Text, x20 y465 w80 h18 +0x200, UiaMonitor:
-        Gui, Settings:Add, Text, x100 y465 w14 h18 +0x200 HwndhUiaIndicator, %uiaIcon%
+        Gui, Settings:Add, Text, x20 y445 w80 h18 +0x200, UiaMonitor:
+        Gui, Settings:Add, Text, x100 y445 w14 h18 +0x200 HwndhUiaIndicator, %uiaIcon%
         SUI_UiaIndicatorHwnd := hUiaIndicator
         SUI_UiaIndicatorColor := uiaConnected ? 0x00AA00 : 0x0000CC
-        Gui, Settings:Add, Text, x114 y465 w120 h18 +0x200 vSettingsUiaStatus, %uiaDesc%
+        Gui, Settings:Add, Text, x114 y445 w120 h18 +0x200 vSettingsUiaStatus, %uiaDesc%
 
         ; ChatterGuard 閾値セクション
-        Gui, Settings:Add, GroupBox, x370 y350 w370 h52, ChatterGuard
-        Gui, Settings:Add, Text, x388 y370 w36 h20 +0x200, 同種
-        Gui, Settings:Add, Edit, x426 y369 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
-        Gui, Settings:Add, Text, x470 y370 w18 h20 +0x200, ms
-        Gui, Settings:Add, Text, x500 y370 w36 h20 +0x200, 交差
-        Gui, Settings:Add, Edit, x538 y369 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
-        Gui, Settings:Add, Text, x582 y370 w18 h20 +0x200, ms
+        Gui, Settings:Add, GroupBox, x20 y467 w330 h52, ChatterGuard
+        Gui, Settings:Add, Text, x38 y487 w36 h20 +0x200, 同種
+        Gui, Settings:Add, Edit, x76 y486 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
+        Gui, Settings:Add, Text, x120 y487 w18 h20 +0x200, ms
+        Gui, Settings:Add, Text, x150 y487 w36 h20 +0x200, 交差
+        Gui, Settings:Add, Edit, x188 y486 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
+        Gui, Settings:Add, Text, x232 y487 w18 h20 +0x200, ms
 
         ; -----------------------------------------
         ; ▼ タブの配置指定を終了 (以降はタブ外の要素)
@@ -1935,21 +1950,6 @@ SUI_AddLeaf(name, varName, disabled := false) {
     return row
 }
 
-SUI_ResetDisabledItem(itemID) {
-    global SUI_SettingsItemsLVHwnd
-    if !SUI_SettingsItemsLVHwnd
-        return
-
-    Gui, Settings:Default
-    Gui, Settings:ListView, SettingsItemsLV
-    LV_Modify(itemID, "-Check")
-
-    VarSetCapacity(lvi, 60, 0)
-    NumPut(0, lvi, 12, "UInt")
-    NumPut(0xF000, lvi, 16, "UInt")
-    SendMessage, 0x102B, % (itemID - 1), % &lvi,, ahk_id %SUI_SettingsItemsLVHwnd%
-}
-
 SUI_IsItemChecked(itemID) {
     global SettingsItemsLV
 
@@ -2031,11 +2031,7 @@ SUI_ItemsHandler() {
     if ((evt = "I" && info && (InStr(flags, "C") || InStr(flags, "c")))
         ||  (evt = "C" && targetID)) {
         changedID := info ? info : targetID
-        if (_SUI_ItemMap.HasKey(changedID) && _SUI_ItemMap[changedID].Disabled) {
-            SUI_ResetDisabledItem(changedID)
-        } else {
-            SUI_QueueCheckSync(changedID, "evt=" . evt)
-        }
+        SUI_QueueCheckSync(changedID, "evt=" . evt)
     }
 
     SUI_DebugLog("list_event"
