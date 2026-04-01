@@ -14,7 +14,6 @@ global MG_DebugEnabled   := true
 global MG_DebugLogDir    := A_ScriptDir . "\.claude"
 global MG_DebugLogPath   := MG_DebugLogDir . "\mouse_gesture_debug.log"
 global MG_DebugMaxBytes  := 262144
-global cUIA              := new UIA_Interface()
 
 MG_DebugInit() {
     global MG_DebugEnabled, MG_DebugLogDir

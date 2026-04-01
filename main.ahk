@@ -13,7 +13,6 @@ SetBatchLines, -1
 ; ==========================================================
 ; --- Pluginsファイルの読み込み ---
 ; ==========================================================
-#Include %A_ScriptDir%\lib\UiaMonitor\UiaIntegration.ahk
 #Include %A_ScriptDir%\Plugins\UIA_Utils.ahk
 #Include %A_ScriptDir%\Plugins\Application.ahk
 #Include %A_ScriptDir%\Plugins\AppInit.ahk
@@ -26,7 +25,6 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\MouseGesture.ahk
 #Include %A_ScriptDir%\Plugins\MouseGestureMap.ahk
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
-#Include %A_ScriptDir%\Plugins\TextEditor.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
 #Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
@@ -46,7 +44,6 @@ global EnableOthers               := 1
 global EnableBrowser              := 1
 global EnablePPT                  := 1
 global EnableExcel                := 1
-global EnableBracketWrap          := 1
 global EnableChatterGuard         := 1
 global CG_SameEventThreshold      := 50
 global CG_CrossEventThreshold     := 30
@@ -57,7 +54,6 @@ global CG_CrossEventThreshold     := 30
 App_Init()
 vk1C & F1::Settings_Open()
 vk1C & F2::MG_DebugSnapshot("manual-hotkey")
-vk1C & F3::App_DebugUia()
 vk1C & F4::App_DebugStatus()
 #If WinActive("機能設定") && SUI_HasHelpSelection()
     ^c::SUI_CopySelectedHelpRow()
@@ -131,12 +127,10 @@ Cursor_GetHotkeyConfig() {
     #q::
         Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
         Sleep, 300
-        UiaRequestRefresh()
     return
     #w::
         Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
         Sleep, 300
-        UiaRequestRefresh()
     return
 #If
 
@@ -259,34 +253,6 @@ Cursor_GetHotkeyConfig() {
 #If (EnableExcel && WinActive("ahk_exe EXCEL.EXE"))
     ^Tab::  Send ^{PgDn}
     ^+Tab:: Send ^{PgUp}
-#If
-
-; ==========================================================
-; ----- BracketWrap: 括弧ラップ (テキスト選択中) -----
-; ==========================================================
-#If (EnableBracketWrap && UiaIsEditable() && UiaHasSelection())
-    ; 対称文字 (wrap/unwrap トグル)
-    $":: BW_OnKey("""")
-    $':: BW_OnKey("'")
-    $$:: BW_OnKey("$")
-    $%:: BW_OnKey(Chr(37))
-
-    ; 開き/閉じ括弧 (IME 連動)
-    $(::  BW_OnKeyIME("(")
-    $)::  BW_OnKeyIME(")")
-    $[::  BW_OnKeyIME("[")
-    $]::  BW_OnKeyIME("]")
-    $+[:: BW_OnKeyIME(Chr(123))
-    $+]:: BW_OnKeyIME(Chr(125))
-#If
-
-; ==========================================================
-; ----- BracketWrap: Smart 行操作 (テキスト未選択, EditorGroup) -----
-; ==========================================================
-#If (EnableBracketWrap && UiaIsEditable() && !UiaHasSelection() && BW_SmartKeysEnabled())
-    $^c:: BW_SmartCopy()
-    $^x:: BW_SmartCut()
-    $^d:: BW_SmartDuplicate()
 #If
 
 ; ==========================================================

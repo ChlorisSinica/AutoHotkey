@@ -431,8 +431,6 @@ SUI_LoadConfig() {
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
-    global BW_SmartKeyApps
-    global EnableBracketWrap
     global CG_SameEventThreshold, CG_CrossEventThreshold
 
     SUI_EnsureConfigPath()
@@ -464,9 +462,6 @@ SUI_LoadConfig() {
     EnablePPT         := SUI_NormalizeBool(pptRaw, EnablePPT)
     EnableExcel       := SUI_NormalizeBool(excelRaw, EnableExcel)
     EnableChatterGuard := SUI_NormalizeBool(chatterGuardRaw, EnableChatterGuard)
-
-    IniRead, bracketWrapRaw,    %SUI_ConfigPath%, Indicators, EnableBracketWrap, %EnableBracketWrap%
-    EnableBracketWrap := SUI_NormalizeBool(bracketWrapRaw, EnableBracketWrap)
 
     IniRead, editorProviderRaw,    %SUI_ConfigPath%, TextEditor, Provider, %TextEditorProvider%
     IniRead, editorCustomPathRaw,  %SUI_ConfigPath%, TextEditor, CustomPath, __EMPTY__
@@ -539,16 +534,6 @@ SUI_LoadConfig() {
     CG_SameEventThreshold := SUI_NormalizeInt(sameThreshRaw, 50, 10, 200)
     CG_CrossEventThreshold := SUI_NormalizeInt(crossThreshRaw, 30, 5, 100)
 
-    ; [BracketWrap] SmartKeyApps 読込み (デフォルト保護付き)
-    IniRead, smartApps, %SUI_ConfigPath%, BracketWrap, SmartKeyApps, notepad.exe
-    if (smartApps = "")
-        smartApps := "notepad.exe"
-    Loop, Parse, smartApps, `,, %A_Space%
-    {
-        if (A_LoopField != "")
-            BW_SmartKeyApps[A_LoopField] := true
-    }
-
     SUI_DebugLog("config_load", "path=" . SUI_ConfigPath)
 }
 
@@ -562,7 +547,6 @@ SUI_SaveConfig() {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global EnableBracketWrap
     global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
@@ -584,7 +568,6 @@ SUI_SaveConfig() {
     IniWrite, % EnablePPT           ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
     IniWrite, % EnableChatterGuard  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableChatterGuard
     IniWrite, % EnableExcel         ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
-    IniWrite, % EnableBracketWrap  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBracketWrap
     SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
     IniWrite, % SettingsUI.EditorType, %SUI_ConfigPath%, SettingsUI, EditorType
 
@@ -782,7 +765,7 @@ SUI_HandleCtlColorEdit(wParam, lParam, msg, hwnd) {
 }
 
 SUI_HandleCtlColorStatic(wParam, lParam, msg, hwnd) {
-    global _SUI_Theme, SUI_UiaIndicatorHwnd, SUI_UiaIndicatorColor
+    global _SUI_Theme
 
     if (!IsObject(_SUI_Theme) || !SUI_IsSettingsGuiCtlColor(hwnd))
         return
@@ -792,14 +775,6 @@ SUI_HandleCtlColorStatic(wParam, lParam, msg, hwnd) {
         DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.TitleColor)
         DllCall("SetBkMode", "Ptr", wParam, "Int", 2)
         return SUI_GetThemeBrush(_SUI_Theme.TitleColor)
-    }
-
-    ; UIA インジケーター: 個別色適用
-    if (SUI_UiaIndicatorHwnd && lParam = SUI_UiaIndicatorHwnd) {
-        DllCall("SetTextColor", "Ptr", wParam, "UInt", SUI_UiaIndicatorColor)
-        DllCall("SetBkColor", "Ptr", wParam, "UInt", _SUI_Theme.WindowColor)
-        DllCall("SetBkMode", "Ptr", wParam, "Int", 1)
-        return SUI_GetThemeBrush(_SUI_Theme.WindowColor)
     }
 
     DllCall("SetTextColor", "Ptr", wParam, "UInt", _SUI_Theme.ForegroundColor)
@@ -869,9 +844,8 @@ class SettingsUI {
         Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorEdgeInset
         Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
         Global SettingsBrowserPdfZoomDebug, SettingsPPTSpacingDebug, SettingsPPTCaptionDebug, SettingsValidationHint
-        Global SettingsUiaStatus, SUI_UiaIndicatorHwnd, SUI_UiaIndicatorColor
         Global SettingsSameEvent, SettingsCrossEvent
-        Global EnableBracketWrap, CG_SameEventThreshold, CG_CrossEventThreshold, pBuf
+        Global CG_SameEventThreshold, CG_CrossEventThreshold
         Global SUI_IsInitializing, SUI_SelectedItemID, _SUI_LastHelpRow
         SUI_IsInitializing := true
         SUI_SelectedItemID := 0
@@ -973,16 +947,6 @@ class SettingsUI {
         Gui, Settings:Add, Text, x500 y360 w36 h20 +0x200, 交差
         Gui, Settings:Add, Edit, x538 y359 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
         Gui, Settings:Add, Text, x582 y360 w18 h20 +0x200, ms
-
-        ; ステータス表示
-        uiaConnected := (pBuf != 0)
-        uiaIcon := "●"
-        uiaDesc := uiaConnected ? "接続済み" : "未検出"
-        Gui, Settings:Add, Text, x370 y402 w80 h18 +0x200, UiaMonitor:
-        Gui, Settings:Add, Text, x450 y402 w14 h18 +0x200 HwndhUiaIndicator, %uiaIcon%
-        SUI_UiaIndicatorHwnd := hUiaIndicator
-        SUI_UiaIndicatorColor := uiaConnected ? 0x00AA00 : 0x0000CC
-        Gui, Settings:Add, Text, x464 y402 w120 h18 +0x200 vSettingsUiaStatus, %uiaDesc%
 
         Gui, Settings:Add, Button, x20 y393 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
         Gui, Settings:Add, Button, x150 y393 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
@@ -1881,17 +1845,6 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Ctrl+Shift+Tab", "前のシート", "Send ^{PgUp}", excelWhen, "", "^+Tab::", 1, 1, mainFile))
     d["EnableExcel"] := h
 
-    bwWhen := "EnableBracketWrap = ON かつ UIA 編集可能"
-    bwSmartWhen := "EnableBracketWrap = ON かつ SmartKeyApps (notepad.exe 等)"
-    textEditorFile := A_ScriptDir . "\Plugins\TextEditor.ahk"
-    h := []
-    h.Push(SUI_HelpItem("( ) [ ] { }", "選択テキストを括弧で囲む", "BW_OnKeyIME(char)", bwWhen, "IME ON 時は全角括弧", "$(::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem(""" ' $ %", "選択テキストを引用符で囲む/外す", "BW_OnKey(char)", bwWhen, "既にラップ済みなら解除", "$""::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+C", "行コピー (未選択時)", "BW_SmartCopy()", bwSmartWhen, "対象: INI [BracketWrap] SmartKeyApps", "$^c::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+X", "行カット (未選択時)", "BW_SmartCut()", bwSmartWhen, "", "$^x::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+D", "行複製 (未選択時)", "BW_SmartDuplicate()", bwSmartWhen, "", "$^d::", 1, 1, mainFile))
-    d["EnableBracketWrap"] := h
-
     _SUI_HelpData := d
 }
 
@@ -1914,7 +1867,6 @@ SUI_BuildItemList() {
     SUI_AddLeaf("ブラウザ", "EnableBrowser")
     SUI_AddLeaf("PowerPoint", "EnablePPT")
     SUI_AddLeaf("Excel", "EnableExcel")
-    SUI_AddLeaf("BracketWrap", "EnableBracketWrap", pBuf = 0)
 }
 
 SUI_AddLeaf(name, varName, disabled := false) {
@@ -2130,7 +2082,7 @@ SUI_SyncVars() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableBracketWrap, EnableChatterGuard
+    global EnableChatterGuard
     Gui, Settings:Default
 
     for itemID, item in _SUI_ItemMap {
@@ -2162,8 +2114,6 @@ SUI_SyncVars() {
             EnablePPT := v
         else if (item.Var = "EnableExcel")
             EnableExcel := v
-        else if (item.Var = "EnableBracketWrap")
-            EnableBracketWrap := v
         else if (item.Var = "EnableChatterGuard") {
             EnableChatterGuard := v
             if (v)
@@ -2180,7 +2130,7 @@ SUI_GetFlagValue(varName) {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableBracketWrap, EnableChatterGuard
+    global EnableChatterGuard
 
     if (varName = "EnableNavLayer")
         return EnableNavLayer
@@ -2206,8 +2156,6 @@ SUI_GetFlagValue(varName) {
         return EnablePPT
     if (varName = "EnableExcel")
         return EnableExcel
-    if (varName = "EnableBracketWrap")
-        return EnableBracketWrap
     if (varName = "EnableChatterGuard")
         return EnableChatterGuard
     return 0

@@ -84,27 +84,10 @@
    - `execute_passthrough_right_click` まで到達しているか
 4. `execute_empty_gesture_cancelled` が出ていれば，ジェスチャ状態により右クリックが抑止されています．
 
-## UiaMonitor セットアップ
+## UiaMonitor
 
-`lib/UiaMonitor/` はフォーカス状態を共有メモリ経由で取得する C# 監視プロセスです。
-未ビルドの場合、BracketWrap 等の UIA 依存機能は自動的に無効化されます。
-
-初回 / 別 PC への移行時:
-
-```bash
-# 1. AutoHotkey v1.1 のインストール
-winget install AutoHotkey.AutoHotkey --version 1.1.37.02
-
-# 2. .NET SDK のインストール（ビルド時のみ必要）
-winget install Microsoft.DotNet.SDK.10
-
-# 3. UiaMonitor のビルド
-cd lib/UiaMonitor
-dotnet publish -c Release -r win-x64 --self-contained true -o ./UiaMonitor
-```
-
-- 生成される `UiaMonitor/UiaMonitor.exe` は self-contained のため実行時に .NET 不要
-- `main.ahk` 起動時に `UiaInit()` で自動起動され，終了時に `UiaCleanup()` で停止
+BracketWrap 廃止に伴い、`lib/UiaMonitor/` は repo から削除しました。
+現行構成で使っている UI Automation 依存は `lib/UIA_Interface.ahk` と `lib/UIA_Browser.ahk` のみです。
 
 ## Appendix
 
