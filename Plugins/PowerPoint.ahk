@@ -14,6 +14,12 @@ global PPT_CaptionLogMaxBytes            := 262144
 global PPT_CaptionConfigPath             := PPT_SpacingLogDir . "\powerpoint_caption.ini"
 global PPT_CaptionVisualGapHorizontal    := 0.5
 global PPT_CaptionVisualGapVertical      := 2.5
+global PPT_CaptionPresetIndex            := 2
+global PPT_CaptionPresets                := []
+PPT_CaptionPresets.Push({Name: "10pt", FontSize: 10, Thickness: 18, MarginLeft: 0, MarginTop: 0, MarginRight: 0, MarginBottom: 0})
+PPT_CaptionPresets.Push({Name: "12pt", FontSize: 12, Thickness: 20, MarginLeft: 0, MarginTop: 0, MarginRight: 0, MarginBottom: 0})
+PPT_CaptionPresets.Push({Name: "14pt", FontSize: 14, Thickness: 22, MarginLeft: 0, MarginTop: 0, MarginRight: 0, MarginBottom: 0})
+PPT_CaptionPresets.Push({Name: "16pt", FontSize: 16, Thickness: 24, MarginLeft: 0, MarginTop: 0, MarginRight: 0, MarginBottom: 0})
 global PPT_SpacingEpsilon                := 0.05
 
 ; ============================================================================
@@ -844,8 +850,52 @@ PPT_CaptionNormalizeGapValue(value) {
     return value
 }
 
+PPT_CaptionNormalizePresetIndex(value, fallback := 2) {
+    global PPT_CaptionPresets
+
+    maxIndex := PPT_CaptionPresets.MaxIndex()
+    if (fallback < 1 || fallback > maxIndex)
+        fallback := 2
+
+    if (value = "" || value = "ERROR" || value = "__MISSING__")
+        return fallback
+
+    value := Floor(value + 0)
+    if (value < 1 || value > maxIndex)
+        return fallback
+    return value
+}
+
+PPT_GetCaptionPreset() {
+    global PPT_CaptionPresets, PPT_CaptionPresetIndex
+
+    PPT_CaptionPresetIndex := PPT_CaptionNormalizePresetIndex(PPT_CaptionPresetIndex, 2)
+    return PPT_CaptionPresets[PPT_CaptionPresetIndex]
+}
+
+PPT_CaptionShowPresetStatus(prefix := "Caption preset") {
+    preset := PPT_GetCaptionPreset()
+
+    ToolTip, % prefix . ": " . preset.Name
+    SetTimer, CloseToolTip, -1500
+}
+
+PPT_CycleCaptionPreset() {
+    global PPT_CaptionPresetIndex, PPT_CaptionPresets
+
+    PPT_CaptionPresetIndex := PPT_CaptionNormalizePresetIndex(PPT_CaptionPresetIndex, 2) + 1
+    if (PPT_CaptionPresetIndex > PPT_CaptionPresets.MaxIndex())
+        PPT_CaptionPresetIndex := 1
+
+    PPT_CaptionSaveConfig()
+    preset := PPT_GetCaptionPreset()
+    PPT_CaptionLog("caption_preset_cycle", "preset=" . preset.Name)
+    PPT_CaptionShowPresetStatus()
+}
+
 PPT_CaptionSaveConfig() {
     global PPT_CaptionConfigPath, PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+    global PPT_CaptionPresetIndex
     global SUI_ConfigPath
 
     configPath := ""
@@ -860,14 +910,17 @@ PPT_CaptionSaveConfig() {
 
     IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapHorizontal), %configPath%, PowerPoint, CaptionHorizontalGap
     IniWrite, % PPT_CaptionFormatSettingValue(PPT_CaptionVisualGapVertical), %configPath%, PowerPoint, CaptionVerticalGap
+    IniWrite, % PPT_CaptionNormalizePresetIndex(PPT_CaptionPresetIndex, 2), %configPath%, PowerPoint, CaptionPresetIndex
 }
 
 PPT_CaptionInit() {
     global PPT_CaptionConfigPath, PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
+    global PPT_CaptionPresetIndex
     global SUI_ConfigPath
 
     horizontalGapRaw := "__MISSING__"
     verticalGapRaw := "__MISSING__"
+    presetIndexRaw := "__MISSING__"
     usedLegacyConfig := false
 
     if (SUI_ConfigPath != "") {
@@ -875,24 +928,29 @@ PPT_CaptionInit() {
             SUI_EnsureConfigPath()
         IniRead, horizontalGapRaw, %SUI_ConfigPath%, PowerPoint, CaptionHorizontalGap, __MISSING__
         IniRead, verticalGapRaw, %SUI_ConfigPath%, PowerPoint, CaptionVerticalGap, __MISSING__
+        IniRead, presetIndexRaw, %SUI_ConfigPath%, PowerPoint, CaptionPresetIndex, __MISSING__
     }
 
-    if (horizontalGapRaw = "__MISSING__" || verticalGapRaw = "__MISSING__") {
+    if (horizontalGapRaw = "__MISSING__" || verticalGapRaw = "__MISSING__" || presetIndexRaw = "__MISSING__") {
         PPT_SpacingEnsureLogDir()
         IniRead, legacyHorizontalGapRaw, %PPT_CaptionConfigPath%, Caption, HorizontalGap, % PPT_CaptionVisualGapHorizontal
         IniRead, legacyVerticalGapRaw, %PPT_CaptionConfigPath%, Caption, VerticalGap, % PPT_CaptionVisualGapVertical
+        IniRead, legacyPresetIndexRaw, %PPT_CaptionConfigPath%, PowerPoint, CaptionPresetIndex, %PPT_CaptionPresetIndex%
         usedLegacyConfig := true
 
         if (horizontalGapRaw = "__MISSING__")
             horizontalGapRaw := legacyHorizontalGapRaw
         if (verticalGapRaw = "__MISSING__")
             verticalGapRaw := legacyVerticalGapRaw
+        if (presetIndexRaw = "__MISSING__")
+            presetIndexRaw := legacyPresetIndexRaw
     }
 
     if PPT_CaptionTryParseGapValue(horizontalGapRaw, horizontalGap)
         PPT_CaptionVisualGapHorizontal := PPT_CaptionNormalizeGapValue(horizontalGap)
     if PPT_CaptionTryParseGapValue(verticalGapRaw, verticalGap)
         PPT_CaptionVisualGapVertical := PPT_CaptionNormalizeGapValue(verticalGap)
+    PPT_CaptionPresetIndex := PPT_CaptionNormalizePresetIndex(presetIndexRaw, PPT_CaptionPresetIndex)
 
     if (SUI_ConfigPath != "" && usedLegacyConfig)
         PPT_CaptionSaveConfig()
@@ -1005,6 +1063,8 @@ PPT_CaptionDescribeTextBox(shapeRef) {
     boundTop := ""
     boundWidth := ""
     boundHeight := ""
+    fontSize := ""
+    presetName := ""
 
     try shapeId := shapeRef.Id
     try shapeName := shapeRef.Name
@@ -1021,6 +1081,8 @@ PPT_CaptionDescribeTextBox(shapeRef) {
     try marginBottom := shapeRef.TextFrame.MarginBottom
     try anchor := shapeRef.TextFrame.VerticalAnchor
     try wordWrap := shapeRef.TextFrame.WordWrap
+    try fontSize := shapeRef.TextFrame.TextRange.Font.Size
+    presetName := PPT_GetShapeTagValue(shapeRef, "AHK_CAPTION_PRESET")
     try {
         textRange := shapeRef.TextFrame.TextRange
         boundLeft := textRange.BoundLeft
@@ -1040,6 +1102,8 @@ PPT_CaptionDescribeTextBox(shapeRef) {
         . ",orientation=" . orientation
         . ",anchor=" . anchor
         . ",wordWrap=" . wordWrap
+        . ",fontSize=" . PPT_CaptionFormatNumber(fontSize)
+        . ",preset=" . presetName
         . ",margins=("
         . PPT_CaptionFormatNumber(marginLeft) . ","
         . PPT_CaptionFormatNumber(marginTop) . ","
@@ -1655,8 +1719,9 @@ PPT_GetEdgeCaptionTargets(shapes, edge) {
 }
 
 PPT_GetCaptionRect(shape, edge, slideSize) {
+    preset := PPT_GetCaptionPreset()
     gap := 0
-    lineH := 20
+    lineH := preset.Thickness
     x := 0
     y := 0
     w := 0
@@ -1854,7 +1919,7 @@ PPT_FindExistingCaptions(slide, target, edge, rect := "") {
             . " rect=" . PPT_CaptionDescribeRect(rect)
             . " count=" . matches.MaxIndex())
         for _, shp in matches
-            PPT_TagCaption(shp, edge, target.id)
+            PPT_TagCaptionIdentity(shp, edge, target.id)
     }
     return matches
 }
@@ -1873,13 +1938,34 @@ PPT_DeleteShapes(shapeList) {
     return deleted
 }
 
+PPT_SetShapeTagValue(shapeRef, tagName, tagValue) {
+    try shapeRef.Tags.Delete(tagName)
+    try shapeRef.Tags.Add(tagName, tagValue)
+}
+
+PPT_TagCaptionIdentity(textBox, edge, targetId) {
+    PPT_SetShapeTagValue(textBox, "AHK_KIND", "EDGE_CAPTION")
+    PPT_SetShapeTagValue(textBox, "AHK_EDGE", edge)
+    PPT_SetShapeTagValue(textBox, "AHK_TARGET_ID", targetId)
+}
+
+PPT_TagCaptionStyle(textBox) {
+    preset := PPT_GetCaptionPreset()
+    PPT_SetShapeTagValue(textBox, "AHK_CAPTION_PRESET", preset.Name)
+}
+
+PPT_CaptionPresetMatches(shapeRef) {
+    preset := PPT_GetCaptionPreset()
+    return (PPT_GetShapeTagValue(shapeRef, "AHK_CAPTION_PRESET") = preset.Name)
+}
+
 PPT_TagCaption(textBox, edge, targetId) {
-    try textBox.Tags.Add("AHK_KIND", "EDGE_CAPTION")
-    try textBox.Tags.Add("AHK_EDGE", edge)
-    try textBox.Tags.Add("AHK_TARGET_ID", targetId)
+    PPT_TagCaptionIdentity(textBox, edge, targetId)
+    PPT_TagCaptionStyle(textBox)
 }
 
 PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := false) {
+    preset := PPT_GetCaptionPreset()
     anchor := PPT_GetCaptionVerticalAnchor(edge)
     orientation := PPT_GetCaptionOrientation(edge)
     currentText := ""
@@ -1895,14 +1981,14 @@ PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := f
 
     try textBox.TextFrame.AutoSize := 0
     try textBox.TextFrame.Orientation := orientation
-    try textBox.TextFrame.MarginLeft := 0
-    try textBox.TextFrame.MarginRight := 0
-    try textBox.TextFrame.MarginTop := 0
-    try textBox.TextFrame.MarginBottom := 0
+    try textBox.TextFrame.MarginLeft := preset.MarginLeft
+    try textBox.TextFrame.MarginRight := preset.MarginRight
+    try textBox.TextFrame.MarginTop := preset.MarginTop
+    try textBox.TextFrame.MarginBottom := preset.MarginBottom
     try textBox.TextFrame.WordWrap := 0
     try textBox.TextFrame.VerticalAnchor := anchor
     try textBox.TextFrame.TextRange.Text := labelText
-    try textBox.TextFrame.TextRange.Font.Size := 12
+    try textBox.TextFrame.TextRange.Font.Size := preset.FontSize
     try textBox.TextFrame.TextRange.Font.Name := "Arial"
     try textBox.TextFrame.TextRange.ParagraphFormat.Alignment := 2
     try textBox.TextFrame.TextRange.ParagraphFormat.Bullet.Type := 0  ; ppBulletNone
@@ -1910,14 +1996,14 @@ PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := f
     try {
         textBox.TextFrame2.AutoSize := 0
         textBox.TextFrame2.Orientation := orientation
-        textBox.TextFrame2.MarginLeft := 0
-        textBox.TextFrame2.MarginRight := 0
-        textBox.TextFrame2.MarginTop := 0
-        textBox.TextFrame2.MarginBottom := 0
+        textBox.TextFrame2.MarginLeft := preset.MarginLeft
+        textBox.TextFrame2.MarginRight := preset.MarginRight
+        textBox.TextFrame2.MarginTop := preset.MarginTop
+        textBox.TextFrame2.MarginBottom := preset.MarginBottom
         textBox.TextFrame2.WordWrap := 0
         textBox.TextFrame2.VerticalAnchor := anchor
         font2 := textBox.TextFrame2.TextRange.Font
-        font2.Size := 12
+        font2.Size := preset.FontSize
         font2.NameAscii := "Arial"
         font2.NameFarEast := "Meiryo"
     } catch {
@@ -1997,10 +2083,13 @@ PPT_AddEdgeCaption(edge) {
     targets := PPT_GetEdgeCaptionTargets(shapes, edge)
     layout := PPT_GetSelectionLayout(shapes)
     allExist := true
+    allMatchPreset := true
     affectedCount := 0
+    preset := PPT_GetCaptionPreset()
 
     PPT_CaptionLog("caption_start"
         , "edge=" . edge
+        . " preset=" . preset.Name
         . " layout=" . layout
         . " slide=(" . PPT_CaptionFormatNumber(slideSize.w) . "," . PPT_CaptionFormatNumber(slideSize.h) . ") "
         . PPT_SpacingDescribeSelection())
@@ -2013,11 +2102,15 @@ PPT_AddEdgeCaption(edge) {
             . " target=" . PPT_CaptionDescribeTarget(target)
             . " rect=" . PPT_CaptionDescribeRect(rect)
             . " existing=" . captions.MaxIndex())
-        if !(captions.MaxIndex())
+        if !(captions.MaxIndex()) {
             allExist := false
+            allMatchPreset := false
+        } else if !PPT_CaptionPresetMatches(captions[1]) {
+            allMatchPreset := false
+        }
     }
 
-    if (allExist) {
+    if (allExist && allMatchPreset) {
         deletedCount := 0
         for _, target in targets {
             rect := PPT_GetCaptionRect(target, edge, slideSize)
@@ -2057,7 +2150,7 @@ PPT_AddEdgeCaption(edge) {
         try {
             if !textBox {
                 textBox := slide.Shapes.AddTextbox(rect.orientation, rect.createX, rect.createY, rect.createW, rect.createH)
-                PPT_TagCaption(textBox, edge, target.id)
+                PPT_TagCaptionIdentity(textBox, edge, target.id)
                 PPT_CaptionLog("caption_created"
                     , "edge=" . edge
                     . " target=" . PPT_CaptionDescribeTarget(target)
@@ -2067,8 +2160,10 @@ PPT_AddEdgeCaption(edge) {
             PPT_StyleCaptionTextBox(textBox, edge, "Caption", preserveText)
             PPT_ApplyCaptionGeometry(textBox, rect)
             PPT_AlignCaptionToShape(textBox, target, edge, "", slideSize)
+            PPT_TagCaption(textBox, edge, target.id)
             PPT_CaptionLog("caption_applied"
                 , "edge=" . edge
+                . " preset=" . preset.Name
                 . " target=" . PPT_CaptionDescribeTarget(target)
                 . " rect=" . PPT_CaptionDescribeRect(rect)
                 . " preserveText=" . preserveText
@@ -2085,7 +2180,7 @@ PPT_AddEdgeCaption(edge) {
     }
 
     if (affectedCount > 0) {
-        ToolTip, % edge . " caption: " . affectedCount
+        ToolTip, % edge . " caption: " . affectedCount . " [" . preset.Name . "]"
         SetTimer, CloseToolTip, -1500
     }
 }

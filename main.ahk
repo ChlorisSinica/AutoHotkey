@@ -32,19 +32,19 @@ SetBatchLines, -1
 ; ==========================================================
 ; ----- Indicator用変数 -----
 ; ==========================================================
-global EnableNavLayer             := 1
-global EnableWinPlace             := 1
+global EnableNavLayer             := 0
+global EnableWinPlace             := 0
 global EnableWinIsland            := 0
-global EnableVDesk                := 1
-global EnableMouseEmu             := 1
-global EnableMouseBtn             := 1
-global EnableGestures             := 1
-global EnableAlt                  := 1
-global EnableOthers               := 1
-global EnableBrowser              := 1
-global EnablePPT                  := 1
-global EnableExcel                := 1
-global EnableChatterGuard         := 1
+global EnableVDesk                := 0
+global EnableMouseEmu             := 0
+global EnableMouseBtn             := 0
+global EnableGestures             := 0
+global EnableAlt                  := 0
+global EnableOthers               := 0
+global EnableBrowser              := 0
+global EnablePPT                  := 0
+global EnableExcel                := 0
+global EnableChatterGuard         := 0
 global CG_SameEventThreshold      := 50
 global CG_CrossEventThreshold     := 30
 
@@ -53,8 +53,8 @@ global CG_CrossEventThreshold     := 30
 ; ==========================================================
 App_Init()
 vk1C & F1::Settings_Open()
-vk1C & F2::MG_DebugSnapshot("manual-hotkey")
-vk1C & F4::App_DebugStatus()
+vk1C & F2::App_DebugStatus()
+vk1C & F3::MG_DebugSnapshot("manual-hotkey")
 #If WinActive("機能設定") && SUI_HasHelpSelection()
     ^c::SUI_CopySelectedHelpRow()
 #If
@@ -68,8 +68,8 @@ vk1C & F4::App_DebugStatus()
 #If (EnableNavLayer)
     vk1C & 1::IME_ToEnglish()
     vk1C & 2::IME_ToJapanese()
-    vk1C & 3::Send,{Blind}^+6
-    vk1C & 4::Send,{Blind}^+2
+    vk1C & 3::Send,{Blind}^+2
+    vk1C & 4::Send,{Blind}^+6
     vk1C & j::Send,{Blind}{Left}
     vk1C & k::Send,{Blind}{Down}
     vk1C & i::Send,{Blind}{Up}
@@ -182,13 +182,13 @@ Cursor_GetHotkeyConfig() {
 ; ----- Others -----
 ; ==========================================================
 #If (EnableOthers)
-    scrolllock::        Return
-    $sc073::            Send, +{sc073}  ; \ → _
-    $+sc073::           Send, {sc073}  ; _ → \
-    vk1C & z::          Manage_N_Hold("Toggle")
-    vk1C & x::          Manage_N_Hold("Off")
-    ^!#Backspace::      CapsLock_SetState(false)
-    ^!#Delete::         CapsLock_SetState(true)
+    scrolllock::    Return
+    $sc073::        Send, +{sc073}  ; \ → _
+    $+sc073::       Send, {sc073}  ; _ → \
+    vk1C & z::      Manage_N_Hold("Toggle")
+    vk1C & x::      Manage_N_Hold("Off")
+    ^!#Backspace::  CapsLock_SetState(false)
+    ^!#Delete::     CapsLock_SetState(true)
 #If
 
 ; ==========================================================
@@ -226,6 +226,7 @@ Cursor_GetHotkeyConfig() {
     ^+!o::  PPT_AlignCenterToSmallest("V")
     ^+!m::  PPT_GridRepeatStart("H", "m")
     ^+!.::  PPT_GridRepeatStart("V", ".")
+    ^!0::   PPT_CycleCaptionPreset()
     ^!1::   PPT_AddEdgeCaption("Top")
     ^!2::   PPT_AddEdgeCaption("Bottom")
     ^!3::   PPT_AddEdgeCaption("Left")
@@ -269,7 +270,7 @@ Cursor_GetHotkeyConfig() {
 #If
 
 #If (EnableGestures && MG_IsActive && MouseIsOverTarget())
-    WheelUp::MG_ScrollAction("Up")
-    WheelDown::MG_ScrollAction("Down")
+    WheelUp::   MG_ScrollAction("Up")
+    WheelDown:: MG_ScrollAction("Down")
 #If
 
