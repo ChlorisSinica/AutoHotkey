@@ -53,8 +53,8 @@ global CG_CrossEventThreshold     := 30
 ; ==========================================================
 App_Init()
 vk1C & F1::Settings_Open()
-vk1C & F2::MG_DebugSnapshot("manual-hotkey")
-vk1C & F3::App_DebugStatus()
+vk1C & F2::App_DebugStatus()
+vk1C & F3::MG_DebugSnapshot("manual-hotkey")
 #If WinActive("機能設定") && SUI_HasHelpSelection()
     ^c::SUI_CopySelectedHelpRow()
 #If
@@ -68,8 +68,8 @@ vk1C & F3::App_DebugStatus()
 #If (EnableNavLayer)
     vk1C & 1::IME_ToEnglish()
     vk1C & 2::IME_ToJapanese()
-    vk1C & 3::Send,{Blind}^+6
-    vk1C & 4::Send,{Blind}^+2
+    vk1C & 3::Send,{Blind}^+2
+    vk1C & 4::Send,{Blind}^+6
     vk1C & j::Send,{Blind}{Left}
     vk1C & k::Send,{Blind}{Down}
     vk1C & i::Send,{Blind}{Up}
@@ -182,13 +182,13 @@ Cursor_GetHotkeyConfig() {
 ; ----- Others -----
 ; ==========================================================
 #If (EnableOthers)
-    scrolllock::        Return
-    $sc073::            Send, +{sc073}  ; \ → _
-    $+sc073::           Send, {sc073}  ; _ → \
-    vk1C & z::          Manage_N_Hold("Toggle")
-    vk1C & x::          Manage_N_Hold("Off")
-    ^!#Backspace::      CapsLock_SetState(false)
-    ^!#Delete::         CapsLock_SetState(true)
+    scrolllock::    Return
+    $sc073::        Send, +{sc073}  ; \ → _
+    $+sc073::       Send, {sc073}  ; _ → \
+    vk1C & z::      Manage_N_Hold("Toggle")
+    vk1C & x::      Manage_N_Hold("Off")
+    ^!#Backspace::  CapsLock_SetState(false)
+    ^!#Delete::     CapsLock_SetState(true)
 #If
 
 ; ==========================================================
@@ -270,7 +270,7 @@ Cursor_GetHotkeyConfig() {
 #If
 
 #If (EnableGestures && MG_IsActive && MouseIsOverTarget())
-    WheelUp::MG_ScrollAction("Up")
-    WheelDown::MG_ScrollAction("Down")
+    WheelUp::   MG_ScrollAction("Up")
+    WheelDown:: MG_ScrollAction("Down")
 #If
 
