@@ -228,8 +228,8 @@ OpenVSCode() {
     if (!TargetID)
         return
 
-    ; VSCodeも正規化比率で配置 (例: 右側メイン配置に近い設定)
-    MoveWindowRatio("ahk_id " . TargetID, 0.503, 0.216, 0.404, 0.766)
+    ; main.ahk の ^#9 と同じ全面配置へ揃える
+    MoveWindowRatio("ahk_id " . TargetID, 0.000, 0.030, 1.000, 0.970)
 }
 
 ; --- メディア操作の実行サブルーチン ---

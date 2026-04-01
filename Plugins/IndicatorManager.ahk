@@ -50,12 +50,15 @@ global SUI_IsInitializing                  := false
 global SUI_SelectedItemID                  := 0
 global _SUI_LastHelpRow                    := 0
 global _SUI_HelpRefreshPending             := false
+global _SUI_IsRebuildingHelpList           := false
+global _SUI_ItemRefreshPending             := false
 global _SUI_PendingCheckItemID             := 0
 global _SUI_PendingCheckSource             := ""
 global SUI_DebugEnabled                    := true
 global SUI_DebugLogDir                     := A_ScriptDir . "\.claude"
 global SUI_DebugLogPath                    := SUI_DebugLogDir . "\indicator_manager_debug.log"
 global SUI_DebugMaxBytes                   := 262144
+global SUI_DefaultConfigPath               := A_ScriptDir . "\defaults\indicator_settings.ini"
 global SUI_ConfigDir                       := A_ScriptDir . "\config"
 global SUI_LegacyConfigPath                := A_ScriptDir . "\Plugins\indicator_settings.ini"
 global SUI_ConfigPath                      := SUI_ConfigDir . "\indicator_settings.ini"
@@ -396,7 +399,7 @@ SUI_IsNotepadsAvailable() {
 }
 
 SUI_EnsureConfigPath() {
-    global SUI_ConfigDir, SUI_ConfigPath, SUI_LegacyConfigPath
+    global SUI_ConfigDir, SUI_ConfigPath, SUI_LegacyConfigPath, SUI_DefaultConfigPath
 
     if !InStr(FileExist(SUI_ConfigDir), "D")
         FileCreateDir, %SUI_ConfigDir%
@@ -404,17 +407,26 @@ SUI_EnsureConfigPath() {
     if FileExist(SUI_ConfigPath)
         return
 
-    if !FileExist(SUI_LegacyConfigPath)
-        return
+    if FileExist(SUI_LegacyConfigPath) {
+        FileMove, %SUI_LegacyConfigPath%, %SUI_ConfigPath%, 0
+        if (ErrorLevel) {
+            FileCopy, %SUI_LegacyConfigPath%, %SUI_ConfigPath%, 0
+            if (ErrorLevel)
+                return
+        }
 
-    FileMove, %SUI_LegacyConfigPath%, %SUI_ConfigPath%, 0
-    if (ErrorLevel) {
-        FileCopy, %SUI_LegacyConfigPath%, %SUI_ConfigPath%, 0
-        if (ErrorLevel)
-            return
+        SUI_DebugLog("config_migrated", "from=" . SUI_LegacyConfigPath . " to=" . SUI_ConfigPath)
+        return
     }
 
-    SUI_DebugLog("config_migrated", "from=" . SUI_LegacyConfigPath . " to=" . SUI_ConfigPath)
+    if !FileExist(SUI_DefaultConfigPath)
+        return
+
+    FileCopy, %SUI_DefaultConfigPath%, %SUI_ConfigPath%, 0
+    if (ErrorLevel)
+        return
+
+    SUI_DebugLog("config_seeded", "from=" . SUI_DefaultConfigPath . " to=" . SUI_ConfigPath)
 }
 
 SUI_LoadConfig() {
@@ -634,6 +646,7 @@ SUI_HandleWmClose(wParam, lParam, msg, hwnd) {
 
 SUI_HandleNotify(wParam, lParam, msg, hwnd) {
     global SUI_SettingsGuiHwnd, SUI_SettingsLVHwnd, SUI_SettingsItemsLVHwnd
+    global _SUI_IsRebuildingHelpList
     global _SUI_ItemMap
 
     if (!SUI_SettingsGuiHwnd || hwnd != SUI_SettingsGuiHwnd)
@@ -656,6 +669,8 @@ SUI_HandleNotify(wParam, lParam, msg, hwnd) {
     }
 
     if (hwndFrom != SUI_SettingsLVHwnd)
+        return
+    if (_SUI_IsRebuildingHelpList)
         return
 
     if (code = -101 || code = -2 || code = -3 || code = -155)
@@ -1588,10 +1603,10 @@ SUI_QueueHelpRefresh(reason := "") {
 }
 
 SUI_RefreshSelectedHelpRow() {
-    global _SUI_HelpRefreshPending
+    global _SUI_HelpRefreshPending, _SUI_IsRebuildingHelpList
 
     _SUI_HelpRefreshPending := false
-    if !SUI_IsSettingsWindowActive()
+    if (_SUI_IsRebuildingHelpList || !SUI_IsSettingsWindowActive())
         return
 
     selectedRow := SUI_GetSelectedHelpRow()
@@ -1826,6 +1841,7 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Ctrl+Alt+.", "垂直等間隔", "SetVerticalSpace()", pptWhen, "", "^!.::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+G/H", "グループ化/解除", "GroupSet() / GroupRelease()", pptWhen, "", "^!g::", 1, 6, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Shift+Alt+G/H", "前面/背面", "SetFront() / SetBack()", pptWhen, "", "^!h::", 1, 2, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+0", "キャプション preset 切替", "PPT_CycleCaptionPreset()", pptWhen, "", "^!0::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+1/2/3/4", "上/下/左/右キャプションの設置/削除", "PPT_AddEdgeCaption(edge)", pptWhen, "", "^!1::", 1, 3, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+5/6", "上下キャプション gap 微調整", "PPT_CaptionAdjustGap(""H"", delta)", pptWhen, "", "^!5::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+7/8", "左右キャプション gap 微調整", "PPT_CaptionAdjustGap(""V"", delta)", pptWhen, "", "^!7::", 1, 1, mainFile))
@@ -1944,8 +1960,38 @@ SUI_ApplyPendingCheckChange() {
     SUI_ProcessItemCheckChange(itemID, source)
 }
 
+SUI_QueueItemRefresh(reason := "") {
+    global _SUI_ItemRefreshPending
+    static refreshItemFn := Func("SUI_RefreshSelectedItem")
+
+    _SUI_ItemRefreshPending := true
+    if (reason != "")
+        SUI_DebugLog("item_refresh_queue", reason)
+    SetTimer, % refreshItemFn, Off
+    SetTimer, % refreshItemFn, -15
+}
+
+SUI_RefreshSelectedItem() {
+    global _SUI_ItemRefreshPending, SUI_SelectedItemID, _SUI_ItemMap
+
+    _SUI_ItemRefreshPending := false
+    if !SUI_IsSettingsWindowActive()
+        return
+
+    selectedID := SUI_GetSelectedItemID()
+    if (!selectedID || !_SUI_ItemMap.HasKey(selectedID))
+        return
+
+    if (selectedID != SUI_SelectedItemID) {
+        SUI_SelectedItemID := selectedID
+        SUI_RefreshLV(selectedID)
+    }
+
+    SUI_DebugLog("item_refresh_apply", SUI_DebugDescribeItem(selectedID))
+}
+
 SUI_ItemsHandler() {
-    global SUI_IsInitializing, SUI_SelectedItemID
+    global SUI_IsInitializing, SUI_SelectedItemID, _SUI_ItemMap
 
     if (SUI_IsInitializing) {
         SUI_DebugLog("list_event_ignored_init")
@@ -1955,19 +2001,19 @@ SUI_ItemsHandler() {
     evt        := A_GuiEvent
     info       := A_EventInfo
     flags      := ErrorLevel
-    targetID   := info ? info : SUI_GetSelectedItemID()
+    targetID   := (info && _SUI_ItemMap.HasKey(info)) ? info : SUI_GetSelectedItemID()
     selectedID := SUI_GetSelectedItemID()
-    refreshID  := 0
+    shouldRefresh := false
 
-    if (evt = "I" && info && InStr(flags, "S"))
-        refreshID := info
-    else if (evt = "Normal" && selectedID && selectedID != SUI_SelectedItemID)
-        refreshID := selectedID
+    if (evt = "K" || evt = "Normal" || evt = "F" || evt = "f")
+        shouldRefresh := true
+    else if (evt = "I" && info && _SUI_ItemMap.HasKey(info)
+        && (InStr(flags, "S") || InStr(flags, "s") || InStr(flags, "F") || InStr(flags, "f")))
+        shouldRefresh := true
 
-    if (refreshID && refreshID != SUI_SelectedItemID) {
-        SUI_SelectedItemID := refreshID
-        SUI_RefreshLV(refreshID)
-    } else if (!SUI_SelectedItemID && selectedID) {
+    if (shouldRefresh)
+        SUI_QueueItemRefresh("evt=" . evt . " info=" . info . " flags=" . flags)
+    else if (!SUI_SelectedItemID && selectedID) {
         SUI_SelectedItemID := selectedID
     }
 
@@ -1987,9 +2033,9 @@ SUI_ItemsHandler() {
 }
 
 SUI_HelpHandler() {
-    global SUI_IsInitializing
+    global SUI_IsInitializing, _SUI_IsRebuildingHelpList
 
-    if (SUI_IsInitializing)
+    if (SUI_IsInitializing || _SUI_IsRebuildingHelpList)
         return
 
     selectedRow := A_EventInfo ? A_EventInfo : SUI_GetSelectedHelpRow()
@@ -2039,13 +2085,18 @@ SUI_FlushPendingChange(reason := "manual") {
 
 SUI_RefreshLV(targetID) {
     global _SUI_ItemMap, _SUI_HelpData, _SUI_HelpRowMap, SettingsLV
+    global _SUI_LastHelpRow, _SUI_HelpRefreshPending, _SUI_IsRebuildingHelpList
     Gui, Settings:Default
     Gui, Settings:ListView, SettingsLV
+    _SUI_IsRebuildingHelpList := true
+    _SUI_LastHelpRow := 0
+    _SUI_HelpRefreshPending := false
     LV_Delete()
     _SUI_HelpRowMap := {}
 
     if (!targetID || !_SUI_ItemMap.HasKey(targetID)) {
         SUI_SetDetailPane(SUI_DefaultDetailMessage())
+        _SUI_IsRebuildingHelpList := false
         return
     }
 
@@ -2070,11 +2121,12 @@ SUI_RefreshLV(targetID) {
 
     firstRow := SUI_FindInitialHelpRow()
     if (firstRow) {
-        LV_Modify(firstRow, "Select Vis")
+        LV_Modify(firstRow, "Select Focus Vis")
         SUI_RefreshHelpDetails(firstRow)
     } else {
         SUI_SetDetailPane("この機能に対応する詳細はありません。")
     }
+    _SUI_IsRebuildingHelpList := false
 }
 
 SUI_SyncVars() {
