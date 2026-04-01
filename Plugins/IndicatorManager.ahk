@@ -58,7 +58,6 @@ global SUI_DebugEnabled                    := true
 global SUI_DebugLogDir                     := A_ScriptDir . "\.claude"
 global SUI_DebugLogPath                    := SUI_DebugLogDir . "\indicator_manager_debug.log"
 global SUI_DebugMaxBytes                   := 262144
-global SUI_DefaultConfigPath               := A_ScriptDir . "\defaults\indicator_settings.ini"
 global SUI_ConfigDir                       := A_ScriptDir . "\config"
 global SUI_LegacyConfigPath                := A_ScriptDir . "\Plugins\indicator_settings.ini"
 global SUI_ConfigPath                      := SUI_ConfigDir . "\indicator_settings.ini"
@@ -399,7 +398,7 @@ SUI_IsNotepadsAvailable() {
 }
 
 SUI_EnsureConfigPath() {
-    global SUI_ConfigDir, SUI_ConfigPath, SUI_LegacyConfigPath, SUI_DefaultConfigPath
+    global SUI_ConfigDir, SUI_ConfigPath, SUI_LegacyConfigPath
 
     if !InStr(FileExist(SUI_ConfigDir), "D")
         FileCreateDir, %SUI_ConfigDir%
@@ -418,15 +417,6 @@ SUI_EnsureConfigPath() {
         SUI_DebugLog("config_migrated", "from=" . SUI_LegacyConfigPath . " to=" . SUI_ConfigPath)
         return
     }
-
-    if !FileExist(SUI_DefaultConfigPath)
-        return
-
-    FileCopy, %SUI_DefaultConfigPath%, %SUI_ConfigPath%, 0
-    if (ErrorLevel)
-        return
-
-    SUI_DebugLog("config_seeded", "from=" . SUI_DefaultConfigPath . " to=" . SUI_ConfigPath)
 }
 
 SUI_LoadConfig() {
