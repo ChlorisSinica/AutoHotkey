@@ -2,6 +2,10 @@
 
 個人用の AutoHotkey v1.1 スクリプト集です．エントリポイントは `main.ahk` で，主要な処理は `Plugins` 配下にあります．
 
+## 必要インストール
+- `AHKv1.1`: https://www.autohotkey.com/
+- `VSCode`: https://code.visualstudio.com/download
+
 ## 構成
 
 - `main.ahk`
