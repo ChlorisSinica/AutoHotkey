@@ -187,11 +187,25 @@ SetFrameSize() {
         , "ShapeOutlineWeightMoreLinesDialog"], "!jpw")
 }
 
-; 黒枠線サイクル: 0.5pt → 0.25pt → 枠線なし → 0.5pt ...
+; 黒枠線サイクル: 枠線なし → 0.25pt → 0.5pt → 枠線なし ...
 PPT_CycleBlackBorder() {
-    shp := PPT_GetSelectedShapes()
-    if !shp
+    app := PPT_GetApp()
+    if !app
         return
+    try {
+        sel := app.ActiveWindow.Selection
+        if (sel.Type != 2)
+            return
+        ; グループ内の子図形が選択されている場合は ChildShapeRange を使用
+        shp := ""
+        try shp := sel.ChildShapeRange
+        if !shp || (shp.Count = 0)
+            shp := sel.ShapeRange
+        if !shp
+            return
+    } catch {
+        return
+    }
 
     try {
         line := shp.Item(1).Line
@@ -200,15 +214,15 @@ PPT_CycleBlackBorder() {
 
         ; 現在の状態を判定してサイクル
         if (isVisible = 0) {
-            ; 枠線なし → 黒 0.5pt
-            PPT_SetBorder(shp, true, 0, 0.5)
-            ToolTip, 枠線: 黒 0.5pt
-        } else if (weight > 0.3) {
-            ; 0.5pt → 0.25pt
+            ; 枠線なし → 黒 0.25pt
             PPT_SetBorder(shp, true, 0, 0.25)
             ToolTip, 枠線: 黒 0.25pt
+        } else if (weight < 0.3) {
+            ; 0.25pt → 0.5pt
+            PPT_SetBorder(shp, true, 0, 0.5)
+            ToolTip, 枠線: 黒 0.5pt
         } else {
-            ; 0.25pt → なし
+            ; 0.5pt → なし
             PPT_SetBorder(shp, false, 0, 0)
             ToolTip, 枠線: なし
         }
@@ -574,31 +588,7 @@ PasteTextOnly() {
 ;  UIA層: 書式設定パネル内の SpinBox フォーカス
 ; ============================================================================
 PPT_GetFormatPanel() {
-    hwnd := WinExist("ahk_exe POWERPNT.EXE")
-    if !hwnd
-        return ""
-
-    uia := UIA_Interface()
-    if !uia
-        return ""
-
-    rootEl := uia.ElementFromHandle(hwnd)
-    if !rootEl
-        return ""
-
-    names := []
-    names.Push("Format Shape")
-    names.Push("Format Picture")
-    names.Push("Size and Properties")
-
-    for _, n in names {
-        cond := uia.CreatePropertyCondition(uia.NamePropertyId, n)
-        panel := rootEl.FindFirst(cond, 0x4)
-        if panel
-            return panel
-    }
-
-    return FindElementByKeyword(rootEl, ["Format Shape", "Format Picture"])
+    return PPT_DetectFormatPanel()
 }
 
 PPT_FocusPanelField(keywords, excludeKeywords := "") {
@@ -647,13 +637,56 @@ PPT_FocusPanelField(keywords, excludeKeywords := "") {
 }
 
 FocusWidthField() {
-    PPT_FocusPanelField(["Width"], ["Height"])
+    PPT_FocusRibbonSizeField(["Width", "幅"], ["Height", "高さ"])
+}
+
+; リボンの書式タブをUIA経由でアクティブにし、サイズ系スピンボックスにフォーカス
+PPT_FocusRibbonSizeField(keywords, excludeKeywords := "") {
+    hwnd := WinExist("ahk_exe POWERPNT.EXE")
+    if !hwnd
+        return false
+    uia := UIA_Interface()
+    if !uia
+        return false
+    rootEl := uia.ElementFromHandle(hwnd)
+    if !rootEl
+        return false
+
+    ; Step 1: コンテキストタブ（図形の書式 / 図の形式 等）を選択
+    tabNames := ["図形の書式", "図の形式", "Shape Format", "Picture Format"
+        , "ビデオの書式", "オーディオの書式", "Video Format", "Audio Format"]
+    for _, tName in tabNames {
+        cond := uia.CreatePropertyCondition(30005, tName)  ; NamePropertyId
+        tab := rootEl.FindFirst(cond, 0x4)
+        if tab {
+            try tab.Invoke()
+            catch {
+                try tab.GetCurrentPatternAs("LegacyIAccessible").DoDefaultAction()
+                catch {
+                    try tab.SetFocus()
+                }
+            }
+            Sleep, 200
+            break
+        }
+    }
+
+    ; Step 2: 幅スピンボックスを探してフォーカス
+    el := FindElementByKeyword(rootEl, keywords, excludeKeywords)
+    if el {
+        try {
+            el.SetFocus()
+            return true
+        } catch {
+        }
+    }
+    return false
 }
 FocusHeightField() {
-    PPT_FocusPanelField(["Height"], ["Width"])
+    PPT_FocusPanelField(["Height", "高さ"], ["Width", "幅"])
 }
 FocusRotationField() {
-    PPT_FocusPanelField(["Rotation"])
+    PPT_FocusPanelField(["Rotation", "回転"])
 }
 
 ; ============================================================================

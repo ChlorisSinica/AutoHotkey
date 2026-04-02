@@ -239,7 +239,7 @@ Cursor_GetHotkeyConfig() {
     ^+!7::  PPT_CaptionPromptGap("V")
     !1::    PasteTextOnly()
     !2::    PPT_CycleBlackBorder()
-    !3::    SetFrameSize()
+    !3::    FocusWidthField()
     !4::    OpenFormatObject()
     +!4::   CloseFormatObject()
     ^v::    PasteImageWithMetadata()

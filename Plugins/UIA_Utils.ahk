@@ -5,7 +5,11 @@
 ;   excludeKeywords: 除外したい文字の配列 (OR条件) ["X", "Y"] (省略可)
 ; ----------------------------------------------------------
 FindElementByKeyword(parentEl, keywords, excludeKeywords := "") {
-    condTrue := parentEl.UIA.CreateTrueCondition()
+    uia := ""
+    try uia := parentEl.UIA
+    if !IsObject(uia)
+        uia := UIA_Interface()
+    condTrue := uia.CreateTrueCondition()
     elements := parentEl.FindAll(condTrue)
 
     Loop % elements.MaxIndex() {

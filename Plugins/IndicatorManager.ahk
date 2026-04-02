@@ -1838,7 +1838,7 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Ctrl+Shift+Alt+5/7", "キャプション gap 直接設定", "PPT_CaptionPromptGap(axis)", pptWhen, "", "^+!5::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Alt+1", "テキストのみ貼り付け", "PasteTextOnly()", pptWhen, "", "!1::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Alt+2", "枠線色", "PPT_CycleBlackBorder()", pptWhen, "", "!2::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Alt+3", "枠線太さ", "SetFrameSize()", pptWhen, "", "!3::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+3", "幅フォーカス", "FocusWidthField()", pptWhen, "", "!3::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Alt+4", "書式設定パネル開閉", "OpenFormatObject()", pptWhen, "", "!4::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Shift+Alt+4", "書式設定パネルを閉じる", "CloseFormatObject()", pptWhen, "", "+!4::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+V / F15", "画像メタデータ付き貼付け", "PasteImageWithMetadata()", pptWhen, "同じ機能を F15 にも割当", "^v::", 1, 2, mainFile))
