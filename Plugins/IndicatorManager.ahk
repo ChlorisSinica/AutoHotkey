@@ -36,6 +36,7 @@ global SettingsCursorAcceleration          := ""
 global SettingsCursorTimerInterval         := ""
 global SettingsCursorGridCols              := ""
 global SettingsCursorGridRows              := ""
+global SettingsCursorJumpDistance          := ""
 global SettingsCursorEdgeInset             := ""
 global SettingsIndicatorDebug              := ""
 global SettingsMouseGestureDebug           := ""
@@ -324,18 +325,47 @@ SUI_NormalizeBool(value, defaultValue := 0) {
     return defaultValue ? 1 : 0
 }
 
-SUI_NormalizeEditorType(value, defaultValue := 1) {
+SUI_NormalizeEditorType(value, defaultValue := 2) {
     value := Trim(value)
     if (value = "1" || value = "2")
         return value + 0
     return (defaultValue = 2) ? 2 : 1
 }
 
-SUI_NormalizeTextEditorProvider(value, defaultValue := "Notepads") {
+SUI_NormalizeTextEditorProvider(value, defaultValue := "Notepad") {
     value := Trim(value)
     if (value = "Notepads" || value = "Notepad" || value = "VSCode" || value = "Custom")
         return value
     return defaultValue
+}
+
+SUI_CanonicalizeTextEditorProvider(value, defaultValue := "Notepad") {
+    provider := SUI_NormalizeTextEditorProvider(value, defaultValue)
+    if (provider = "Notepads" && !SUI_IsNotepadsAvailable())
+        return "Notepad"
+    return provider
+}
+
+SUI_GetTextEditorProviderChoices() {
+    providers := "Notepad"
+    if (SUI_IsNotepadsAvailable())
+        providers .= "|Notepads"
+    providers .= "|VSCode|Custom"
+    return providers
+}
+
+SUI_GetTextEditorProviderChoiceIndex(provider) {
+    provider := SUI_CanonicalizeTextEditorProvider(provider, "Notepad")
+
+    if (provider = "Notepad")
+        return 1
+    if (provider = "Notepads")
+        return 2
+    if (provider = "VSCode")
+        return SUI_IsNotepadsAvailable() ? 3 : 2
+    if (provider = "Custom")
+        return SUI_IsNotepadsAvailable() ? 4 : 3
+    return 1
 }
 
 SUI_NormalizeZoomMode(value, defaultValue := "CtrlNumpad") {
@@ -471,9 +501,10 @@ SUI_LoadConfig() {
     if (Trim(editorProviderRaw) = "") {
         IniRead, editorTypeRaw, %SUI_ConfigPath%, SettingsUI, EditorType, % SettingsUI.EditorType
         SettingsUI.EditorType := SUI_NormalizeEditorType(editorTypeRaw, SettingsUI.EditorType)
-        TextEditorProvider := (SettingsUI.EditorType = 1) ? "Notepads" : "Notepad"
+        legacyProvider := (SettingsUI.EditorType = 1) ? "Notepads" : "Notepad"
+        TextEditorProvider := SUI_CanonicalizeTextEditorProvider(legacyProvider, "Notepad")
     } else {
-        TextEditorProvider := SUI_NormalizeTextEditorProvider(editorProviderRaw, TextEditorProvider)
+        TextEditorProvider := SUI_CanonicalizeTextEditorProvider(editorProviderRaw, TextEditorProvider)
         SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
     }
     if (editorCustomPathRaw = "__EMPTY__" || editorCustomPathRaw = "ERROR")
@@ -506,6 +537,7 @@ SUI_LoadConfig() {
     IniRead, cursorMaxSpeedRaw,     %SUI_ConfigPath%, Cursor, MaxSpeed, % CursorConfig.MaxSpeed
     IniRead, cursorAccelRaw,        %SUI_ConfigPath%, Cursor, Acceleration, % CursorConfig.Acceleration
     IniRead, cursorTimerRaw,        %SUI_ConfigPath%, Cursor, TimerInterval, % CursorConfig.TimerInterval
+    IniRead, cursorJumpDistRaw,     %SUI_ConfigPath%, Cursor, JumpDistance, % CursorConfig.JumpDistance
     IniRead, cursorGridColsRaw,     %SUI_ConfigPath%, Cursor, GridCols, % CursorGridConfig.DefaultCols
     IniRead, cursorGridRowsRaw,     %SUI_ConfigPath%, Cursor, GridRows, % CursorGridConfig.DefaultRows
     IniRead, cursorEdgeInsetRaw,    %SUI_ConfigPath%, Cursor, EdgeInset, % CursorGridConfig.EdgeInset
@@ -513,6 +545,7 @@ SUI_LoadConfig() {
     CursorConfig.MaxSpeed := SUI_NormalizeFloat(cursorMaxSpeedRaw, CursorConfig.MaxSpeed, CursorConfig.BaseSpeed, 200, 2)
     CursorConfig.Acceleration := SUI_NormalizeFloat(cursorAccelRaw, CursorConfig.Acceleration, 1.01, 5, 2)
     CursorConfig.TimerInterval := SUI_NormalizeInt(cursorTimerRaw, CursorConfig.TimerInterval, 1, 100)
+    CursorConfig.JumpDistance := SUI_NormalizeInt(cursorJumpDistRaw, CursorConfig.JumpDistance, 10, 500)
     CursorGridConfig.DefaultCols := SUI_NormalizeInt(cursorGridColsRaw, CursorGridConfig.DefaultCols, 1, 12)
     CursorGridConfig.DefaultRows := SUI_NormalizeInt(cursorGridRowsRaw, CursorGridConfig.DefaultRows, 1, 12)
     CursorGridConfig.EdgeInset := SUI_NormalizeInt(cursorEdgeInsetRaw, CursorGridConfig.EdgeInset, 0, 100)
@@ -536,6 +569,8 @@ SUI_LoadConfig() {
     CG_SameEventThreshold := SUI_NormalizeInt(sameThreshRaw, 50, 10, 200)
     CG_CrossEventThreshold := SUI_NormalizeInt(crossThreshRaw, 30, 5, 100)
 
+    if IsFunc("Cursor_ResolveModeForFlags")
+        Cursor_ResolveModeForFlags("config_load")
     SUI_DebugLog("config_load", "path=" . SUI_ConfigPath)
 }
 
@@ -591,6 +626,7 @@ SUI_SaveConfig() {
     IniWrite, % SUI_FormatNumber(CursorConfig.MaxSpeed, 2), %SUI_ConfigPath%, Cursor, MaxSpeed
     IniWrite, % SUI_FormatNumber(CursorConfig.Acceleration, 2), %SUI_ConfigPath%, Cursor, Acceleration
     IniWrite, % CursorConfig.TimerInterval, %SUI_ConfigPath%, Cursor, TimerInterval
+    IniWrite, % CursorConfig.JumpDistance, %SUI_ConfigPath%, Cursor, JumpDistance
     IniWrite, % CursorGridConfig.DefaultCols, %SUI_ConfigPath%, Cursor, GridCols
     IniWrite, % CursorGridConfig.DefaultRows, %SUI_ConfigPath%, Cursor, GridRows
     IniWrite, % CursorGridConfig.EdgeInset, %SUI_ConfigPath%, Cursor, EdgeInset
@@ -810,7 +846,7 @@ SUI_HandleCtlColorDlg(wParam, lParam, msg, hwnd) {
 }
 
 class SettingsUI {
-    static EditorType := 1
+    static EditorType := 2
 
     Init() {
         Global StartupShortcutPath, TargetScriptPath
@@ -846,7 +882,7 @@ class SettingsUI {
         Global SettingsPPTCaptionGapH, SettingsPPTCaptionGapV
         Global SettingsBrowserPdfZoomShortcutFirst, SettingsMouseWheelExplorerRepeat
         Global SettingsCursorBaseSpeed, SettingsCursorMaxSpeed, SettingsCursorAcceleration, SettingsCursorTimerInterval
-        Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorEdgeInset
+        Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorJumpDistance, SettingsCursorEdgeInset
         Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
         Global SettingsBrowserPdfZoomDebug, SettingsPPTSpacingDebug, SettingsPPTCaptionDebug, SettingsValidationHint
         Global SettingsSameEvent, SettingsCrossEvent
@@ -895,7 +931,7 @@ class SettingsUI {
         Gui, Settings:Tab, 2
         Gui, Settings:Add, GroupBox, x20 y45 w330 h116, Text Editor
         Gui, Settings:Add, Text, x35 y69 w68 h20 +0x200, Provider
-        Gui, Settings:Add, DropDownList, x105 y67 w225 vSettingsEditorProvider gSUI_EditorProviderChanged, Notepads|Notepad|VSCode|Custom
+        Gui, Settings:Add, DropDownList, x105 y67 w225 vSettingsEditorProvider gSUI_EditorProviderChanged, % SUI_GetTextEditorProviderChoices()
         Gui, Settings:Add, Text, x35 y98 w68 h20 +0x200, Custom path
         Gui, Settings:Add, Edit, x105 y96 w225 h21 vSettingsEditorCustomPath
         Gui, Settings:Add, Text, x35 y123 w68 h20 +0x200, Custom args
@@ -935,6 +971,8 @@ class SettingsUI {
         Gui, Settings:Add, Edit, x680 y157 w42 h21 Number vSettingsCursorGridRows gSUI_NonNegativeIntEditChanged
         Gui, Settings:Add, Text, x388 y186 w36 h20 +0x200, Inset
         Gui, Settings:Add, Edit, x425 y184 w46 h21 Number vSettingsCursorEdgeInset gSUI_NonNegativeIntEditChanged
+        Gui, Settings:Add, Text, x490 y186 w36 h20 +0x200, Jump
+        Gui, Settings:Add, Edit, x527 y184 w46 h21 Number vSettingsCursorJumpDistance gSUI_NonNegativeIntEditChanged
 
         Gui, Settings:Add, GroupBox, x370 y224 w370 h108, Debug
         Gui, Settings:Add, CheckBox, x388 y249 w145 h20 vSettingsIndicatorDebug, IndicatorManager
@@ -1004,7 +1042,7 @@ SUI_LoadAdvancedSettingsIntoGui() {
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
     global CG_SameEventThreshold, CG_CrossEventThreshold
 
-    GuiControl, Settings:ChooseString, SettingsEditorProvider, %TextEditorProvider%
+    GuiControl, Settings:Choose, SettingsEditorProvider, % SUI_GetTextEditorProviderChoiceIndex(TextEditorProvider)
     GuiControl, Settings:, SettingsEditorCustomPath, %TextEditorCustomPath%
     GuiControl, Settings:, SettingsEditorArgs, %TextEditorArgsTemplate%
 
@@ -1024,6 +1062,7 @@ SUI_LoadAdvancedSettingsIntoGui() {
     GuiControl, Settings:, SettingsCursorTimerInterval, % CursorConfig.TimerInterval
     GuiControl, Settings:, SettingsCursorGridCols, % CursorGridConfig.DefaultCols
     GuiControl, Settings:, SettingsCursorGridRows, % CursorGridConfig.DefaultRows
+    GuiControl, Settings:, SettingsCursorJumpDistance, % CursorConfig.JumpDistance
     GuiControl, Settings:, SettingsCursorEdgeInset, % CursorGridConfig.EdgeInset
 
     GuiControl, Settings:, SettingsIndicatorDebug, % SUI_DebugEnabled ? 1 : 0
@@ -1099,6 +1138,8 @@ SUI_GetNumericControlSpec(controlName) {
         return {Label: "Grid Cols", Type: "int", Min: 1, Max: 12}
     if (controlName = "SettingsCursorGridRows")
         return {Label: "Grid Rows", Type: "int", Min: 1, Max: 12}
+    if (controlName = "SettingsCursorJumpDistance")
+        return {Label: "Jump Distance", Type: "int", Min: 10, Max: 500}
     if (controlName = "SettingsCursorEdgeInset")
         return {Label: "Grid Inset", Type: "int", Min: 0, Max: 100}
     return ""
@@ -1218,8 +1259,6 @@ SUI_ResetAdvancedSettings() {
     SetTimer, CloseToolTip, -1200
 }
 
-
-
 SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SUI_IsInitializing, SUI_SettingsGuiHwnd
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
@@ -1251,6 +1290,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     GuiControlGet, cursorTimerInterval,, SettingsCursorTimerInterval
     GuiControlGet, cursorGridCols,, SettingsCursorGridCols
     GuiControlGet, cursorGridRows,, SettingsCursorGridRows
+    GuiControlGet, cursorJumpDistance,, SettingsCursorJumpDistance
     GuiControlGet, cursorEdgeInset,, SettingsCursorEdgeInset
     GuiControlGet, indicatorDebug,, SettingsIndicatorDebug
     GuiControlGet, mouseGestureDebug,, SettingsMouseGestureDebug
@@ -1259,7 +1299,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     GuiControlGet, pptSpacingDebug,, SettingsPPTSpacingDebug
     GuiControlGet, pptCaptionDebug,, SettingsPPTCaptionDebug
 
-    TextEditorProvider := SUI_NormalizeTextEditorProvider(editorProvider, TextEditorProvider)
+    TextEditorProvider := SUI_CanonicalizeTextEditorProvider(editorProvider, TextEditorProvider)
     TextEditorCustomPath := Trim(editorCustomPath)
     TextEditorArgsTemplate := editorArgs
     SaveDir := SUI_NormalizeText(authSaveDir, SaveDir)
@@ -1275,6 +1315,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     CursorConfig.MaxSpeed := SUI_NormalizeFloat(cursorMaxSpeed, CursorConfig.MaxSpeed, CursorConfig.BaseSpeed, 200, 2)
     CursorConfig.Acceleration := SUI_NormalizeFloat(cursorAcceleration, CursorConfig.Acceleration, 1.01, 5, 2)
     CursorConfig.TimerInterval := SUI_NormalizeInt(cursorTimerInterval, CursorConfig.TimerInterval, 1, 100)
+    CursorConfig.JumpDistance := SUI_NormalizeInt(cursorJumpDistance, CursorConfig.JumpDistance, 10, 500)
     CursorGridConfig.DefaultCols := SUI_NormalizeInt(cursorGridCols, CursorGridConfig.DefaultCols, 1, 12)
     CursorGridConfig.DefaultRows := SUI_NormalizeInt(cursorGridRows, CursorGridConfig.DefaultRows, 1, 12)
     CursorGridConfig.EdgeInset := SUI_NormalizeInt(cursorEdgeInset, CursorGridConfig.EdgeInset, 0, 100)
@@ -1593,14 +1634,14 @@ SUI_QueueHelpRefresh(reason := "") {
 }
 
 SUI_RefreshSelectedHelpRow() {
-    global _SUI_HelpRefreshPending, _SUI_IsRebuildingHelpList
+    global _SUI_HelpRefreshPending, _SUI_IsRebuildingHelpList, _SUI_LastHelpRow
 
     _SUI_HelpRefreshPending := false
     if (_SUI_IsRebuildingHelpList || !SUI_IsSettingsWindowActive())
         return
 
     selectedRow := SUI_GetSelectedHelpRow()
-    if (selectedRow)
+    if (selectedRow && selectedRow != _SUI_LastHelpRow)
         SUI_RefreshHelpDetails(selectedRow)
     SUI_DebugLog("help_refresh_apply", "row=" . selectedRow)
 }
@@ -1681,19 +1722,20 @@ SUI_InitHelpData() {
     pptWhen := "EnablePPT = ON かつ POWERPNT.EXE がアクティブ"
     excelWhen := "EnableExcel = ON かつ EXCEL.EXE がアクティブ"
     altWhen := "EnableAlt = ON"
-    altExceptPptWhen := "EnableAlt = ON かつ POWERPNT.EXE 以外"
     othersWhen := "EnableOthers = ON"
 
     h := []
     h.Push(SUI_HelpItem("変換 + 1", "IME → 英語", "IME_ToEnglish()", navWhen, "", "vk1C & 1::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("変換 + 2", "IME → 日本語", "IME_ToJapanese()", navWhen, "", "vk1C & 2::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + 3", "Ctrl+Shift+6", "Send {Blind}^+6", navWhen, "", "vk1C & 3::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + 4", "Ctrl+Shift+2", "Send {Blind}^+2", navWhen, "", "vk1C & 4::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + J / K / I / L", "カーソル移動 (←↓↑→)", "Send {Blind}{Left/Down/Up/Right}", navWhen, "", "vk1C & j::", 1, 3, mainFile))
-    h.Push(SUI_HelpItem("変換 + U / O", "Home / End", "Send {Blind}{Home/End}", navWhen, "", "vk1C & u::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + P", "リネーム (F2)", "Send {Blind}{F2}", navWhen, "", "vk1C & p::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + N", "ペイント起動", "OpenWithMspaint(0)", navWhen, "", "vk1C & n::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + M", "テキストエディタ起動", "OpenTextEditor(0)", navWhen, "", "vk1C & m::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + 3", "Ctrl+Shift+2", "Send {Blind}^+2", navWhen, "", "vk1C & 3::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + 4", "Ctrl+Shift+6", "Send {Blind}^+6", navWhen, "", "vk1C & 4::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + J / K / I / L", "カーソル移動 (←↓↑→)", "Send {Blind}{Left/Down/Up/Right}", navWhen . " かつ Mouse mode OFF", "", "vk1C & j::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("変換 + U / O", "Home / End", "Send {Blind}{Home/End}", navWhen . " かつ Mouse mode OFF", "", "vk1C & u::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + P", "リネーム (F2)", "Send {Blind}{F2}", navWhen . " かつ Mouse mode OFF", "", "vk1C & p::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + N", "ペイント起動", "OpenWithMspaint(0)", navWhen, "", "vk1C & n::OpenWithMspaint(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + Ctrl + N", "選択ファイルをペイントで開く", "OpenWithMspaint(1)", navWhen . " かつ Ctrl 押下", "", "vk1C & n::OpenWithMspaint(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + M", "テキストエディタ起動", "OpenTextEditor(0)", navWhen, "", "vk1C & m::OpenTextEditor(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + Ctrl + M", "選択ファイルをエディタで開く", "OpenTextEditor(1)", navWhen . " かつ Ctrl 押下", "", "vk1C & m::OpenTextEditor(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
     h.Push(SUI_HelpItem("変換 + T", "日時挿入 (yyyy/MM/dd (ddd) HH:mm)", "InsertDateTime(...)", navWhen, "", "vk1C & t::", 1, 1, mainFile))
     d["EnableNavLayer"] := h
 
@@ -1702,9 +1744,9 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Win+Shift+K", "Bluetooth設定", "Run ms-settings:bluetooth", winWhen, "", "+#k::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+1/2/3", "右側プリセット配置", "MoveWindowRatio(...)", winWhen, "", "^#1::", 1, 3, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+1/2/3", "左側プリセット配置", "MoveWindowRatio(...)", winWhen, "", "^+#1::", 1, 3, mainFile))
-    h.Push(SUI_HelpItem("Win+Ctrl+8", "高さ最大化 (上寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Top"")", winWhen, "", "^#8::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Win+Ctrl+Shift+8", "高さ最大化 (下寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Bottom"")", winWhen, "", "^+#8::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Win+Ctrl+9", "横幅最大化 (下寄せ)", "MoveWindowRatio(...)", winWhen, "", "^#9::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+8", "高さ最大化 (※タイトルバー分下寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Top"")", winWhen, "", "^#8::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+8", "高さ最大化(※タイトルバー分上寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Bottom"")", winWhen, "", "^+#8::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+9", "横幅最大化 (※タイトルバー分下寄せ)", "MoveWindowRatio(...)", winWhen, "", "^#9::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+G", "Gridモード切替", "Grid_ToggleMode()", winWhen, "", "^#g::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+G", "Window Island 切替", "WindowIsland_Toggle()", winWhen, "", "^+#g::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+J/K/I/L", "Grid移動 (←↓↑→)", "Grid_Move(dx, dy)", winWhen, "", "^#j::", 1, 3, mainFile))
@@ -1721,11 +1763,18 @@ SUI_InitHelpData() {
     d["EnableVDesk"] := h
 
     h := []
-    h.Push(SUI_HelpItem("F13 + O/K/L/;", "カーソル移動 (↑←↓→)", "Cursor_MoveHotkeyDown() -> Cursor_StartContinuous()", mouseEmuWhen, "キー割当は Cursor_GetHotkeyConfig() で定義", "Cursor_GetHotkeyConfig() {", 0, 4, mainFile))
-    h.Push(SUI_HelpItem("F13 + Ctrl + O/K/L/;", "グリッドジャンプ", "Cursor_MoveHotkeyGrid() -> Cursor_GridMoveByDirection()", mouseEmuWhen, "Ctrl 同時押しでグリッドモード", "Cursor_MoveHotkeyGrid() {", 0, 4, A_ScriptDir . "\Plugins\MouseCursor.ahk"))
-    h.Push(SUI_HelpItem("F13 + I", "左クリック (押下/解放)", "Click Down / Click Up", mouseEmuWhen, "", "F13 & i::Click, Down", 1, 3, mainFile))
-    h.Push(SUI_HelpItem("F13 + .", "中クリック", "Click, Middle", mouseEmuWhen, "", "F13 & .::Click, Middle", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("F13 + P", "右クリック (押下/解放)", "Click, Right, Down / Up", mouseEmuWhen, "", "F13 & p::Click, Right, Down", 1, 2, mainFile))
+    cursorFile := A_ScriptDir . "\Plugins\MouseCursor.ahk"
+    mouseModWhen := mouseEmuWhen . " かつ Mouse モード"
+    toggleWhen := mouseEmuWhen . " かつ " . navWhen
+    h.Push(SUI_HelpItem("変換 + `;", "Mouse/Keyboard Cursor 切替", "ToggleMouseCursorMode()", toggleWhen, "両方 ON のときのみ切替可能", "vk1C & sc027::ToggleMouseCursorMode()", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + I/J/K/L", "カーソル連続移動 (↑←↓→)", "Cursor_MoveHotkeyDown()", mouseModWhen, "長押しで加速", "Cursor_GetHotkeyConfig() {", 0, 4, mainFile))
+    h.Push(SUI_HelpItem("変換 + Ctrl + I/J/K/L", "カーソルジャンプ", "Cursor_MoveHotkeyJump()", mouseModWhen, "JumpDistance 分を一気に移動", "Cursor_MoveHotkeyJump() {", 0, 8, cursorFile))
+    h.Push(SUI_HelpItem("変換 + Alt + I/J/K/L", "グリッドジャンプ", "Cursor_MoveHotkeyGrid()", mouseModWhen, "Alt 同時押しでグリッド交点へ移動", "Cursor_MoveHotkeyGrid() {", 0, 4, cursorFile))
+    h.Push(SUI_HelpItem("変換 + Ctrl+Alt + I/J/K/L", "画面端へ移動", "Cursor_MoveHotkeyEdge()", mouseModWhen, "EdgeInset 分内側のモニター端へ", "Cursor_MoveHotkeyEdge() {", 0, 10, cursorFile))
+    h.Push(SUI_HelpItem("変換 + U", "左クリック (押下/解放)", "Click Down / Click Up", mouseModWhen, "", "vk1C & u::", 1, 3, mainFile))
+    h.Push(SUI_HelpItem("変換 + O", "中クリック", "Click, Middle", mouseModWhen, "", "vk1C & o::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + ,", "右クリック (押下/解放)", "Click, Right, Down / Up", mouseModWhen, "", "vk1C & sc033::", 1, 2, mainFile))
+    h.Push(SUI_HelpSection("【Mode Fallback】", "EnableNavLayer を OFF にすると Keyboard mode では Mouse へ移り、Mouse mode ではそのまま継続します。再度 ON にしても自動では戻りません。", mouseEmuWhen, "Cursor_ResolveModeForFlags() {", 0, 8, cursorFile))
     d["EnableMouseEmu"] := h
 
     h := []
@@ -1799,10 +1848,8 @@ SUI_InitHelpData() {
     d["EnableChatterGuard"] := h
 
     h := []
-    h.Push(SUI_HelpItem("Alt+W", "ウィンドウを閉じる", "Send !{F4}", altWhen, "", "!w::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+C", "選択内の \\ を / に置換", "ReplaceEscapeToSlash()", altWhen, "", "^!c::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+Alt+N", "選択ファイルをペイントで開く", "OpenWithMspaint(1)", altWhen, "", "^!n::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+Alt+M", "選択ファイルをエディタで開く", "OpenTextEditor(1)", altExceptPptWhen, "", "^!m::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+W", "ウィンドウを閉じる", "Send !{F4}", altWhen, "", "!w::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Alt+Backspace", "Delete", "Send {Del}", altWhen, "", "!Backspace::", 1, 1, mainFile))
     d["EnableAlt"] := h
 
@@ -1818,8 +1865,8 @@ SUI_InitHelpData() {
 
     h := []
     h.Push(SUI_HelpItem("Ctrl+\", "PDFズーム切替", "TogglePDFZoom()", browserWhen, "", "$^sc073::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("F1", "サイト固有キー", "RunSiteSpecificKey(""{F1}"", KeyActions[""F1""])", browserWhen, "", "$F1 Up::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("F2", "サイト固有キー", "RunSiteSpecificKey(F2)", browserWhen, "", "F2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F1", "サイト固有キー", "RunSiteSpecificKey(""{F1}"", KeyActions[""F1""])", browserWhen, "", "F1::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F2", "サイト固有キー", "RunSiteSpecificKey(""{F2}"", KeyActions[""F2""])", browserWhen, "", "F2::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Shift+C", "プレーンURLコピー", "CopyPlaneURL()", browserWhen, "", "^+c::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("F8", "全タブURL取得", "GetAllEdgeURLs(false)", browserWhen, "", "F8::", 1, 1, mainFile))
     d["EnableBrowser"] := h
@@ -1829,15 +1876,21 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Ctrl+Alt+U/O", "水平/垂直中央揃え", "SetHorizontalCenter() / SetVerticalCenter()", pptWhen, "", "^!u::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+M", "水平等間隔", "SetHorizontalSpacer()", pptWhen, "", "^!m::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+.", "垂直等間隔", "SetVerticalSpace()", pptWhen, "", "^!.::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+Alt+G/H", "グループ化/解除", "GroupSet() / GroupRelease()", pptWhen, "", "^!g::", 1, 6, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+G/H", "前面/背面", "SetFront() / SetBack()", pptWhen, "", "^!h::", 1, 2, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+G", "グループ化", "GroupSet()", pptWhen, "", "^!g::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+G", "グループ解除", "GroupRelease()", pptWhen, "", "^+!g::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+H", "前面へ", "SetFront()", pptWhen, "", "^!h::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+H", "背面へ", "SetBack()", pptWhen, "", "^+!h::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+J/L", "水平間隔の反復調整", "PPT_SpacingRepeatStart(""H"", delta, key)", pptWhen, "", "^+!l::", 1, 4, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+I/K", "垂直間隔の反復調整", "PPT_SpacingRepeatStart(""V"", delta, key)", pptWhen, "", "^+!i::", 1, 4, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+U/O", "最小要素基準の中央揃え", "PPT_AlignCenterToSmallest(""H/V"")", pptWhen, "", "^+!u::", 1, 2, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+M/.", "グリッド反復配置", "PPT_GridRepeatStart(""H/V"", key)", pptWhen, "", "^+!m::", 1, 2, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+0", "キャプション preset 切替", "PPT_CycleCaptionPreset()", pptWhen, "", "^!0::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+1/2/3/4", "上/下/左/右キャプションの設置/削除", "PPT_AddEdgeCaption(edge)", pptWhen, "", "^!1::", 1, 3, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+5/6", "上下キャプション gap 微調整", "PPT_CaptionAdjustGap(""H"", delta)", pptWhen, "", "^!5::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+7/8", "左右キャプション gap 微調整", "PPT_CaptionAdjustGap(""V"", delta)", pptWhen, "", "^!7::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Shift+Alt+5/7", "キャプション gap 直接設定", "PPT_CaptionPromptGap(axis)", pptWhen, "", "^+!5::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Alt+1", "テキストのみ貼り付け", "PasteTextOnly()", pptWhen, "", "!1::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Alt+2", "枠線色", "PPT_CycleBlackBorder()", pptWhen, "", "!2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Alt+2", "枠線色(枠なし/0.25/0.50)", "PPT_CycleBlackBorder()", pptWhen, "", "!2::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Alt+3", "幅フォーカス", "FocusWidthField()", pptWhen, "", "!3::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Alt+4", "書式設定パネル開閉", "OpenFormatObject()", pptWhen, "", "!4::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Shift+Alt+4", "書式設定パネルを閉じる", "CloseFormatObject()", pptWhen, "", "+!4::", 1, 1, mainFile))
@@ -1994,6 +2047,7 @@ SUI_ItemsHandler() {
     targetID   := (info && _SUI_ItemMap.HasKey(info)) ? info : SUI_GetSelectedItemID()
     selectedID := SUI_GetSelectedItemID()
     shouldRefresh := false
+    changedID := 0
 
     if (evt = "K" || evt = "Normal" || evt = "F" || evt = "f")
         shouldRefresh := true
@@ -2007,10 +2061,17 @@ SUI_ItemsHandler() {
         SUI_SelectedItemID := selectedID
     }
 
-    if ((evt = "I" && info && (InStr(flags, "C") || InStr(flags, "c")))
-        ||  (evt = "C" && targetID)) {
-        changedID := info ? info : targetID
+    if (evt = "I" && info && (InStr(flags, "C") || InStr(flags, "c")))
+        changedID := SUI_FindChangedCheckItemID(info)
+    else if (evt = "C")
+        changedID := SUI_FindChangedCheckItemID(targetID)
+    else if (evt = "K" && info = 32)
+        changedID := SUI_FindChangedCheckItemID(selectedID)
+
+    if (changedID) {
         SUI_QueueCheckSync(changedID, "evt=" . evt)
+        ; Mouse/Keyboard Cursor: チェック変更を即座に反映 (タイマー遅延を待たない)
+        SUI_SyncVars()
     }
 
     SUI_DebugLog("list_event"
@@ -2165,6 +2226,8 @@ SUI_SyncVars() {
         }
     }
 
+    if IsFunc("Cursor_ResolveModeForFlags")
+        Cursor_ResolveModeForFlags("sync_vars")
     SUI_DebugLog("sync_vars")
 }
 
@@ -2214,6 +2277,21 @@ SUI_DidCheckStateChange(itemID) {
         return false
 
     return (_SUI_CheckStateMap[itemID] != currentState)
+}
+
+SUI_FindChangedCheckItemID(preferredID := 0) {
+    global _SUI_ItemMap
+
+    if (preferredID && _SUI_ItemMap.HasKey(preferredID) && SUI_DidCheckStateChange(preferredID))
+        return preferredID
+
+    for itemID, item in _SUI_ItemMap {
+        if (item.Disabled || item.Var = "")
+            continue
+        if SUI_DidCheckStateChange(itemID)
+            return itemID
+    }
+    return 0
 }
 
 SUI_SnapshotCheckStates() {

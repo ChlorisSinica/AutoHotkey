@@ -47,11 +47,16 @@ global EnableExcel                := 0
 global EnableChatterGuard         := 0
 global CG_SameEventThreshold      := 50
 global CG_CrossEventThreshold     := 30
+global EnableMouseCursorMode      := 0
 
 ; ==========================================================
 ; --- 初期化処理 ---
 ; ==========================================================
 App_Init()
+
+; ==========================================================
+; --- 初期化処理 ---
+; ==========================================================
 vk1C & F1::Settings_Open()
 vk1C & F2::App_DebugStatus()
 vk1C & F3::MG_DebugSnapshot("manual-hotkey")
@@ -65,11 +70,16 @@ vk1C & F3::MG_DebugSnapshot("manual-hotkey")
 ; ==========================================================
 ; ----- vk1C(Convert) -----
 ; ==========================================================
-#If (EnableNavLayer)
+#If Cursor_CanUseKeyboardMode()
     vk1C & 1::IME_ToEnglish()
     vk1C & 2::IME_ToJapanese()
     vk1C & 3::Send,{Blind}^+2
     vk1C & 4::Send,{Blind}^+6
+    vk1C & n::OpenWithMspaint(GetKeyState("Ctrl", "P") ? 1 : 0)
+    vk1C & m::OpenTextEditor(GetKeyState("Ctrl", "P") ? 1 : 0)
+    vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
+#If
+#If Cursor_IsKeyboardMode()
     vk1C & j::Send,{Blind}{Left}
     vk1C & k::Send,{Blind}{Down}
     vk1C & i::Send,{Blind}{Up}
@@ -77,25 +87,37 @@ vk1C & F3::MG_DebugSnapshot("manual-hotkey")
     vk1C & u::Send,{Blind}{Home}
     vk1C & o::Send,{Blind}{End}
     vk1C & p::Send,{Blind}{F2}
-    vk1C & n::OpenWithMspaint(0)
-    vk1C & m::OpenTextEditor(0)
-    vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #If
 
 ; ==========================================================
 ; ----- Mouse Cursor -----
 ; ==========================================================
 Cursor_GetHotkeyConfig() {
-    return {Modifier: "F13"
-        , Move: {o: "Up", k: "Left", l: "Down", sc027: "Right"}
-        , Grid: {o: "Up", k: "Left", l: "Down", sc027: "Right"}}
+    return {Modifier: "vk1C"
+        , Move: {i: "Up", j: "Left", k: "Down", l: "Right"}
+        , Grid: {i: "Up", j: "Left", k: "Down", l: "Right"}}
 }
-#If (EnableMouseEmu)
-    F13 & i::   Click, Down
-    F13 & .::   Click, Middle
-    F13 & p::   Click, Right, Down
-    F13 & i Up::Click, Up
-    F13 & p Up::Click, Right, Up
+#If Cursor_CanToggleModes()
+    vk1C & sc027::ToggleMouseCursorMode()
+#If
+#If Cursor_IsMouseMode()
+    vk1C & u::
+        CursorClickHeld_Left := true
+        Click, Down
+    return
+    vk1C & u Up::
+        CursorClickHeld_Left := false
+        Click, Up
+    return
+    vk1C & o::      Click, Middle
+    vk1C & sc033::
+        CursorClickHeld_Right := true
+        Click, Right, Down
+    return
+    vk1C & sc033 Up::
+        CursorClickHeld_Right := false
+        Click, Right, Up
+    return
 #If
 
 ; ==========================================================
@@ -172,10 +194,6 @@ Cursor_GetHotkeyConfig() {
     !Backspace::    Send,{Del}
     !w::            Send, !{F4}
     ^!c::           ReplaceEscapeToSlash()
-    ^!n::           OpenWithMspaint(1)
-#If
-#If (EnableAlt && !WinActive("ahk_exe POWERPNT.EXE"))
-    ^!m::           OpenTextEditor(1)
 #If
 
 ; ==========================================================

@@ -15,7 +15,7 @@ GroupAdd, ExplorerGroup, ahk_class CabinetWClass
 GroupAdd, ExplorerGroup, ahk_class ExploreWClass
 GroupAdd, JetBrainsGroup, ahk_class pycharm64.exe
 
-global TextEditorProvider     := "Notepads"
+global TextEditorProvider     := "Notepad"
 global TextEditorCustomPath   := ""
 global TextEditorArgsTemplate := ""
 
@@ -95,7 +95,7 @@ TextEditor_CollectTargetArgs(withFile := 1) {
 TextEditor_RunProvider(provider, targetArgs := "", customPath := "", argsTemplate := "") {
     provider := Trim(provider)
     if (provider = "")
-        provider := "Notepads"
+        provider := "Notepad"
 
     if (provider = "Notepads" && !IsNotepadsAvailable())
         provider := "Notepad"
@@ -159,7 +159,7 @@ OpenTextEditor(withFile = 1) {
     TextEditor_RunProvider(TextEditorProvider, targetArgs, TextEditorCustomPath, TextEditorArgsTemplate)
 }
 
-OpenWithNotePad(withFile = 1, editorType = 1) {
+OpenWithNotePad(withFile = 1, editorType = 2) {
     global TextEditorProvider
 
     if (TextEditorProvider = "") {
@@ -168,6 +168,9 @@ OpenWithNotePad(withFile = 1, editorType = 1) {
         else
             TextEditorProvider := "Notepad"
     }
+
+    if (TextEditorProvider = "Notepads" && !IsNotepadsAvailable())
+        TextEditorProvider := "Notepad"
 
     OpenTextEditor(withFile)
 }
