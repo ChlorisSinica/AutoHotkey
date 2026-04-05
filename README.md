@@ -1,34 +1,8 @@
-# AutoHotkey
+# AutoHotkey Tips
 
 個人用の AutoHotkey v1.1 スクリプト集です．エントリポイントは `main.ahk` で，主要な処理は `Plugins` 配下にあります．
 
-## 必要インストール
-- `AHKv1.1`: https://www.autohotkey.com/
-- `VSCode`: https://code.visualstudio.com/download
-
-## 構成
-
-- `main.ahk`
-  - 初期化
-  - 機能トグル
-  - ホットキー定義
-- `Plugins/Application.ahk`
-  - アプリ起動補助
-  - ウィンドウグループ定義
-- `Plugins/WindowManager.ahk`
-  - ウィンドウ移動補助
-  - モニター作業領域取得
-- `Plugins/WindowGrid.ahk`
-  - グリッド単位の移動とリサイズ
-- `Plugins/Browser.ahk`
-  - ブラウザ操作
-  - URL 取得
-  - PDF / YouTube 補助
-- `Plugins/PowerPoint.ahk`
-  - PowerPoint 操作自動化
-- `Plugins/MouseGesture.ahk`
-  - 右クリックベースのマウスジェスチャ
-  - 右クリック不具合のデバッグログ
+vk1c(変換キー) + F1の設定欄でON/OFFが可能です．
 
 ## マウスジェスチャの補足
 
@@ -95,7 +69,7 @@ BracketWrap 廃止に伴い、`lib/UiaMonitor/` は repo から削除しまし�
 
 ## Appendix
 
-- `Plugins\UIA_Interface.ahk` and `Plugins\UIA_Browser.ahk` are UI Automation dependency libraries.
+- `lib\UIA_Interface.ahk` and `lib\UIA_Browser.ahk` are UI Automation dependency libraries.
 - In `#Include` files, avoid top-level labels followed by a bare `return`.
 - Included files are effectively inlined into `main.ahk`, so auto-execute can fall into that label body and stop early at `return`.
 - Also avoid top-level hotkeys, hotstrings, and `#If` hotkey blocks in `#Include` files when later startup lines in `main.ahk` still need to run.
@@ -104,10 +78,24 @@ BracketWrap 廃止に伴い、`lib/UiaMonitor/` は repo から削除しまし�
 - This can silently break later initialization and make unrelated hotkeys appear dead.
 - Prefer function timers such as `SetTimer, % Func("MyHandler"), -10` instead of label timers in plugin files.
 
+
+## 初めての方へ
+
+- 必要インストール:
+  - `AHKv1.1`: https://www.autohotkey.com/
+  - `VSCode`: https://code.visualstudio.com/download (拡張機能はAHK++を推奨)
+  - `git`: https://gitforwindows.org/
+- 実行方法
+  - インストール後，任意のフォルダで `git clone https://github.com/ChlorisSinica/AutoHotkey`
+  - main.ahkを実行後，タスクバー右下のインジケータに常駐します
+  - shell:startupに追加 (再起動しても自動実行) する場合は，インジケータから「スタートアップで実行する」を有効化してください
+- プロジェクトを最新版にアップデートする場合は `git pull` を実行し, 追加要望があればIssueを投げてください. 
+- 下記文献を参考に，.ahkファイルを試作することを推奨します
+
+
 ## Reference
 
 - https://ahkwiki.net/KeyList
 - https://qiita.com/draganmaistir/items/0bf4a2ff484523a2dee9
 - https://qiita.com/ryoheiszk/items/092cc5d76838cb5a13f1
 - https://qiita.com/riekure/items/49b941fa5159f9948313
-
