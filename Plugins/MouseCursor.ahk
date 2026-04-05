@@ -28,14 +28,16 @@ Cursor_CreateGridConfig() {
 }
 
 Cursor_CreateHotkeyState() {
-    return {DownMap: {}, UpMap: {}, GridMap: {}, JumpMap: {}, EdgeMap: {}, ModifierUp: ""}
+    return {DownMap: {}, UpMap: {}, GridMap: {}, JumpMap: {}, EdgeMap: {}
+        , ClickDownMap: {}, ClickUpMap: {}, ClickSingleMap: {}, ModifierUp: ""}
 }
 
 Cursor_RegisterHotkeys(config) {
     global CursorHotkeyConfig, CursorHotkeyState
 
     CursorHotkeyConfig := config
-    CursorHotkeyState := {DownMap: {}, UpMap: {}, GridMap: {}, JumpMap: {}, EdgeMap: {}, ModifierUp: "*" . config.Modifier . " Up"}
+    CursorHotkeyState := {DownMap: {}, UpMap: {}, GridMap: {}, JumpMap: {}, EdgeMap: {}
+        , ClickDownMap: {}, ClickUpMap: {}, ClickSingleMap: {}, ModifierUp: "*" . config.Modifier . " Up"}
 
     for keyName, direction in config.Move {
         downHotkey := config.Modifier . " & " . keyName
@@ -64,6 +66,25 @@ Cursor_RegisterHotkeys(config) {
 
         Hotkey, If, Cursor_GridHotkeyEnabled()
         Hotkey, %downHotkey%, Cursor_MoveHotkeyGrid, On
+    }
+
+    for keyName, buttonName in config.ClickHold {
+        downHotkey := config.Modifier . " & " . keyName
+        upHotkey := downHotkey . " Up"
+        CursorHotkeyState.ClickDownMap[downHotkey] := buttonName
+        CursorHotkeyState.ClickUpMap[upHotkey] := buttonName
+
+        Hotkey, If, Cursor_IsMouseMode()
+        Hotkey, %downHotkey%, Cursor_ClickHotkeyDown, On
+        Hotkey, %upHotkey%, Cursor_ClickHotkeyUp, On
+    }
+
+    for keyName, buttonName in config.ClickSingle {
+        downHotkey := config.Modifier . " & " . keyName
+        CursorHotkeyState.ClickSingleMap[downHotkey] := buttonName
+
+        Hotkey, If, Cursor_IsMouseMode()
+        Hotkey, %downHotkey%, Cursor_ClickHotkeySingle, On
     }
 
     Hotkey, If, Cursor_IsMouseMode()
@@ -182,6 +203,55 @@ ResetMouseCursorModeIfNeeded() {
     return Cursor_ResolveModeForFlags("legacy_reset")
 }
 
+Cursor_SetHeldClick(button, isDown) {
+    global CursorClickHeld_Left, CursorClickHeld_Right
+
+    if (button = "Left") {
+        if (isDown) {
+            if (!CursorClickHeld_Left) {
+                CursorClickHeld_Left := true
+                Click, Down
+            }
+        } else if (CursorClickHeld_Left) {
+            CursorClickHeld_Left := false
+            Click, Up
+        }
+        return
+    }
+
+    if (button = "Right") {
+        if (isDown) {
+            if (!CursorClickHeld_Right) {
+                CursorClickHeld_Right := true
+                Click, Right, Down
+            }
+        } else if (CursorClickHeld_Right) {
+            CursorClickHeld_Right := false
+            Click, Right, Up
+        }
+    }
+}
+
+Cursor_LeftClickDown() {
+    Cursor_SetHeldClick("Left", true)
+}
+
+Cursor_LeftClickUp() {
+    Cursor_SetHeldClick("Left", false)
+}
+
+Cursor_MiddleClick() {
+    Click, Middle
+}
+
+Cursor_RightClickDown() {
+    Cursor_SetHeldClick("Right", true)
+}
+
+Cursor_RightClickUp() {
+    Cursor_SetHeldClick("Right", false)
+}
+
 Cursor_ReleaseHeldClicks() {
     global CursorClickHeld_Left, CursorClickHeld_Right
     if (CursorClickHeld_Left) {
@@ -234,6 +304,34 @@ Cursor_MoveHotkeyGrid() {
     direction := CursorHotkeyState.GridMap[A_ThisHotkey]
     if (direction != "")
         Cursor_GridMoveByDirection(direction)
+}
+
+Cursor_ClickHotkeyDown() {
+    global CursorHotkeyState
+
+    button := CursorHotkeyState.ClickDownMap[A_ThisHotkey]
+    if (button = "Left")
+        Cursor_LeftClickDown()
+    else if (button = "Right")
+        Cursor_RightClickDown()
+}
+
+Cursor_ClickHotkeyUp() {
+    global CursorHotkeyState
+
+    button := CursorHotkeyState.ClickUpMap[A_ThisHotkey]
+    if (button = "Left")
+        Cursor_LeftClickUp()
+    else if (button = "Right")
+        Cursor_RightClickUp()
+}
+
+Cursor_ClickHotkeySingle() {
+    global CursorHotkeyState
+
+    button := CursorHotkeyState.ClickSingleMap[A_ThisHotkey]
+    if (button = "Middle")
+        Cursor_MiddleClick()
 }
 
 Cursor_MoveHotkeyJump() {

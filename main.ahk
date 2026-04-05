@@ -95,29 +95,12 @@ vk1C & F3::MG_DebugSnapshot("manual-hotkey")
 Cursor_GetHotkeyConfig() {
     return {Modifier: "vk1C"
         , Move: {i: "Up", j: "Left", k: "Down", l: "Right"}
-        , Grid: {i: "Up", j: "Left", k: "Down", l: "Right"}}
+        , Grid: {i: "Up", j: "Left", k: "Down", l: "Right"}
+        , ClickHold: {u: "Left", sc033: "Right"}
+        , ClickSingle: {o: "Middle"}}
 }
 #If Cursor_CanToggleModes()
     vk1C & sc027::ToggleMouseCursorMode()
-#If
-#If Cursor_IsMouseMode()
-    vk1C & u::
-        CursorClickHeld_Left := true
-        Click, Down
-    return
-    vk1C & u Up::
-        CursorClickHeld_Left := false
-        Click, Up
-    return
-    vk1C & o::      Click, Middle
-    vk1C & sc033::
-        CursorClickHeld_Right := true
-        Click, Right, Down
-    return
-    vk1C & sc033 Up::
-        CursorClickHeld_Right := false
-        Click, Right, Up
-    return
 #If
 
 ; ==========================================================

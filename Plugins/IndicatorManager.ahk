@@ -1771,9 +1771,9 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("変換 + Ctrl + I/J/K/L", "カーソルジャンプ", "Cursor_MoveHotkeyJump()", mouseModWhen, "JumpDistance 分を一気に移動", "Cursor_MoveHotkeyJump() {", 0, 8, cursorFile))
     h.Push(SUI_HelpItem("変換 + Alt + I/J/K/L", "グリッドジャンプ", "Cursor_MoveHotkeyGrid()", mouseModWhen, "Alt 同時押しでグリッド交点へ移動", "Cursor_MoveHotkeyGrid() {", 0, 4, cursorFile))
     h.Push(SUI_HelpItem("変換 + Ctrl+Alt + I/J/K/L", "画面端へ移動", "Cursor_MoveHotkeyEdge()", mouseModWhen, "EdgeInset 分内側のモニター端へ", "Cursor_MoveHotkeyEdge() {", 0, 10, cursorFile))
-    h.Push(SUI_HelpItem("変換 + U", "左クリック (押下/解放)", "Click Down / Click Up", mouseModWhen, "", "vk1C & u::", 1, 3, mainFile))
-    h.Push(SUI_HelpItem("変換 + O", "中クリック", "Click, Middle", mouseModWhen, "", "vk1C & o::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + ,", "右クリック (押下/解放)", "Click, Right, Down / Up", mouseModWhen, "", "vk1C & sc033::", 1, 2, mainFile))
+    h.Push(SUI_HelpItem("変換 + U", "左クリック (押下/解放)", "Click Down / Click Up", mouseModWhen, "", "Cursor_LeftClickDown() {", 0, 4, cursorFile))
+    h.Push(SUI_HelpItem("変換 + O", "中クリック", "Click, Middle", mouseModWhen, "", "Cursor_MiddleClick() {", 0, 2, cursorFile))
+    h.Push(SUI_HelpItem("変換 + ,", "右クリック (押下/解放)", "Click, Right, Down / Up", mouseModWhen, "", "Cursor_RightClickDown() {", 0, 4, cursorFile))
     h.Push(SUI_HelpSection("【Mode Fallback】", "EnableNavLayer を OFF にすると Keyboard mode では Mouse へ移り、Mouse mode ではそのまま継続します。再度 ON にしても自動では戻りません。", mouseEmuWhen, "Cursor_ResolveModeForFlags() {", 0, 8, cursorFile))
     d["EnableMouseEmu"] := h
 
