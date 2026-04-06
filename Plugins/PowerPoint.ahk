@@ -903,7 +903,7 @@ PPT_CaptionSaveConfig() {
         if IsFunc("SUI_EnsureConfigPath")
             SUI_EnsureConfigPath()
     } else {
-        PPT_SpacingEnsureLogDir()
+        Debug_EnsureDir(A_ScriptDir . "\.claude")
         configPath := PPT_CaptionConfigPath
     }
 
@@ -931,7 +931,7 @@ PPT_CaptionInit() {
     }
 
     if (horizontalGapRaw = "__MISSING__" || verticalGapRaw = "__MISSING__" || presetIndexRaw = "__MISSING__") {
-        PPT_SpacingEnsureLogDir()
+        Debug_EnsureDir(A_ScriptDir . "\.claude")
         IniRead, legacyHorizontalGapRaw, %PPT_CaptionConfigPath%, Caption, HorizontalGap, % PPT_CaptionVisualGapHorizontal
         IniRead, legacyVerticalGapRaw, %PPT_CaptionConfigPath%, Caption, VerticalGap, % PPT_CaptionVisualGapVertical
         IniRead, legacyPresetIndexRaw, %PPT_CaptionConfigPath%, PowerPoint, CaptionPresetIndex, %PPT_CaptionPresetIndex%

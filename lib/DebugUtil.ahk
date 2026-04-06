@@ -139,10 +139,11 @@ Debug_OpenLog(channel) {
     ch := _Debug_Channels[channel]
 
     Debug_EnsureDir(ch.LogDir)
-    if !FileExist(ch.LogPath)
-        FileAppend,, % ch.LogPath, UTF-8
+    logPath := ch.LogPath
+    if !FileExist(logPath)
+        FileAppend,, %logPath%, UTF-8
 
-    Run, notepad.exe "%ch.LogPath%"
+    Run, notepad.exe "%logPath%"
 }
 
 ; ==========================================================
