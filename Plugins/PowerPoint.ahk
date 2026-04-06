@@ -28,7 +28,8 @@ global PPT_SpacingEpsilon                := 0.05
 PPT_GetApp() {
     try {
         return ComObjActive("PowerPoint.Application")
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "get_app_error", e)
         return ""
     }
 }
@@ -59,47 +60,48 @@ PPT_AlignRelTo(shp) {
     try {
         if (shp.Count <= 1)
             return -1
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "align_relto_count_error", e)
     }
     return 0
 }
 
-SetLeft() {
+PPT_SetLeft() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Align(0, PPT_AlignRelTo(shp))
 }
-SetRight() {
+PPT_SetRight() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Align(2, PPT_AlignRelTo(shp))
 }
-SetTop() {
+PPT_SetTop() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Align(3, PPT_AlignRelTo(shp))
 }
-SetBottom() {
+PPT_SetBottom() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Align(5, PPT_AlignRelTo(shp))
 }
-SetHorizontalCenter() {
+PPT_SetHorizontalCenter() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Align(1, PPT_AlignRelTo(shp))
 }
-SetVerticalCenter() {
+PPT_SetVerticalCenter() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Align(4, PPT_AlignRelTo(shp))
 }
-SetHorizontalSpacer() {
+PPT_SetHorizontalSpacer() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Distribute(0, 0)
 }
-SetVerticalSpace() {
+PPT_SetVerticalSpace() {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Distribute(1, 0)
@@ -108,48 +110,52 @@ SetVerticalSpace() {
 ; ============================================================================
 ;  グループ化 / 解除
 ; ============================================================================
-GroupSet() {
+PPT_GroupSet() {
     shp := PPT_GetSelectedShapes()
     if !shp
         return
     try {
         newShp := shp.Group()
         newShp.Select()
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "group_set_error", e)
     }
 }
-GroupRelease() {
+PPT_GroupRelease() {
     shp := PPT_GetSelectedShapes()
     if !shp
         return
     try {
         newRange := shp.Ungroup()
         newRange.Select()
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "group_release_error", e)
     }
 }
 
 ; ============================================================================
 ;  前面 / 背面
 ; ============================================================================
-SetFront() {
+PPT_SetFront() {
     shp := PPT_GetSelectedShapes()
     if !shp
         return
     try {
         shp.ZOrder(0)
         shp.Select()
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "set_front_error", e)
     }
 }
-SetBack() {
+PPT_SetBack() {
     shp := PPT_GetSelectedShapes()
     if !shp
         return
     try {
         shp.ZOrder(1)
         shp.Select()
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "set_back_error", e)
     }
 }
 
@@ -166,7 +172,8 @@ PPT_TryExecuteMso(candidates, fallbackKeys := "") {
         try {
             app.CommandBars.ExecuteMso(idMso)
             return true
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "execute_mso_error", e)
         }
     }
     ; 全 idMso が失敗 → キーチップにフォールバック
@@ -177,12 +184,12 @@ PPT_TryExecuteMso(candidates, fallbackKeys := "") {
     return false
 }
 
-SetFrameLine() {
+PPT_SetFrameLine() {
     PPT_TryExecuteMso(["ShapeOutlineColorPicker", "OutlineColorPicker"]
         , "!jpsow{Home}{Down}{Enter}")
 }
 
-SetFrameSize() {
+PPT_SetFrameSize() {
     PPT_TryExecuteMso(["OutlineWeightGallery", "ShapeOutlineWeightPicker"
         , "ShapeOutlineWeightMoreLinesDialog"], "!jpw")
 }
@@ -203,7 +210,8 @@ PPT_CycleBlackBorder() {
             shp := sel.ShapeRange
         if !shp
             return
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "cycle_border_selection_error", e)
         return
     }
 
@@ -227,7 +235,8 @@ PPT_CycleBlackBorder() {
             ToolTip, 枠線: なし
         }
         SetTimer, CloseToolTip, -1500
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "cycle_border_error", e)
     }
 }
 
@@ -243,14 +252,15 @@ PPT_SetBorder(shp, visible, rgb, weight) {
                 line.Visible := 0   ; msoFalse
             }
         }
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "set_border_error", e)
     }
 }
 
 ; ============================================================================
 ;  書式設定パネルを開く / テキストのみ貼り付け
 ; ============================================================================
-OpenFormatObject() {
+PPT_OpenFormatObject() {
     panelHwnd := ""
     panel := PPT_DetectFormatPanel(panelHwnd)
     if (panel) {
@@ -263,7 +273,7 @@ OpenFormatObject() {
     PPT_TryExecuteMso(["ObjectSizeAndPositionDialog"])
 }
 
-CloseFormatObject() {
+PPT_CloseFormatObject() {
     panelHwnd := ""
     panel := PPT_DetectFormatPanel(panelHwnd)
     if !panel {
@@ -301,12 +311,14 @@ PPT_FindFormatPanelInRoot(rootEl, uia) {
             found := rootEl.FindFirst(cond, 0x4)  ; Descendants
             if found
                 return found
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "find_format_panel_error", e)
         }
     }
     try {
         return FindElementByKeyword(rootEl, panelNames)
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "find_format_panel_keyword_error", e)
     }
     return ""
 }
@@ -360,14 +372,16 @@ PPT_FindFormatCloseButton(panel, panelHwnd := "") {
         parent := uia.TreeWalkerTrue.GetParentElement(panel)
         if parent
             roots.Push(parent)
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "find_close_parent_error", e)
     }
     if panelHwnd {
         try {
             rootEl := uia.ElementFromHandle(panelHwnd)
             if rootEl
                 roots.Push(rootEl)
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "find_close_hwnd_error", e)
         }
     }
 
@@ -417,7 +431,8 @@ PPT_FindFormatCloseButton(panel, panelHwnd := "") {
                     bestButton := btn
                 }
             }
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "find_close_button_error", e)
         }
     }
 
@@ -433,17 +448,20 @@ PPT_TryActivateCloseButton(btn) {
     try {
         btn.Invoke()
         return true
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "close_invoke_error", e)
     }
     try {
         btn.Click("left")
         return true
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "close_click_error", e)
     }
     try {
         btn.GetCurrentPatternAs("LegacyIAccessible").DoDefaultAction()
         return true
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "close_legacy_error", e)
     }
     return false
 }
@@ -478,12 +496,14 @@ PPT_TryCloseFormatPanelWindow(panel, panelHwnd := "") {
                         return true
                     }
                 }
-            } catch {
+            } catch e {
+                Debug_LogCatch("PPT_Spacing", "close_walk_window_error", e)
             }
 
             nativeHwnd := ""
             try nativeHwnd := current.CurrentNativeWindowHandle
-            catch {
+            catch e {
+                Debug_LogCatch("PPT_Spacing", "close_walk_hwnd_error", e)
             }
             if (nativeHwnd && nativeHwnd != panelHwnd) {
                 WinClose, ahk_id %nativeHwnd%
@@ -497,7 +517,8 @@ PPT_TryCloseFormatPanelWindow(panel, panelHwnd := "") {
 
         nextCurrent := ""
         try nextCurrent := uia.TreeWalkerTrue.GetParentElement(current)
-        catch {
+        catch e {
+            Debug_LogCatch("PPT_Spacing", "close_walk_parent_error", e)
         }
         current := nextCurrent
     }
@@ -524,7 +545,8 @@ PPT_DetectFormatPanel(ByRef panelHwnd := "") {
                 panelHwnd := hwnd
                 return found
             }
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "detect_panel_error", e)
         }
     }
     return ""
@@ -568,7 +590,8 @@ PPT_CloseFormatPanel(panel := "", panelHwnd := "") {
     try {
         panel.SetFocus()
         Sleep, 50
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "close_panel_setfocus_error", e)
     }
     Send, {Esc}
     Sleep, 150
@@ -580,7 +603,7 @@ PPT_CloseFormatPanel(panel := "", panelHwnd := "") {
     return false
 }
 
-PasteTextOnly() {
+PPT_PasteTextOnly() {
     PPT_TryExecuteMso(["PasteTextOnly", "PasteAsText"])
 }
 
@@ -592,7 +615,7 @@ PPT_GetFormatPanel() {
 }
 
 PPT_FocusPanelField(keywords, excludeKeywords := "") {
-    OpenFormatObject()
+    PPT_OpenFormatObject()
     Sleep, 400
 
     panel := PPT_GetFormatPanel()
@@ -611,7 +634,8 @@ PPT_FocusPanelField(keywords, excludeKeywords := "") {
         try {
             el.SetFocus()
             return true
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "focus_panel_setfocus_error", e)
         }
     }
 
@@ -629,14 +653,15 @@ PPT_FocusPanelField(keywords, excludeKeywords := "") {
                         return true
                     }
                 }
-            } catch {
+            } catch e {
+                Debug_LogCatch("PPT_Spacing", "focus_panel_edit_error", e)
             }
         }
     }
     return false
 }
 
-FocusWidthField() {
+PPT_FocusWidthField() {
     PPT_FocusRibbonSizeField(["Width", "幅"], ["Height", "高さ"])
 }
 
@@ -660,9 +685,11 @@ PPT_FocusRibbonSizeField(keywords, excludeKeywords := "") {
         tab := rootEl.FindFirst(cond, 0x4)
         if tab {
             try tab.Invoke()
-            catch {
+            catch e {
+                Debug_LogCatch("PPT_Spacing", "focus_ribbon_invoke_error", e)
                 try tab.GetCurrentPatternAs("LegacyIAccessible").DoDefaultAction()
-                catch {
+                catch e {
+                    Debug_LogCatch("PPT_Spacing", "focus_ribbon_legacy_error", e)
                     try tab.SetFocus()
                 }
             }
@@ -677,15 +704,16 @@ PPT_FocusRibbonSizeField(keywords, excludeKeywords := "") {
         try {
             el.SetFocus()
             return true
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "focus_ribbon_setfocus_error", e)
         }
     }
     return false
 }
-FocusHeightField() {
+PPT_FocusHeightField() {
     PPT_FocusPanelField(["Height", "高さ"], ["Width", "幅"])
 }
-FocusRotationField() {
+PPT_FocusRotationField() {
     PPT_FocusPanelField(["Rotation", "回転"])
 }
 
@@ -699,7 +727,8 @@ PPT_GetSlideSize() {
     try {
         ps := app.ActivePresentation.PageSetup
         return {w: ps.SlideWidth, h: ps.SlideHeight}
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "get_slide_size_error", e)
     }
     return ""
 }
@@ -752,33 +781,17 @@ PPT_ClampPosition(pos, shapeSize, slideSize) {
     return pos
 }
 
-PPT_SpacingEnsureLogDir() {
-    global PPT_SpacingLogDir
+PPT_DebugInit() {
+    global PPT_SpacingLogEnabled, PPT_SpacingLogPath, PPT_SpacingLogMaxBytes
+    global PPT_CaptionLogEnabled, PPT_CaptionLogPath, PPT_CaptionLogMaxBytes
 
-    if !InStr(FileExist(PPT_SpacingLogDir), "D")
-        FileCreateDir, %PPT_SpacingLogDir%
-}
-
-PPT_SpacingRotateLogIfNeeded() {
-    global PPT_SpacingLogPath, PPT_SpacingLogMaxBytes
-
-    if !FileExist(PPT_SpacingLogPath)
-        return
-
-    FileGetSize, logSize, %PPT_SpacingLogPath%
-    if (logSize < PPT_SpacingLogMaxBytes)
-        return
-
-    backupPath := RegExReplace(PPT_SpacingLogPath, "\.log$", ".old.log")
-    FileDelete, %backupPath%
-    FileMove, %PPT_SpacingLogPath%, %backupPath%, 1
+    Debug_CreateChannel("PPT_Spacing", PPT_SpacingLogPath, PPT_SpacingLogMaxBytes, PPT_SpacingLogEnabled)
+    Debug_CreateChannel("PPT_Caption", PPT_CaptionLogPath, PPT_CaptionLogMaxBytes, PPT_CaptionLogEnabled)
+    Debug_Log("PPT_Spacing", "startup", "script=" . A_ScriptFullPath)
 }
 
 PPT_SpacingSanitize(text) {
-    text := StrReplace(text, "`r", " ")
-    text := StrReplace(text, "`n", " ")
-    text := StrReplace(text, "`t", " ")
-    return text
+    return Debug_Sanitize(text)
 }
 
 PPT_SpacingValueText(value) {
@@ -796,66 +809,19 @@ PPT_SpacingNearlyEqual(a, b, epsilon := "") {
 }
 
 PPT_SpacingLog(event, extra := "") {
-    global PPT_SpacingLogEnabled, PPT_SpacingLogPath
-
-    if (!PPT_SpacingLogEnabled)
-        return
-
-    PPT_SpacingEnsureLogDir()
-    PPT_SpacingRotateLogIfNeeded()
-    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
-    line := stamp . "." . A_MSec . " event=" . event
-    if (extra != "")
-        line .= " extra=" . PPT_SpacingSanitize(extra)
-    FileAppend, % line . "`n", %PPT_SpacingLogPath%, UTF-8
+    Debug_Log("PPT_Spacing", event, extra)
 }
 
 PPT_SpacingOpenLog() {
-    global PPT_SpacingLogPath
-
-    PPT_SpacingEnsureLogDir()
-    if !FileExist(PPT_SpacingLogPath)
-        FileAppend,, %PPT_SpacingLogPath%, UTF-8
-    Run, notepad.exe "%PPT_SpacingLogPath%"
-}
-
-PPT_CaptionRotateLogIfNeeded() {
-    global PPT_CaptionLogPath, PPT_CaptionLogMaxBytes
-
-    if !FileExist(PPT_CaptionLogPath)
-        return
-    FileGetSize, size, %PPT_CaptionLogPath%
-    if (size < PPT_CaptionLogMaxBytes)
-        return
-
-    backupPath := PPT_CaptionLogPath . ".1"
-    if FileExist(backupPath)
-        FileDelete, %backupPath%
-    FileMove, %PPT_CaptionLogPath%, %backupPath%, 1
+    Debug_OpenLog("PPT_Spacing")
 }
 
 PPT_CaptionLog(event, extra := "") {
-    global PPT_CaptionLogEnabled, PPT_CaptionLogPath
-
-    if (!PPT_CaptionLogEnabled)
-        return
-
-    PPT_SpacingEnsureLogDir()
-    PPT_CaptionRotateLogIfNeeded()
-    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
-    line := stamp . "." . A_MSec . " event=" . event
-    if (extra != "")
-        line .= " extra=" . PPT_SpacingSanitize(extra)
-    FileAppend, % line . "`n", %PPT_CaptionLogPath%, UTF-8
+    Debug_Log("PPT_Caption", event, extra)
 }
 
 PPT_CaptionOpenLog() {
-    global PPT_CaptionLogPath
-
-    PPT_SpacingEnsureLogDir()
-    if !FileExist(PPT_CaptionLogPath)
-        FileAppend,, %PPT_CaptionLogPath%, UTF-8
-    Run, notepad.exe "%PPT_CaptionLogPath%"
+    Debug_OpenLog("PPT_Caption")
 }
 
 PPT_CaptionFormatSettingValue(value) {
@@ -1122,7 +1088,8 @@ PPT_CaptionDescribeTextBox(shapeRef) {
         boundTop := textRange.BoundTop
         boundWidth := textRange.BoundWidth
         boundHeight := textRange.BoundHeight
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Caption", "caption_text_bounds_error", e)
     }
 
     return "id=" . shapeId
@@ -1157,7 +1124,8 @@ PPT_GetCaptionTextBounds(shapeRef) {
             , top: textRange.BoundTop
             , w: textRange.BoundWidth
             , h: textRange.BoundHeight}
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Caption", "text_bounds_error", e)
     }
     return ""
 }
@@ -1213,7 +1181,8 @@ PPT_GetShapeAxisPosition(shapeRef, axis) {
             return shapeRef.Left
         if (axis = "V")
             return shapeRef.Top
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "shape_axis_error", e)
     }
     return ""
 }
@@ -1223,13 +1192,15 @@ PPT_MoveShapeAxisBy(shapeRef, axis, delta) {
         try {
             shapeRef.IncrementLeft(delta)
             return true
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "move_shape_h_error", e)
         }
     } else if (axis = "V") {
         try {
             shapeRef.IncrementTop(delta)
             return true
-        } catch {
+        } catch e {
+            Debug_LogCatch("PPT_Spacing", "move_shape_v_error", e)
         }
     }
     return false
@@ -1298,7 +1269,8 @@ PPT_AlignCenterToSmallest(axis) {
     try {
         if (shp.Count < 2)
             return
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "align_center_count_error", e)
         return
     }
 
@@ -1334,7 +1306,8 @@ PPT_GridDistributeH() {
     try {
         if (shp.Count < 2)
             return
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "grid_h_count_error", e)
         return
     }
     slide := PPT_GetSlideSize()
@@ -1365,7 +1338,8 @@ PPT_GridDistributeV() {
     try {
         if (shp.Count < 2)
             return
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "grid_v_count_error", e)
         return
     }
     slide := PPT_GetSlideSize()
@@ -1653,7 +1627,8 @@ PPT_GetActiveSlide() {
 
     try {
         return app.ActiveWindow.View.Slide
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Caption", "get_active_slide_error", e)
     }
     return ""
 }
@@ -1887,7 +1862,8 @@ PPT_IsLegacyCaptionCandidate(shapeRef, rect, edge, epsilon := 0.75) {
 
     try {
         textValue := shapeRef.TextFrame.TextRange.Text
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Caption", "legacy_caption_text_error", e)
         return false
     }
 
@@ -2039,7 +2015,8 @@ PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := f
         font2.Size := preset.FontSize
         font2.NameAscii := "Arial"
         font2.NameFarEast := "Meiryo"
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Caption", "caption_style_textframe2_error", e)
     }
 }
 
@@ -2221,17 +2198,17 @@ PPT_AddEdgeCaption(edge) {
 ; ============================================================================
 ;  ユーティリティ
 ; ============================================================================
-SetWidthCm(cm) {
+PPT_SetWidthCm(cm) {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Width := cm * 28.3464567
 }
-SetHeightCm(cm) {
+PPT_SetHeightCm(cm) {
     shp := PPT_GetSelectedShapes()
     if shp
         try shp.Height := cm * 28.3464567
 }
-ShowSizeCm() {
+PPT_ShowSizeCm() {
     shp := PPT_GetSelectedShapes()
     if !shp
         return
@@ -2240,7 +2217,8 @@ ShowSizeCm() {
         h := Round(shp.Height / 28.3464567, 2)
         ToolTip, % w . " cm x " . h . " cm"
         SetTimer, CloseToolTip, -2000
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "show_size_cm_error", e)
     }
 }
 
@@ -2277,7 +2255,7 @@ PPT_DiagnoseMso() {
 ; ----------------------------------------------------------------------------
 ;  Phase 1: CF_HDROP から画像パスリストを取得（GlobalLock修正版）
 ; ----------------------------------------------------------------------------
-GetClipboardImagePaths() {
+PPT_GetClipboardImagePaths() {
     result := []
     if !DllCall("IsClipboardFormatAvailable", "uint", 15)
         return result
@@ -2324,7 +2302,8 @@ PPT_InsertImagesWithMetadata(pathArray) {
         return 0
     try {
         sld := app.ActiveWindow.View.Slide
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "insert_images_slide_error", e)
         return 0
     }
 
@@ -2366,8 +2345,8 @@ PPT_InsertImagesWithMetadata(pathArray) {
 ; ----------------------------------------------------------------------------
 ;  Phase 3: Ctrl+V / F15 フック本体
 ; ----------------------------------------------------------------------------
-PasteImageWithMetadata() {
-    paths := GetClipboardImagePaths()
+PPT_PasteImageWithMetadata() {
+    paths := PPT_GetClipboardImagePaths()
     if (paths.MaxIndex() = "") {
         Send ^v
         return
@@ -2410,7 +2389,8 @@ PPT_ShowSourcePath() {
         } else {
             MsgBox, 48, , このマクロ経由で挿入されていない図です。
         }
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "show_source_path_error", e)
     }
 }
 
@@ -2454,7 +2434,8 @@ PPT_ExportSources() {
     try {
         prs     := app.ActivePresentation
         pptPath := prs.FullName
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "export_presentation_error", e)
         MsgBox, 16, エラー, プレゼンテーションが開かれていません。
         return
     }
@@ -2488,7 +2469,8 @@ PPT_ExportSources() {
             mediaId := ""
             try {
                 mediaId := shp.Tags("MEDIA_ID")
-            } catch {
+            } catch e {
+                Debug_LogCatch("PPT_Spacing", "export_tag_media_id_error", e)
             }
             if (mediaId = "")
                 continue
@@ -2502,12 +2484,14 @@ PPT_ExportSources() {
             srcPath := ""
             try {
                 srcPath := shp.Tags("SOURCE_PATH")
-            } catch {
+            } catch e {
+                Debug_LogCatch("PPT_Spacing", "export_tag_source_path_error", e)
             }
             srcName := ""
             try {
                 srcName := shp.Tags("SOURCE_NAME")
-            } catch {
+            } catch e {
+                Debug_LogCatch("PPT_Spacing", "export_tag_source_name_error", e)
             }
             if (srcName = "")
                 SplitPath, srcPath, srcName
@@ -2515,7 +2499,8 @@ PPT_ExportSources() {
             insertedBy := ""
             try {
                 insertedBy := shp.Tags("INSERTED_BY")
-            } catch {
+            } catch e {
+                Debug_LogCatch("PPT_Spacing", "export_tag_inserted_by_error", e)
             }
 
             destName := mediaId . "_" . srcName
@@ -2601,7 +2586,8 @@ PPT_ExportSources() {
     ; pptx 上書き保存
     try {
         prs.Save()
-    } catch {
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "export_save_error", e)
         MsgBox, 48, 警告, pptxの保存に失敗しました。手動で保存してください。
     }
 

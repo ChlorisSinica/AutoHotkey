@@ -16,44 +16,11 @@ global MG_DebugLogPath   := MG_DebugLogDir . "\mouse_gesture_debug.log"
 global MG_DebugMaxBytes  := 262144
 
 MG_DebugInit() {
-    global MG_DebugEnabled, MG_DebugLogDir
+    global MG_DebugEnabled, MG_DebugLogPath, MG_DebugMaxBytes
 
-    if (!MG_DebugEnabled)
-        return
-
-    if !InStr(FileExist(MG_DebugLogDir), "D")
-        FileCreateDir, %MG_DebugLogDir%
-
-    MG_DebugLog("startup", "script=" . A_ScriptFullPath)
-}
-
-MG_DebugEnsureLogDir() {
-    global MG_DebugLogDir
-
-    if !InStr(FileExist(MG_DebugLogDir), "D")
-        FileCreateDir, %MG_DebugLogDir%
-}
-
-MG_DebugRotateIfNeeded() {
-    global MG_DebugLogPath, MG_DebugMaxBytes
-
-    if !FileExist(MG_DebugLogPath)
-        return
-
-    FileGetSize, logSize, %MG_DebugLogPath%
-    if (logSize < MG_DebugMaxBytes)
-        return
-
-    backupPath := RegExReplace(MG_DebugLogPath, "\.log$", ".old.log")
-    FileDelete, %backupPath%
-    FileMove, %MG_DebugLogPath%, %backupPath%, 1
-}
-
-MG_DebugSanitize(text) {
-    text := StrReplace(text, "`r", " ")
-    text := StrReplace(text, "`n", " ")
-    text := StrReplace(text, "`t", " ")
-    return text
+    Debug_CreateChannel("MG", MG_DebugLogPath, MG_DebugMaxBytes, MG_DebugEnabled)
+    Debug_SetStateCallback("MG", "MG_DebugStateText")
+    Debug_Log("MG", "startup", "script=" . A_ScriptFullPath)
 }
 
 MG_DebugStateText() {
@@ -94,34 +61,18 @@ MG_DebugStateText() {
         . " MouseHWND=" . mouseHwnd
         . " MouseExe=" . mouseExe
         . " MouseClass=" . mouseClass
-        . " MouseTitle=" . MG_DebugSanitize(mouseTitle)
+        . " MouseTitle=" . Debug_Sanitize(mouseTitle)
         . " ActiveHWND=" . activeHwnd
         . " ActiveExe=" . activeExe
         . " ActiveClass=" . activeClass
-        . " ActiveTitle=" . MG_DebugSanitize(activeTitle)
+        . " ActiveTitle=" . Debug_Sanitize(activeTitle)
         . " ThisHotkey=" . A_ThisHotkey
         . " PriorHotkey=" . A_PriorHotkey
         . " PriorMs=" . A_TimeSincePriorHotkey
 }
 
 MG_DebugLog(event, extra := "") {
-    global MG_DebugEnabled, MG_DebugLogPath
-
-    if (!MG_DebugEnabled)
-        return
-
-    MG_DebugEnsureLogDir()
-    MG_DebugRotateIfNeeded()
-
-    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
-    line := stamp . "." . A_MSec
-        . " event=" . event
-
-    if (extra != "")
-        line .= " extra=" . MG_DebugSanitize(extra)
-
-    line .= " " . MG_DebugStateText()
-    FileAppend, % line . "`n", %MG_DebugLogPath%, UTF-8
+    Debug_Log("MG", event, extra)
 }
 
 MG_DebugSnapshot(reason := "manual") {
@@ -137,13 +88,7 @@ MG_DebugSnapshotMenu() {
 }
 
 MG_DebugOpenLog() {
-    global MG_DebugLogPath
-
-    MG_DebugEnsureLogDir()
-    if !FileExist(MG_DebugLogPath)
-        FileAppend,, %MG_DebugLogPath%, UTF-8
-
-    Run, notepad.exe "%MG_DebugLogPath%"
+    Debug_OpenLog("MG")
 }
 
 MouseIsOverTarget() {

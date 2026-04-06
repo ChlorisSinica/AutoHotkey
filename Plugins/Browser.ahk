@@ -63,59 +63,18 @@ CopyPlaneURL() {
     ClipSaved := ""
 }
 
-Browser_DebugEnsurePdfZoomLogDir() {
-    global Browser_PDFZoomDebugLogDir
+Browser_DebugInit() {
+    global Browser_PDFZoomDebugEnabled, Browser_PDFZoomDebugLogPath, Browser_PDFZoomDebugMaxBytes
 
-    if !InStr(FileExist(Browser_PDFZoomDebugLogDir), "D")
-        FileCreateDir, %Browser_PDFZoomDebugLogDir%
-}
-
-Browser_DebugRotatePdfZoomLogIfNeeded() {
-    global Browser_PDFZoomDebugLogPath, Browser_PDFZoomDebugMaxBytes
-
-    if !FileExist(Browser_PDFZoomDebugLogPath)
-        return
-
-    FileGetSize, logSize, %Browser_PDFZoomDebugLogPath%
-    if (logSize < Browser_PDFZoomDebugMaxBytes)
-        return
-
-    backupPath := RegExReplace(Browser_PDFZoomDebugLogPath, "\.log$", ".old.log")
-    FileDelete, %backupPath%
-    FileMove, %Browser_PDFZoomDebugLogPath%, %backupPath%, 1
+    Debug_CreateChannel("BrowserPDF", Browser_PDFZoomDebugLogPath, Browser_PDFZoomDebugMaxBytes, Browser_PDFZoomDebugEnabled)
 }
 
 Browser_DebugSanitize(text) {
-    if IsObject(text) {
-        if (text.Message != "")
-            text := text.Message
-        else if (text.What != "")
-            text := text.What
-        else
-            text := "[object]"
-    }
-
-    text := text . ""
-    text := StrReplace(text, "`r", " ")
-    text := StrReplace(text, "`n", " ")
-    text := StrReplace(text, "`t", " ")
-    return text
+    return Debug_Sanitize(text)
 }
 
 Browser_PDFZoomLog(event, extra := "") {
-    global Browser_PDFZoomDebugEnabled, Browser_PDFZoomDebugLogPath
-
-    if (!Browser_PDFZoomDebugEnabled)
-        return
-
-    Browser_DebugEnsurePdfZoomLogDir()
-    Browser_DebugRotatePdfZoomLogIfNeeded()
-
-    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
-    line := stamp . "." . A_MSec . " event=" . event
-    if (extra != "")
-        line .= " extra=" . Browser_DebugSanitize(extra)
-    FileAppend, % line . "`n", %Browser_PDFZoomDebugLogPath%, UTF-8
+    Debug_Log("BrowserPDF", event, extra)
 }
 
 Browser_IsPdfUrl(url) {

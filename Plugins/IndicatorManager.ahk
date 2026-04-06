@@ -100,42 +100,11 @@ Settings_Close() {
 }
 
 SUI_DebugInit() {
-    global SUI_DebugEnabled
+    global SUI_DebugEnabled, SUI_DebugLogPath, SUI_DebugMaxBytes
 
-    if (!SUI_DebugEnabled)
-        return
-
-    SUI_DebugEnsureLogDir()
-    SUI_DebugLog("startup", "script=" . A_ScriptFullPath)
-}
-
-SUI_DebugEnsureLogDir() {
-    global SUI_DebugLogDir
-
-    if !InStr(FileExist(SUI_DebugLogDir), "D")
-        FileCreateDir, %SUI_DebugLogDir%
-}
-
-SUI_DebugRotateIfNeeded() {
-    global SUI_DebugLogPath, SUI_DebugMaxBytes
-
-    if !FileExist(SUI_DebugLogPath)
-        return
-
-    FileGetSize, logSize, %SUI_DebugLogPath%
-    if (logSize < SUI_DebugMaxBytes)
-        return
-
-    backupPath := RegExReplace(SUI_DebugLogPath, "\.log$", ".old.log")
-    FileDelete, %backupPath%
-    FileMove, %SUI_DebugLogPath%, %backupPath%, 1
-}
-
-SUI_DebugSanitize(text) {
-    text := StrReplace(text, "`r", " ")
-    text := StrReplace(text, "`n", " ")
-    text := StrReplace(text, "`t", " ")
-    return text
+    Debug_CreateChannel("SUI", SUI_DebugLogPath, SUI_DebugMaxBytes, SUI_DebugEnabled)
+    Debug_SetStateCallback("SUI", "SUI_DebugFlagsText")
+    Debug_Log("SUI", "startup", "script=" . A_ScriptFullPath)
 }
 
 SUI_DebugFlagsText() {
@@ -177,29 +146,11 @@ SUI_DebugDescribeItem(itemID) {
 }
 
 SUI_DebugLog(event, extra := "") {
-    global SUI_DebugEnabled, SUI_DebugLogPath
-
-    if (!SUI_DebugEnabled)
-        return
-
-    SUI_DebugEnsureLogDir()
-    SUI_DebugRotateIfNeeded()
-
-    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
-    line := stamp . "." . A_MSec . " event=" . event
-    if (extra != "")
-        line .= " extra=" . SUI_DebugSanitize(extra)
-    line .= " " . SUI_DebugFlagsText()
-    FileAppend, % line . "`n", %SUI_DebugLogPath%, UTF-8
+    Debug_Log("SUI", event, extra)
 }
 
 SUI_DebugOpenLog() {
-    global SUI_DebugLogPath
-
-    SUI_DebugEnsureLogDir()
-    if !FileExist(SUI_DebugLogPath)
-        FileAppend,, %SUI_DebugLogPath%, UTF-8
-    Run, notepad.exe "%SUI_DebugLogPath%"
+    Debug_OpenLog("SUI")
 }
 
 SUI_CreateDefaultTheme() {
@@ -1329,6 +1280,13 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     Browser_PDFZoomDebugEnabled := SUI_NormalizeBool(browserPdfDebug, Browser_PDFZoomDebugEnabled)
     PPT_SpacingLogEnabled := SUI_NormalizeBool(pptSpacingDebug, PPT_SpacingLogEnabled)
     PPT_CaptionLogEnabled := SUI_NormalizeBool(pptCaptionDebug, PPT_CaptionLogEnabled)
+
+    Debug_SetEnabled("SUI", SUI_DebugEnabled)
+    Debug_SetEnabled("MG", MG_DebugEnabled)
+    Debug_SetEnabled("MouseWheel", MouseWheel_DebugEnabled)
+    Debug_SetEnabled("BrowserPDF", Browser_PDFZoomDebugEnabled)
+    Debug_SetEnabled("PPT_Spacing", PPT_SpacingLogEnabled)
+    Debug_SetEnabled("PPT_Caption", PPT_CaptionLogEnabled)
 
     ; ChatterGuard 閾値
     GuiControlGet, sameThresh, Settings:, SettingsSameEvent

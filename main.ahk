@@ -9,6 +9,7 @@ SetBatchLines, -1
 ; ==========================================================
 #Include %A_ScriptDir%\lib\UIA_Interface.ahk
 #Include %A_ScriptDir%\lib\UIA_Browser.ahk
+#Include %A_ScriptDir%\lib\DebugUtil.ahk
 
 ; ==========================================================
 ; --- Pluginsファイルの読み込み ---
@@ -60,6 +61,7 @@ App_Init()
 vk1C & F1::Settings_Open()
 vk1C & F2::App_DebugStatus()
 vk1C & F3::MG_DebugSnapshot("manual-hotkey")
+vk1C & F4::Debug_DumpToClipboard()
 #If WinActive("機能設定") && SUI_HasHelpSelection()
     ^c::SUI_CopySelectedHelpRow()
 #If
@@ -207,18 +209,18 @@ Cursor_GetHotkeyConfig() {
 ; ----- Power Point -----
 ; ==========================================================
 #If (EnablePPT && WinActive("ahk_exe POWERPNT.EXE"))
-    ^!l::   SetRight()
-    ^!j::   SetLeft()
-    ^!i::   SetTop()
-    ^!k::   SetBottom()
-    ^!g::   GroupSet()
-    ^+!g::  GroupRelease()
-    ^!u::   SetHorizontalCenter()
-    ^!o::   SetVerticalCenter()
-    ^!m::   SetHorizontalSpacer()
-    ^!.::   SetVerticalSpace()
-    ^!h::   SetFront()
-    ^+!h::  SetBack()
+    ^!l::   PPT_SetRight()
+    ^!j::   PPT_SetLeft()
+    ^!i::   PPT_SetTop()
+    ^!k::   PPT_SetBottom()
+    ^!g::   PPT_GroupSet()
+    ^+!g::  PPT_GroupRelease()
+    ^!u::   PPT_SetHorizontalCenter()
+    ^!o::   PPT_SetVerticalCenter()
+    ^!m::   PPT_SetHorizontalSpacer()
+    ^!.::   PPT_SetVerticalSpace()
+    ^!h::   PPT_SetFront()
+    ^+!h::  PPT_SetBack()
     ^+!l::  PPT_SpacingRepeatStart("H",  1, "l")
     ^+!j::  PPT_SpacingRepeatStart("H", -1, "j")
     ^+!i::  PPT_SpacingRepeatStart("V",  1, "i")
@@ -238,13 +240,13 @@ Cursor_GetHotkeyConfig() {
     ^!8::   PPT_CaptionAdjustGap("V",  0.25)
     ^+!5::  PPT_CaptionPromptGap("H")
     ^+!7::  PPT_CaptionPromptGap("V")
-    !1::    PasteTextOnly()
+    !1::    PPT_PasteTextOnly()
     !2::    PPT_CycleBlackBorder()
-    !3::    FocusWidthField()
-    !4::    OpenFormatObject()
-    +!4::   CloseFormatObject()
-    ^v::    PasteImageWithMetadata()
-    F15::   PasteImageWithMetadata()
+    !3::    PPT_FocusWidthField()
+    !4::    PPT_OpenFormatObject()
+    +!4::   PPT_CloseFormatObject()
+    ^v::    PPT_PasteImageWithMetadata()
+    F15::   PPT_PasteImageWithMetadata()
     ^!e::   PPT_ExportSources()
     ^!q::   PPT_ShowSourcePath()
 #If

@@ -119,18 +119,10 @@ MouseWheel_SendHScrollMessage(targetHwnd, direction) {
     PostMessage, %WM_HSCROLL%, %scrollCmd%, 0,, ahk_id %targetHwnd%
 }
 
-MouseWheel_DebugEnsureLogDir() {
-    global MouseWheel_DebugLogDir
+MouseWheel_DebugInit() {
+    global MouseWheel_DebugEnabled, MouseWheel_DebugLogPath
 
-    if !InStr(FileExist(MouseWheel_DebugLogDir), "D")
-        FileCreateDir, %MouseWheel_DebugLogDir%
-}
-
-MouseWheel_DebugSanitize(text) {
-    text := StrReplace(text, "`r", " ")
-    text := StrReplace(text, "`n", " ")
-    text := StrReplace(text, "`t", " ")
-    return text
+    Debug_CreateChannel("MouseWheel", MouseWheel_DebugLogPath, 262144, MouseWheel_DebugEnabled)
 }
 
 MouseWheel_DebugDescribeWindow(hwnd) {
@@ -143,19 +135,9 @@ MouseWheel_DebugDescribeWindow(hwnd) {
     return "hwnd=" . hwnd
         . " class=" . className
         . " exe=" . exeName
-        . " title=" . MouseWheel_DebugSanitize(title)
+        . " title=" . Debug_Sanitize(title)
 }
 
 MouseWheel_DebugLog(event, extra := "") {
-    global MouseWheel_DebugEnabled, MouseWheel_DebugLogPath
-
-    if (!MouseWheel_DebugEnabled)
-        return
-
-    MouseWheel_DebugEnsureLogDir()
-    FormatTime, stamp,, yyyy-MM-dd HH:mm:ss
-    line := stamp . "." . A_MSec . " event=" . event
-    if (extra != "")
-        line .= " extra=" . MouseWheel_DebugSanitize(extra)
-    FileAppend, % line . "`n", %MouseWheel_DebugLogPath%, UTF-8
+    Debug_Log("MouseWheel", event, extra)
 }
