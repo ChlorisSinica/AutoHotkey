@@ -28,6 +28,10 @@ global SettingsAuthOutputPath              := ""
 global SettingsBrowserUrlExportPath        := ""
 global SettingsPPTCaptionGapH              := ""
 global SettingsPPTCaptionGapV              := ""
+global SettingsIslandOuterX               := ""
+global SettingsIslandOuterY               := ""
+global SettingsIslandInnerX               := ""
+global SettingsIslandInnerY               := ""
 global SettingsBrowserPdfZoomShortcutFirst := ""
 global SettingsMouseWheelExplorerRepeat    := ""
 global SettingsCursorBaseSpeed             := ""
@@ -410,7 +414,8 @@ SUI_LoadConfig() {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
+    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps, MouseWheel_CtrlWheelApps_Default
+    global WinIsland_OuterRatioX, WinIsland_OuterRatioY, WinIsland_InnerRatioX, WinIsland_InnerRatioY
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
@@ -477,12 +482,25 @@ SUI_LoadConfig() {
 
     IniRead, explorerRepeatRaw,       %SUI_ConfigPath%, MouseWheel, ExplorerScrollBarRepeat, %MouseWheel_ExplorerScrollBarRepeat%
     IniRead, defaultZoomModeRaw,      %SUI_ConfigPath%, MouseWheel, DefaultZoomMode, %MouseWheel_DefaultZoomMode%
-    IniRead, ctrlWheelAppsRaw,        %SUI_ConfigPath%, MouseWheel, CtrlWheelApps, %MouseWheel_CtrlWheelApps%
+    IniRead, ctrlWheelAppsRaw,        %SUI_ConfigPath%, MouseWheel, CtrlWheelApps, %MouseWheel_CtrlWheelApps_Default%
     MouseWheel_ExplorerScrollBarRepeat := SUI_NormalizeInt(explorerRepeatRaw, MouseWheel_ExplorerScrollBarRepeat, 1, 20)
     MouseWheel_DefaultZoomMode := SUI_NormalizeZoomMode(defaultZoomModeRaw, MouseWheel_DefaultZoomMode)
-    MouseWheel_CtrlWheelApps := Trim(ctrlWheelAppsRaw)
+    ctrlWheelAppsRaw := Trim(ctrlWheelAppsRaw)
+    if (ctrlWheelAppsRaw != "")
+        MouseWheel_CtrlWheelApps := ctrlWheelAppsRaw
+    else
+        MouseWheel_CtrlWheelApps := MouseWheel_CtrlWheelApps_Default
     if IsFunc("MouseWheel_RebuildZoomRules")
         MouseWheel_RebuildZoomRules()
+
+    IniRead, islandOutXRaw,  %SUI_ConfigPath%, WindowIsland, OuterRatioX, %WinIsland_OuterRatioX%
+    IniRead, islandOutYRaw,  %SUI_ConfigPath%, WindowIsland, OuterRatioY, %WinIsland_OuterRatioY%
+    IniRead, islandInXRaw,   %SUI_ConfigPath%, WindowIsland, InnerRatioX, %WinIsland_InnerRatioX%
+    IniRead, islandInYRaw,   %SUI_ConfigPath%, WindowIsland, InnerRatioY, %WinIsland_InnerRatioY%
+    WinIsland_OuterRatioX := SUI_NormalizeFloat(islandOutXRaw, WinIsland_OuterRatioX, 0, 0.1, 4)
+    WinIsland_OuterRatioY := SUI_NormalizeFloat(islandOutYRaw, WinIsland_OuterRatioY, 0, 0.1, 4)
+    WinIsland_InnerRatioX := SUI_NormalizeFloat(islandInXRaw, WinIsland_InnerRatioX, 0, 0.1, 4)
+    WinIsland_InnerRatioY := SUI_NormalizeFloat(islandInYRaw, WinIsland_InnerRatioY, 0, 0.1, 4)
 
     IniRead, cursorBaseSpeedRaw,    %SUI_ConfigPath%, Cursor, BaseSpeed, % CursorConfig.BaseSpeed
     IniRead, cursorMaxSpeedRaw,     %SUI_ConfigPath%, Cursor, MaxSpeed, % CursorConfig.MaxSpeed
@@ -535,7 +553,8 @@ SUI_SaveConfig() {
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
     global MouseWheel_ExplorerScrollBarRepeat
-    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
+    global MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps, MouseWheel_CtrlWheelApps_Default
+    global WinIsland_OuterRatioX, WinIsland_OuterRatioY, WinIsland_InnerRatioX, WinIsland_InnerRatioY
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
@@ -572,6 +591,11 @@ SUI_SaveConfig() {
     IniWrite, %MouseWheel_ExplorerScrollBarRepeat%, %SUI_ConfigPath%, MouseWheel, ExplorerScrollBarRepeat
     IniWrite, %MouseWheel_DefaultZoomMode%, %SUI_ConfigPath%, MouseWheel, DefaultZoomMode
     IniWrite, %MouseWheel_CtrlWheelApps%, %SUI_ConfigPath%, MouseWheel, CtrlWheelApps
+
+    IniWrite, % SUI_FormatNumber(WinIsland_OuterRatioX, 4), %SUI_ConfigPath%, WindowIsland, OuterRatioX
+    IniWrite, % SUI_FormatNumber(WinIsland_OuterRatioY, 4), %SUI_ConfigPath%, WindowIsland, OuterRatioY
+    IniWrite, % SUI_FormatNumber(WinIsland_InnerRatioX, 4), %SUI_ConfigPath%, WindowIsland, InnerRatioX
+    IniWrite, % SUI_FormatNumber(WinIsland_InnerRatioY, 4), %SUI_ConfigPath%, WindowIsland, InnerRatioY
 
     IniWrite, % SUI_FormatNumber(CursorConfig.BaseSpeed, 2), %SUI_ConfigPath%, Cursor, BaseSpeed
     IniWrite, % SUI_FormatNumber(CursorConfig.MaxSpeed, 2), %SUI_ConfigPath%, Cursor, MaxSpeed
@@ -942,6 +966,16 @@ class SettingsUI {
         Gui, Settings:Add, Edit, x538 y359 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
         Gui, Settings:Add, Text, x582 y360 w18 h20 +0x200, ms
 
+        Gui, Settings:Add, GroupBox, x370 y398 w370 h82, Window Island
+        Gui, Settings:Add, Text, x388 y422 w36 h20 +0x200, OutX
+        Gui, Settings:Add, Edit, x426 y420 w60 h21 vSettingsIslandOuterX gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x500 y422 w36 h20 +0x200, OutY
+        Gui, Settings:Add, Edit, x538 y420 w60 h21 vSettingsIslandOuterY gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x388 y450 w36 h20 +0x200, InX
+        Gui, Settings:Add, Edit, x426 y448 w60 h21 vSettingsIslandInnerX gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x500 y450 w36 h20 +0x200, InY
+        Gui, Settings:Add, Edit, x538 y448 w60 h21 vSettingsIslandInnerY gSUI_PositiveFloatEditChanged
+
         Gui, Settings:Add, Button, x20 y393 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
         Gui, Settings:Add, Button, x150 y393 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
         Gui, Settings:Add, Text, x20 y423 w330 h18 vSettingsValidationHint,
@@ -1003,6 +1037,11 @@ SUI_LoadAdvancedSettingsIntoGui() {
 
     GuiControl, Settings:, SettingsPPTCaptionGapH, % SUI_FormatNumber(PPT_CaptionVisualGapHorizontal, 2)
     GuiControl, Settings:, SettingsPPTCaptionGapV, % SUI_FormatNumber(PPT_CaptionVisualGapVertical, 2)
+
+    GuiControl, Settings:, SettingsIslandOuterX, % SUI_FormatNumber(WinIsland_OuterRatioX, 4)
+    GuiControl, Settings:, SettingsIslandOuterY, % SUI_FormatNumber(WinIsland_OuterRatioY, 4)
+    GuiControl, Settings:, SettingsIslandInnerX, % SUI_FormatNumber(WinIsland_InnerRatioX, 4)
+    GuiControl, Settings:, SettingsIslandInnerY, % SUI_FormatNumber(WinIsland_InnerRatioY, 4)
 
     GuiControl, Settings:, SettingsBrowserPdfZoomShortcutFirst, % Browser_PDFZoomTryShortcutFirst ? 1 : 0
     GuiControl, Settings:, SettingsMouseWheelExplorerRepeat, %MouseWheel_ExplorerScrollBarRepeat%
@@ -1074,6 +1113,14 @@ SUI_GetNumericControlSpec(controlName) {
         return {Label: "Caption H", Type: "float", Min: 0, Max: 20, Decimals: 2}
     if (controlName = "SettingsPPTCaptionGapV")
         return {Label: "Caption V", Type: "float", Min: 0, Max: 20, Decimals: 2}
+    if (controlName = "SettingsIslandOuterX")
+        return {Label: "Island OutX", Type: "float", Min: 0, Max: 0.1, Decimals: 4}
+    if (controlName = "SettingsIslandOuterY")
+        return {Label: "Island OutY", Type: "float", Min: 0, Max: 0.1, Decimals: 4}
+    if (controlName = "SettingsIslandInnerX")
+        return {Label: "Island InX", Type: "float", Min: 0, Max: 0.1, Decimals: 4}
+    if (controlName = "SettingsIslandInnerY")
+        return {Label: "Island InY", Type: "float", Min: 0, Max: 0.1, Decimals: 4}
     if (controlName = "SettingsCursorBaseSpeed")
         return {Label: "Cursor Base", Type: "float", Min: 0.25, Max: 50, Decimals: 2}
     if (controlName = "SettingsCursorMaxSpeed") {
@@ -1233,6 +1280,10 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     GuiControlGet, browserUrlExportPath,, SettingsBrowserUrlExportPath
     GuiControlGet, pptCaptionGapH,, SettingsPPTCaptionGapH
     GuiControlGet, pptCaptionGapV,, SettingsPPTCaptionGapV
+    GuiControlGet, islandOutX,, SettingsIslandOuterX
+    GuiControlGet, islandOutY,, SettingsIslandOuterY
+    GuiControlGet, islandInX,, SettingsIslandInnerX
+    GuiControlGet, islandInY,, SettingsIslandInnerY
     GuiControlGet, browserTryShortcutFirst,, SettingsBrowserPdfZoomShortcutFirst
     GuiControlGet, wheelExplorerRepeat,, SettingsMouseWheelExplorerRepeat
     GuiControlGet, cursorBaseSpeed,, SettingsCursorBaseSpeed
@@ -1273,6 +1324,11 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
 
     PPT_CaptionVisualGapHorizontal := SUI_NormalizeFloat(pptCaptionGapH, PPT_CaptionVisualGapHorizontal, 0, 20, 2)
     PPT_CaptionVisualGapVertical := SUI_NormalizeFloat(pptCaptionGapV, PPT_CaptionVisualGapVertical, 0, 20, 2)
+
+    WinIsland_OuterRatioX := SUI_NormalizeFloat(islandOutX, WinIsland_OuterRatioX, 0, 0.1, 4)
+    WinIsland_OuterRatioY := SUI_NormalizeFloat(islandOutY, WinIsland_OuterRatioY, 0, 0.1, 4)
+    WinIsland_InnerRatioX := SUI_NormalizeFloat(islandInX, WinIsland_InnerRatioX, 0, 0.1, 4)
+    WinIsland_InnerRatioY := SUI_NormalizeFloat(islandInY, WinIsland_InnerRatioY, 0, 0.1, 4)
 
     SUI_DebugEnabled := SUI_NormalizeBool(indicatorDebug, SUI_DebugEnabled)
     MG_DebugEnabled := SUI_NormalizeBool(mouseGestureDebug, MG_DebugEnabled)

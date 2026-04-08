@@ -92,7 +92,14 @@ Grid_Resize(Dimension, Delta) {
 }
 
 Grid_GetRawState(hwnd) {
-    monitor := GetMonitorWorkAreaInfoFromWindow(hwnd)
+    try {
+        GetVisibleWindowPos(wx, wy, ww, wh, "ahk_id " . hwnd)
+    } catch {
+        WinGetPos, wx, wy, ww, wh, ahk_id %hwnd%
+    }
+    cx := wx + (ww / 2)
+    cy := wy + (wh / 2)
+    monitor := GetMonitorWorkAreaInfoFromPoint(cx, cy)
     if !IsObject(monitor)
         return ""
 
@@ -103,11 +110,6 @@ Grid_GetRawState(hwnd) {
     PitchH := layout.PitchH
     InnerX := layout.InnerX
     InnerY := layout.InnerY
-    try {
-        GetVisibleWindowPos(wx, wy, ww, wh, "ahk_id " . hwnd)
-    } catch {
-        WinGetPos, wx, wy, ww, wh, ahk_id %hwnd%
-    }
     rawX := (wx - MonLeft) / PitchW
     rawY := (wy - MonTop) / PitchH
     rawW := (ww + InnerX) / PitchW
@@ -191,30 +193,26 @@ Grid_MoveAcrossMonitor(hwnd, State, direction) {
     if !IsObject(targetMonitor)
         return false
 
-    ratioW := Grid_ClampRatio(State.RatioW)
-    ratioH := Grid_ClampRatio(State.RatioH)
-    ratioX := Grid_ClampRatio(State.RatioX)
-    ratioY := Grid_ClampRatio(State.RatioY)
-
-    if (ratioX + ratioW > 1)
-        ratioX := 1 - ratioW
-    if (ratioY + ratioH > 1)
-        ratioY := 1 - ratioH
-    if (ratioX < 0)
-        ratioX := 0
-    if (ratioY < 0)
-        ratioY := 0
+    layout := Grid_GetMonitorLayout(targetMonitor)
+    gw := State.gw
+    gh := State.gh
+    gx := State.gx
+    gy := State.gy
 
     if (direction = "Left")
-        ratioX := 1 - ratioW
+        gx := GRID_COLS - gw
     else if (direction = "Right")
-        ratioX := 0
+        gx := 0
     else if (direction = "Up")
-        ratioY := 1 - ratioH
+        gy := GRID_ROWS - gh
     else if (direction = "Down")
-        ratioY := 0
+        gy := 0
 
-    Grid_SetWindowByRatio(hwnd, targetMonitor, ratioX, ratioY, ratioW, ratioH)
+    finalX := layout.AreaLeft + (gx * layout.PitchW)
+    finalY := layout.AreaTop + (gy * layout.PitchH)
+    finalW := (gw * layout.CellW) + ((gw - 1) * layout.InnerX)
+    finalH := (gh * layout.CellH) + ((gh - 1) * layout.InnerY)
+    MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
     return true
 }
 

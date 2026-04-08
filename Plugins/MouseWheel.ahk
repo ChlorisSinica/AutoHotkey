@@ -10,7 +10,8 @@ global MouseWheel_DebugEnabled             := false
 global MouseWheel_DebugLogDir              := A_ScriptDir . "\.claude"
 global MouseWheel_DebugLogPath             := MouseWheel_DebugLogDir . "\mouse_wheel_debug.log"
 global MouseWheel_DefaultZoomMode          := "CtrlNumpad"
-global MouseWheel_CtrlWheelApps            := "explorer.exe,WINWORD.EXE,EXCEL.EXE,POWERPNT.EXE"
+global MouseWheel_CtrlWheelApps_Default    := "explorer.exe,WINWORD.EXE,EXCEL.EXE,POWERPNT.EXE,pycharm64.exe"
+global MouseWheel_CtrlWheelApps            := MouseWheel_CtrlWheelApps_Default
 
 MouseWheel_RebuildZoomRules() {
     global MouseWheel_ZoomRules, MouseWheel_DefaultZoomMode, MouseWheel_CtrlWheelApps
@@ -65,12 +66,13 @@ MouseWheel_SendHorizontalWheel(direction) {
 }
 
 MouseWheel_SendCtrlWheel(action) {
-    ; SendInput は Ctrl down + Wheel + Ctrl up をアトミックに注入するため
-    ; PyCharm の「Ctrl 二度押し = Run Anything」が誤発火しない
+    ; SendEvent で Ctrl+Wheel を送信（SendMode に非依存）
+    ; Office アプリは WM_MOUSEWHEEL + GetKeyState(VK_CONTROL) でズーム判定するため
+    ; SendInput のアトミック注入では keyboard state に Ctrl が反映されない
     if (action = "In")
-        SendInput, ^{WheelUp}
+        SendEvent, ^{WheelUp}
     else
-        SendInput, ^{WheelDown}
+        SendEvent, ^{WheelDown}
 }
 
 MouseWheel_SendCtrlNumpad(action) {

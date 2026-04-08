@@ -163,11 +163,20 @@ ApplyWindowIslandToRect(monitor, ByRef x, ByRef y, ByRef w, ByRef h) {
     h -= insetY * 2
 }
 
+global WinIsland_OuterRatioX := 0.006
+global WinIsland_OuterRatioY := 0.008
+global WinIsland_InnerRatioX := 0.006
+global WinIsland_InnerRatioY := 0.008
+
 GetWindowIslandGaps(monitor) {
+    global WinIsland_OuterRatioX, WinIsland_OuterRatioY
+    global WinIsland_InnerRatioX, WinIsland_InnerRatioY
+
     shortEdge := (monitor.Width < monitor.Height) ? monitor.Width : monitor.Height
-    gapX := Round(shortEdge * 0.006)
-    gapY := Round(shortEdge * 0.008)
-    return {OuterX: gapX, OuterY: gapY, InnerX: gapX, InnerY: gapY}
+    return {OuterX: Round(shortEdge * WinIsland_OuterRatioX)
+        , OuterY: Round(shortEdge * WinIsland_OuterRatioY)
+        , InnerX: Round(shortEdge * WinIsland_InnerRatioX)
+        , InnerY: Round(shortEdge * WinIsland_InnerRatioY)}
 }
 
 GetWindowIslandInsets(monitor) {
