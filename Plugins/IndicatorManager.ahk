@@ -1719,10 +1719,11 @@ SUI_IsHelpListFocused() {
 
 SUI_InitHelpData() {
     global _SUI_HelpData
-    d := {}
     mainFile := A_ScriptDir . "\main.ahk"
     browserFile := A_ScriptDir . "\Plugins\Browser.ahk"
     gestureMapFile := A_ScriptDir . "\Plugins\MouseGestureMap.ahk"
+    cursorFile := A_ScriptDir . "\Plugins\MouseCursor.ahk"
+    registry := HotkeyRegistry_Create()
 
     navWhen := "EnableNavLayer = ON"
     winWhen := "EnableWinPlace = ON"
@@ -1737,21 +1738,34 @@ SUI_InitHelpData() {
     excelWhen := "EnableExcel = ON かつ EXCEL.EXE がアクティブ"
     altWhen := "EnableAlt = ON"
     othersWhen := "EnableOthers = ON"
+    mouseModWhen := mouseEmuWhen . " かつ Mouse モード"
+    toggleWhen := mouseEmuWhen . " かつ " . navWhen
 
-    h := []
-    h.Push(SUI_HelpItem("変換 + 1", "IME → 英語", "IME_ToEnglish()", navWhen, "", "vk1C & 1::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + 2", "IME → 日本語", "IME_ToJapanese()", navWhen, "", "vk1C & 2::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + 3", "Ctrl+Shift+2", "Send {Blind}^+2", navWhen, "", "vk1C & 3::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + 4", "Ctrl+Shift+6", "Send {Blind}^+6", navWhen, "", "vk1C & 4::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + J / K / I / L", "カーソル移動 (←↓↑→)", "Send {Blind}{Left/Down/Up/Right}", navWhen . " かつ Mouse mode OFF", "", "vk1C & j::", 1, 3, mainFile))
-    h.Push(SUI_HelpItem("変換 + U / O", "Home / End", "Send {Blind}{Home/End}", navWhen . " かつ Mouse mode OFF", "", "vk1C & u::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + P", "リネーム (F2)", "Send {Blind}{F2}", navWhen . " かつ Mouse mode OFF", "", "vk1C & p::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + N", "ペイント起動", "OpenWithMspaint(0)", navWhen, "", "vk1C & n::OpenWithMspaint(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + Ctrl + N", "選択ファイルをペイントで開く", "OpenWithMspaint(1)", navWhen . " かつ Ctrl 押下", "", "vk1C & n::OpenWithMspaint(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + M", "テキストエディタ起動", "OpenTextEditor(0)", navWhen, "", "vk1C & m::OpenTextEditor(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + Ctrl + M", "選択ファイルをエディタで開く", "OpenTextEditor(1)", navWhen . " かつ Ctrl 押下", "", "vk1C & m::OpenTextEditor(GetKeyState(""Ctrl"", ""P"") ? 1 : 0)", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + T", "日時挿入 (yyyy/MM/dd (ddd) HH:mm)", "InsertDateTime(...)", navWhen, "", "vk1C & t::", 1, 1, mainFile))
-    d["EnableNavLayer"] := h
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + 1", "IME → 英語", "Nav_IMEToEnglish()", navWhen, "", "vk1C & 1::Nav_IMEToEnglish()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + 2", "IME → 日本語", "Nav_IMEToJapanese()", navWhen, "", "vk1C & 2::Nav_IMEToJapanese()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + 3", "Ctrl+Shift+2", "Nav_SendCtrlShift2()", navWhen, "", "vk1C & 3::Nav_SendCtrlShift2()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + 4", "Ctrl+Shift+6", "Nav_SendCtrlShift6()", navWhen, "", "vk1C & 4::Nav_SendCtrlShift6()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + J / K / I / L", "カーソル移動 (←↓↑→)", "Nav_MoveLeft() / Nav_MoveDown() / Nav_MoveUp() / Nav_MoveRight()", navWhen . " かつ Mouse mode OFF", "", "vk1C & j::Nav_MoveLeft()", 1, 3, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + U / O", "Home / End", "Nav_MoveHome() / Nav_MoveEnd()", navWhen . " かつ Mouse mode OFF", "", "vk1C & u::Nav_MoveHome()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + /", "リネーム (F2)", "Nav_Rename()", navWhen . " かつ Mouse mode OFF", "", "vk1C & /::Nav_Rename()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + N", "テキストエディタ起動", "Nav_OpenTextEditor()", "常時", "", "vk1C & n::Nav_OpenTextEditor()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + Ctrl + N", "選択ファイルをエディタで開く", "Nav_OpenTextEditor()", "常時 かつ Ctrl 押下", "", "vk1C & n::Nav_OpenTextEditor()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + P", "ペイント起動", "Nav_OpenWithMspaint()", "常時", "", "vk1C & p::Nav_OpenWithMspaint()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + Ctrl + P", "選択ファイルをペイントで開く", "Nav_OpenWithMspaint()", "常時 かつ Ctrl 押下", "", "vk1C & p::Nav_OpenWithMspaint()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + M / .", "PageDown / PageUp", "Nav_PageUp() / Nav_PageDown()", "常時 (Mouse モードではスクロールに変化)", "", "vk1C & m::Nav_PageUp()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableNavLayer", "変換 + T", "日時挿入 (yyyy/MM/dd (ddd) HH:mm)", "Nav_InsertDateTimeStamp()", navWhen, "", "vk1C & t::Nav_InsertDateTimeStamp()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + `;", "Mouse/Keyboard Cursor 切替", "Cursor_ToggleModeHotkey()", toggleWhen, "両方 ON のときのみ切替可能", "vk1C & sc027::Cursor_ToggleModeHotkey()", 1, 1, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + I/J/K/L", "カーソル連続移動 (↑←↓→)", "Cursor_MoveHotkeyDown()", mouseModWhen, "長押しで加速", "vk1C & i::Cursor_MoveHotkeyDown()", 1, 4, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + Ctrl + I/J/K/L", "カーソルジャンプ", "Cursor_MoveHotkeyJump()", mouseModWhen, "JumpDistance 分を一気に移動", "vk1C & i::Cursor_MoveHotkeyJump()", 1, 8, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + Alt + I/J/K/L", "グリッドジャンプ", "Cursor_MoveHotkeyGrid()", mouseModWhen, "Alt 同時押しでグリッド交点へ移動", "vk1C & i::Cursor_MoveHotkeyGrid()", 1, 4, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + Ctrl+Alt + I/J/K/L", "画面端へ移動", "Cursor_MoveHotkeyEdge()", mouseModWhen, "EdgeInset 分内側のモニター端へ", "vk1C & i::Cursor_MoveHotkeyEdge()", 1, 10, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + U", "左クリック (押下/解放)", "Cursor_ClickHotkeyDown() / Cursor_ClickHotkeyUp()", mouseModWhen, "", "vk1C & u::Cursor_ClickHotkeyDown()", 1, 4, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + O", "中クリック", "Cursor_ClickHotkeySingle()", mouseModWhen, "", "vk1C & o::Cursor_ClickHotkeySingle()", 1, 2, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + ,", "右クリック (押下/解放)", "Cursor_ClickHotkeyDown() / Cursor_ClickHotkeyUp()", mouseModWhen, "", "vk1C & sc033::Cursor_ClickHotkeyDown()", 1, 4, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + M", "スクロール↓ (長押し連続)", "Cursor_ScrollHotkeyDown()", mouseModWhen, "長押しで連続スクロール", "vk1C & m::Cursor_ScrollHotkeyDown()", 1, 4, mainFile)
+    HotkeyRegistry_AddItem(registry, "EnableMouseEmu", "変換 + .", "スクロール↑ (長押し連続)", "Cursor_ScrollHotkeyDown()", mouseModWhen, "長押しで連続スクロール", "vk1C & sc034::Cursor_ScrollHotkeyDown()", 1, 4, mainFile)
+    HotkeyRegistry_AddSection(registry, "EnableMouseEmu", "【Mode Fallback】", "EnableNavLayer を OFF にすると Keyboard mode では Mouse へ移り、Mouse mode ではそのまま継続します。再度 ON にしても自動では戻りません。", mouseEmuWhen, "Cursor_ResolveModeForFlags() {", 0, 8, cursorFile)
+    d := HotkeyRegistry_ExportHelpData(registry)
 
     h := []
     h.Push(SUI_HelpItem("Win+Ctrl+B", "ウィンドウ情報取得", "GetActiveWindowInfo()", winWhen, "", "^#b::", 1, 1, mainFile))
@@ -1775,21 +1789,6 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Win+Q", "左の仮想デスクトップへ", "Send Win+Ctrl+Left", vdeskWhen, "", "#q::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+W", "右の仮想デスクトップへ", "Send Win+Ctrl+Right", vdeskWhen, "", "#w::", 1, 1, mainFile))
     d["EnableVDesk"] := h
-
-    h := []
-    cursorFile := A_ScriptDir . "\Plugins\MouseCursor.ahk"
-    mouseModWhen := mouseEmuWhen . " かつ Mouse モード"
-    toggleWhen := mouseEmuWhen . " かつ " . navWhen
-    h.Push(SUI_HelpItem("変換 + `;", "Mouse/Keyboard Cursor 切替", "ToggleMouseCursorMode()", toggleWhen, "両方 ON のときのみ切替可能", "vk1C & sc027::ToggleMouseCursorMode()", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + I/J/K/L", "カーソル連続移動 (↑←↓→)", "Cursor_MoveHotkeyDown()", mouseModWhen, "長押しで加速", "Cursor_GetHotkeyConfig() {", 0, 4, mainFile))
-    h.Push(SUI_HelpItem("変換 + Ctrl + I/J/K/L", "カーソルジャンプ", "Cursor_MoveHotkeyJump()", mouseModWhen, "JumpDistance 分を一気に移動", "Cursor_MoveHotkeyJump() {", 0, 8, cursorFile))
-    h.Push(SUI_HelpItem("変換 + Alt + I/J/K/L", "グリッドジャンプ", "Cursor_MoveHotkeyGrid()", mouseModWhen, "Alt 同時押しでグリッド交点へ移動", "Cursor_MoveHotkeyGrid() {", 0, 4, cursorFile))
-    h.Push(SUI_HelpItem("変換 + Ctrl+Alt + I/J/K/L", "画面端へ移動", "Cursor_MoveHotkeyEdge()", mouseModWhen, "EdgeInset 分内側のモニター端へ", "Cursor_MoveHotkeyEdge() {", 0, 10, cursorFile))
-    h.Push(SUI_HelpItem("変換 + U", "左クリック (押下/解放)", "Click Down / Click Up", mouseModWhen, "", "Cursor_LeftClickDown() {", 0, 4, cursorFile))
-    h.Push(SUI_HelpItem("変換 + O", "中クリック", "Click, Middle", mouseModWhen, "", "Cursor_MiddleClick() {", 0, 2, cursorFile))
-    h.Push(SUI_HelpItem("変換 + ,", "右クリック (押下/解放)", "Click, Right, Down / Up", mouseModWhen, "", "Cursor_RightClickDown() {", 0, 4, cursorFile))
-    h.Push(SUI_HelpSection("【Mode Fallback】", "EnableNavLayer を OFF にすると Keyboard mode では Mouse へ移り、Mouse mode ではそのまま継続します。再度 ON にしても自動では戻りません。", mouseEmuWhen, "Cursor_ResolveModeForFlags() {", 0, 8, cursorFile))
-    d["EnableMouseEmu"] := h
 
     h := []
     h.Push(SUI_HelpItem("F15", "Ctrl+V (貼り付け)", "Send ^v", mouseBtnExceptPptWhen, "", "F15::", 1, 1, mainFile))
@@ -1871,8 +1870,8 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("ScrollLock", "無効化", "Return", othersWhen, "", "scrolllock::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("\", "_ を入力", "Send +{sc073}", othersWhen, "", "$sc073::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Shift+\", "\ を入力", "Send {sc073}", othersWhen, "", "$+sc073::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + Z", "N 長押しトグル", "Manage_N_Hold(""Toggle"")", othersWhen, "", "vk1C & z::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("変換 + X", "N 長押し解除", "Manage_N_Hold(""Off"")", othersWhen, "", "vk1C & x::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + Z", "WoWs 用 N 長押しトグル", "WoWs_ToggleNHold()", othersWhen . " かつ World of Warships がアクティブ", "最大20分で自動停止", "vk1C & z::WoWs_ToggleNHold()", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("変換 + X", "WoWs 用 N 長押し解除", "WoWs_StopNHold()", othersWhen . " かつ World of Warships がアクティブ", "", "vk1C & x::WoWs_StopNHold()", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Alt+Backspace", "CapsLock OFF", "CapsLock_SetState(false)", othersWhen, "", "^!#Backspace::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Alt+Delete", "CapsLock ON", "CapsLock_SetState(true)", othersWhen, "", "^!#Delete::", 1, 1, mainFile))
     d["EnableOthers"] := h
@@ -1909,13 +1908,13 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Alt+4", "書式設定パネル開閉", "OpenFormatObject()", pptWhen, "", "!4::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Shift+Alt+4", "書式設定パネルを閉じる", "CloseFormatObject()", pptWhen, "", "+!4::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+V / F15", "画像メタデータ付き貼付け", "PasteImageWithMetadata()", pptWhen, "同じ機能を F15 にも割当", "^v::", 1, 2, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+S", "遡及ソーススキャン", "PPT_ScanAndTagSources()", pptWhen, "", "^!s::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+E", "ソースエクスポート", "PPT_ExportSources()", pptWhen, "", "^!e::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+Q", "ソース情報表示", "PPT_ShowSourcePath()", pptWhen, "", "^!q::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+F1", "ソース系ヘルプ", "PPT_ShowSourceCommands()", pptWhen, "", "^!F1::", 1, 1, mainFile))
     d["EnablePPT"] := h
-    h.Push(SUI_HelpItem("Ctrl+Alt+S", "遡及ソーススキャン", "PPT_ScanAndTagSources()", pptWhen, "", "^!s::", 1, 1, mainFile))
 
     h := []
-    h.Push(SUI_HelpItem("Ctrl+Alt+F1", "ソース系ヘルプ", "PPT_ShowSourceCommands()", pptWhen, "", "^!F1::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Tab", "次のシート", "Send ^{PgDn}", excelWhen, "", "^Tab::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Shift+Tab", "前のシート", "Send ^{PgUp}", excelWhen, "", "^+Tab::", 1, 1, mainFile))
     d["EnableExcel"] := h
@@ -1930,18 +1929,8 @@ SUI_BuildItemList() {
     LV_Delete()
     _SUI_ItemMap := {}
 
-    SUI_AddLeaf("キーボード拡張", "EnableNavLayer")
-    SUI_AddLeaf("ウィンドウ配置", "EnableWinPlace")
-    SUI_AddLeaf("仮想デスクトップ", "EnableVDesk")
-    SUI_AddLeaf("キーボードマウス", "EnableMouseEmu")
-    SUI_AddLeaf("ボタン・ホイール", "EnableMouseBtn")
-    SUI_AddLeaf("マウスジェスチャー", "EnableGestures")
-    SUI_AddLeaf("チャタリング防止", "EnableChatterGuard")
-    SUI_AddLeaf("Alt", "EnableAlt")
-    SUI_AddLeaf("その他", "EnableOthers")
-    SUI_AddLeaf("ブラウザ", "EnableBrowser")
-    SUI_AddLeaf("PowerPoint", "EnablePPT")
-    SUI_AddLeaf("Excel", "EnableExcel")
+    for _, spec in FeatureState_GetSpecs()
+        SUI_AddLeaf(spec.Name, spec.Var)
 }
 
 SUI_AddLeaf(name, varName, disabled := false) {
@@ -2198,10 +2187,6 @@ SUI_RefreshLV(targetID) {
 
 SUI_SyncVars() {
     global _SUI_ItemMap
-    global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
-    global EnableMouseEmu, EnableMouseBtn, EnableGestures
-    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableChatterGuard
     Gui, Settings:Default
 
     for itemID, item in _SUI_ItemMap {
@@ -2209,77 +2194,15 @@ SUI_SyncVars() {
             continue
 
         v := SUI_IsItemChecked(itemID) ? 1 : 0
-        if (item.Var = "EnableNavLayer")
-            EnableNavLayer := v
-        else if (item.Var = "EnableWinPlace")
-            EnableWinPlace := v
-        else if (item.Var = "EnableWinIsland")
-            EnableWinIsland := v
-        else if (item.Var = "EnableVDesk")
-            EnableVDesk := v
-        else if (item.Var = "EnableMouseEmu")
-            EnableMouseEmu := v
-        else if (item.Var = "EnableMouseBtn")
-            EnableMouseBtn := v
-        else if (item.Var = "EnableGestures")
-            EnableGestures := v
-        else if (item.Var = "EnableAlt")
-            EnableAlt := v
-        else if (item.Var = "EnableOthers")
-            EnableOthers := v
-        else if (item.Var = "EnableBrowser")
-            EnableBrowser := v
-        else if (item.Var = "EnablePPT")
-            EnablePPT := v
-        else if (item.Var = "EnableExcel")
-            EnableExcel := v
-        else if (item.Var = "EnableChatterGuard") {
-            EnableChatterGuard := v
-            if (v)
-                CG_Init(["XButton1", "XButton2"])
-            else
-                CG_Cleanup()
-        }
+        FeatureState_SetFlag(item.Var, v)
     }
 
-    if IsFunc("Cursor_ResolveModeForFlags")
-        Cursor_ResolveModeForFlags("sync_vars")
+    FeatureState_AfterBulkSync("sync_vars")
     SUI_DebugLog("sync_vars")
 }
 
 SUI_GetFlagValue(varName) {
-    global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
-    global EnableMouseEmu, EnableMouseBtn, EnableGestures
-    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableChatterGuard
-
-    if (varName = "EnableNavLayer")
-        return EnableNavLayer
-    if (varName = "EnableWinPlace")
-        return EnableWinPlace
-    if (varName = "EnableWinIsland")
-        return EnableWinIsland
-    if (varName = "EnableVDesk")
-        return EnableVDesk
-    if (varName = "EnableMouseEmu")
-        return EnableMouseEmu
-    if (varName = "EnableMouseBtn")
-        return EnableMouseBtn
-    if (varName = "EnableGestures")
-        return EnableGestures
-    if (varName = "EnableAlt")
-        return EnableAlt
-    if (varName = "EnableOthers")
-        return EnableOthers
-    if (varName = "EnableBrowser")
-        return EnableBrowser
-    if (varName = "EnablePPT")
-        return EnablePPT
-    if (varName = "EnableExcel")
-        return EnableExcel
-    if (varName = "EnableChatterGuard")
-        return EnableChatterGuard
-    return 0
+    return FeatureState_GetFlag(varName, 0)
 }
 
 SUI_DidCheckStateChange(itemID) {

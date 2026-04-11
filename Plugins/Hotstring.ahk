@@ -1,5 +1,8 @@
 ﻿global g_HoldN_Active := 0
 
+global g_HoldN_AutoOffMs := 0
+global g_HoldN_SourceLabel := ""
+
 IME_GetTargetHwnd(ByRef activeHwnd := 0) {
     WinGet, activeHwnd, ID, A
     if !activeHwnd
@@ -208,12 +211,20 @@ InsertDateTime(fmt) {
     SendInput, {Text}%TimeString%
 }
 
-Manage_N_Hold(Command) {
+Manage_N_Hold(Command, autoOffMs := 0, sourceLabel := "") {
     ; グローバル変数を参照・変更することを宣言
-    global g_HoldN_Active
+    global g_HoldN_Active, g_HoldN_AutoOffMs, g_HoldN_SourceLabel
+    static autoOffFn := Func("Manage_N_Hold_AutoOff")
+
+    autoOffMs := autoOffMs + 0
+    if (autoOffMs < 0)
+        autoOffMs := 0
 
     ; --- 強制停止 (Off) の処理 ---
     if (Command = "Off") {
+        SetTimer, %autoOffFn%, Off
+        g_HoldN_AutoOffMs := 0
+        g_HoldN_SourceLabel := sourceLabel
         if (g_HoldN_Active) {
             Send, {n up}
             g_HoldN_Active := 0
@@ -228,13 +239,36 @@ Manage_N_Hold(Command) {
         g_HoldN_Active := !g_HoldN_Active ; 反転
 
         if (g_HoldN_Active) {
+            g_HoldN_AutoOffMs := autoOffMs
+            g_HoldN_SourceLabel := sourceLabel
             Send, {n down}
-            ToolTip, [自動] N長押し中... (vk1C+n+F2で停止)
+            SetTimer, %autoOffFn%, Off
+            if (g_HoldN_AutoOffMs > 0)
+                SetTimer, %autoOffFn%, % -g_HoldN_AutoOffMs
+
+            tooltipText := "[自動] N長押し中..."
+            if (g_HoldN_AutoOffMs > 0)
+                tooltipText .= " (" . Round(g_HoldN_AutoOffMs / 60000) . "分で自動停止)"
+            ToolTip, %tooltipText%
             SetTimer, CloseToolTip, -1000
         } else {
+            SetTimer, %autoOffFn%, Off
+            g_HoldN_AutoOffMs := 0
             Send, {n up}
             ToolTip, [解除] Nキーを離しました
             SetTimer, CloseToolTip, -1000
         }
     }
+}
+
+Manage_N_Hold_AutoOff() {
+    global g_HoldN_Active, g_HoldN_SourceLabel
+
+    if (!g_HoldN_Active)
+        return
+
+    Manage_N_Hold("Off", 0, g_HoldN_SourceLabel)
+    label := (g_HoldN_SourceLabel != "") ? g_HoldN_SourceLabel . " " : ""
+    ToolTip, [自動停止] %label%N長押し解除
+    SetTimer, CloseToolTip, -1500
 }

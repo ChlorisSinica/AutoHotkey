@@ -10,6 +10,8 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\lib\UIA_Interface.ahk
 #Include %A_ScriptDir%\lib\UIA_Browser.ahk
 #Include %A_ScriptDir%\lib\DebugUtil.ahk
+#Include %A_ScriptDir%\lib\FeatureState.ahk
+#Include %A_ScriptDir%\lib\HotkeyRegistry.ahk
 
 ; ==========================================================
 ; --- Pluginsファイルの読み込み ---
@@ -26,6 +28,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\MouseGesture.ahk
 #Include %A_ScriptDir%\Plugins\MouseGestureMap.ahk
 #Include %A_ScriptDir%\Plugins\PowerPoint.ahk
+#Include %A_ScriptDir%\Plugins\WoWsProfile.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
 #Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
@@ -62,9 +65,6 @@ vk1C & F1::Settings_Open()
 vk1C & F2::App_DebugStatus()
 vk1C & F3::MG_DebugSnapshot("manual-hotkey")
 vk1C & F4::Debug_DumpToClipboard()
-#If WinActive("機能設定") && SUI_HasHelpSelection()
-    ^c::SUI_CopySelectedHelpRow()
-#If
 #If WinActive("機能設定")
     Escape::Settings_Close()
 #If
@@ -77,32 +77,134 @@ vk1C & F4::Debug_DumpToClipboard()
     vk1C & 2::IME_ToJapanese()
     vk1C & 3::Send,{Blind}^+2
     vk1C & 4::Send,{Blind}^+6
-    vk1C & n::OpenWithMspaint(GetKeyState("Ctrl", "P") ? 1 : 0)
-    vk1C & m::OpenTextEditor(GetKeyState("Ctrl", "P") ? 1 : 0)
+    vk1C & n::OpenTextEditor(GetKeyState("Ctrl", "P") ? 1 : 0)
+    vk1C & p::OpenWithMspaint(GetKeyState("Ctrl", "P") ? 1 : 0)
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #If
-#If Cursor_IsKeyboardMode()
-    vk1C & j::Send,{Blind}{Left}
-    vk1C & k::Send,{Blind}{Down}
-    vk1C & i::Send,{Blind}{Up}
-    vk1C & l::Send,{Blind}{Right}
-    vk1C & u::Send,{Blind}{Home}
-    vk1C & o::Send,{Blind}{End}
-    vk1C & p::Send,{Blind}{F2}
+
+#If (EnableNavLayer || EnableMouseEmu)
+    vk1C & sc027::
+        if Cursor_CanToggleModes()
+            Cursor_ToggleModeHotkey()
+    return
+
+    vk1C & i::
+        if Cursor_IsMouseMode() {
+            if GetKeyState("Ctrl", "P") {
+                if GetKeyState("Alt", "P")
+                    Cursor_MoveEdgeByDirection("Up")
+                else
+                    Cursor_MoveJumpByDirection("Up")
+            } else if GetKeyState("Alt", "P") {
+                Cursor_GridMoveByDirection("Up")
+            } else {
+                Cursor_KeyDown("Up")
+            }
+        } else if Cursor_IsKeyboardMode() {
+            Send,{Blind}{Up}
+        }
+    return
+
+    vk1C & j::
+        if Cursor_IsMouseMode() {
+            if GetKeyState("Ctrl", "P") {
+                if GetKeyState("Alt", "P")
+                    Cursor_MoveEdgeByDirection("Left")
+                else
+                    Cursor_MoveJumpByDirection("Left")
+            } else if GetKeyState("Alt", "P") {
+                Cursor_GridMoveByDirection("Left")
+            } else {
+                Cursor_KeyDown("Left")
+            }
+        } else if Cursor_IsKeyboardMode() {
+            Send,{Blind}{Left}
+        }
+    return
+
+    vk1C & k::
+        if Cursor_IsMouseMode() {
+            if GetKeyState("Ctrl", "P") {
+                if GetKeyState("Alt", "P")
+                    Cursor_MoveEdgeByDirection("Down")
+                else
+                    Cursor_MoveJumpByDirection("Down")
+            } else if GetKeyState("Alt", "P") {
+                Cursor_GridMoveByDirection("Down")
+            } else {
+                Cursor_KeyDown("Down")
+            }
+        } else if Cursor_IsKeyboardMode() {
+            Send,{Blind}{Down}
+        }
+    return
+
+    vk1C & l::
+        if Cursor_IsMouseMode() {
+            if GetKeyState("Ctrl", "P") {
+                if GetKeyState("Alt", "P")
+                    Cursor_MoveEdgeByDirection("Right")
+                else
+                    Cursor_MoveJumpByDirection("Right")
+            } else if GetKeyState("Alt", "P") {
+                Cursor_GridMoveByDirection("Right")
+            } else {
+                Cursor_KeyDown("Right")
+            }
+        } else if Cursor_IsKeyboardMode() {
+            Send,{Blind}{Right}
+        }
+    return
+
+    vk1C & u::
+        if Cursor_IsMouseMode()
+            Cursor_LeftClickDown()
+        else if Cursor_IsKeyboardMode()
+            Send,{Blind}{Home}
+    return
+
+    vk1C & o::
+        if Cursor_IsMouseMode()
+            Cursor_MiddleClick()
+        else if Cursor_IsKeyboardMode()
+            Send,{Blind}{End}
+    return
+
+    vk1C & sc033::
+        if Cursor_IsMouseMode()
+            Cursor_RightClickDown()
+    return
+
+    vk1C & m::
+        if Cursor_IsMouseMode()
+            Cursor_ScrollStart("Down")
+        else if Cursor_IsKeyboardMode()
+            Send,{Blind}{PgUp}
+    return
+
+    vk1C & sc034::
+        if Cursor_IsMouseMode()
+            Cursor_ScrollStart("Up")
+        else if Cursor_IsKeyboardMode()
+            Send,{Blind}{PgDn}
+    return
+
+    vk1C & /::
+        if Cursor_IsKeyboardMode()
+            Send,{Blind}{F2}
+    return
 #If
 
-; ==========================================================
-; ----- Mouse Cursor -----
-; ==========================================================
-Cursor_GetHotkeyConfig() {
-    return {Modifier: "vk1C"
-        , Move: {i: "Up", j: "Left", k: "Down", l: "Right"}
-        , Grid: {i: "Up", j: "Left", k: "Down", l: "Right"}
-        , ClickHold: {u: "Left", sc033: "Right"}
-        , ClickSingle: {o: "Middle"}}
-}
-#If Cursor_CanToggleModes()
-    vk1C & sc027::ToggleMouseCursorMode()
+#If (EnableMouseEmu && EnableMouseCursorMode)
+    vk1C & i Up::Cursor_KeyUp("Up")
+    vk1C & j Up::Cursor_KeyUp("Left")
+    vk1C & k Up::Cursor_KeyUp("Down")
+    vk1C & l Up::Cursor_KeyUp("Right")
+    vk1C & u Up::Cursor_LeftClickUp()
+    vk1C & sc033 Up::Cursor_RightClickUp()
+    vk1C & m Up::Cursor_ScrollStop()
+    vk1C & sc034 Up::Cursor_ScrollStop()
+    *vk1C Up::Cursor_MoveHotkeyModifierUp()
 #If
 
 ; ==========================================================
@@ -131,14 +233,8 @@ Cursor_GetHotkeyConfig() {
 ; ----- Virtual Desktop -----
 ; ==========================================================
 #If (EnableVDesk)
-    #q::
-        Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
-        Sleep, 300
-    return
-    #w::
-        Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
-        Sleep, 300
-    return
+    #q::Send {LWin Down}{Ctrl Down}{Left}{LWin Up}{Ctrl Up}
+    #w::Send {LWin Down}{Ctrl Down}{Right}{LWin Up}{Ctrl Up}
 #If
 
 ; ==========================================================
@@ -188,10 +284,13 @@ Cursor_GetHotkeyConfig() {
     scrolllock::    Return
     $sc073::        Send, +{sc073}  ; \ → _
     $+sc073::       Send, {sc073}  ; _ → \
-    vk1C & z::      Manage_N_Hold("Toggle")
-    vk1C & x::      Manage_N_Hold("Off")
     ^!#Backspace::  CapsLock_SetState(false)
     ^!#Delete::     CapsLock_SetState(true)
+#If
+
+#If WoWs_CanUseManageNHold()
+    vk1C & z::      WoWs_ToggleNHold()
+    vk1C & x::      WoWs_StopNHold()
 #If
 
 ; ==========================================================
@@ -249,11 +348,11 @@ Cursor_GetHotkeyConfig() {
     F15::   PPT_PasteImageWithMetadata()
     ^!e::   PPT_ExportSources()
     ^!q::   PPT_ShowSourcePath()
+    ^!s::   PPT_ScanAndTagSources()
+    ^!F1::  PPT_ShowSourceCommands()
 #If
 
 ; ==========================================================
-    ^!s::   PPT_ScanAndTagSources()
-    ^!F1::  PPT_ShowSourceCommands()
 ; ----- Excel -----
 ; ==========================================================
 #If (EnableExcel && WinActive("ahk_exe EXCEL.EXE"))
@@ -278,4 +377,3 @@ Cursor_GetHotkeyConfig() {
     WheelUp::   MG_ScrollAction("Up")
     WheelDown:: MG_ScrollAction("Down")
 #If
-

@@ -11,6 +11,8 @@ global CursorHotkeyConfig  := ""
 global CursorHotkeyState   := Cursor_CreateHotkeyState()
 global CursorClickHeld_Left  := false
 global CursorClickHeld_Right := false
+global CursorScrollDirection := ""
+global CursorScrollHeld      := false
 
 Cursor_CreateConfig() {
     return {BaseSpeed: 2.0
@@ -29,15 +31,26 @@ Cursor_CreateGridConfig() {
 
 Cursor_CreateHotkeyState() {
     return {DownMap: {}, UpMap: {}, GridMap: {}, JumpMap: {}, EdgeMap: {}
-        , ClickDownMap: {}, ClickUpMap: {}, ClickSingleMap: {}, ModifierUp: ""}
+        , ClickDownMap: {}, ClickUpMap: {}, ClickSingleMap: {}
+        , ScrollDownMap: {}, ScrollUpMap: {}, ModifierUp: ""}
 }
 
-Cursor_RegisterHotkeys(config) {
+Cursor_GetHotkeyConfig() {
+    return {Modifier: "vk1C"
+        , Move: {i: "Up", j: "Left", k: "Down", l: "Right"}
+        , Grid: {i: "Up", j: "Left", k: "Down", l: "Right"}
+        , ClickHold:    {u: "Left", sc033: "Right"}
+        , ClickSingle:  {o: "Middle"}
+        , ScrollHold:   {m: "Down", sc034: "Up"}}
+}
+
+Cursor_ConfigureHotkeys(config) {
     global CursorHotkeyConfig, CursorHotkeyState
 
     CursorHotkeyConfig := config
     CursorHotkeyState := {DownMap: {}, UpMap: {}, GridMap: {}, JumpMap: {}, EdgeMap: {}
-        , ClickDownMap: {}, ClickUpMap: {}, ClickSingleMap: {}, ModifierUp: "*" . config.Modifier . " Up"}
+        , ClickDownMap: {}, ClickUpMap: {}, ClickSingleMap: {}
+        , ScrollDownMap: {}, ScrollUpMap: {}, ModifierUp: "*" . config.Modifier . " Up"}
 
     for keyName, direction in config.Move {
         downHotkey := config.Modifier . " & " . keyName
@@ -47,25 +60,11 @@ Cursor_RegisterHotkeys(config) {
         CursorHotkeyState.JumpMap[downHotkey] := direction
         CursorHotkeyState.EdgeMap[downHotkey] := direction
 
-        Hotkey, If, Cursor_MoveHotkeyEnabled()
-        Hotkey, %downHotkey%, Cursor_MoveHotkeyDown, On
-
-        Hotkey, If, Cursor_IsMouseMode()
-        Hotkey, %upHotkey%, Cursor_MoveHotkeyUp, On
-
-        Hotkey, If, Cursor_JumpHotkeyEnabled()
-        Hotkey, %downHotkey%, Cursor_MoveHotkeyJump, On
-
-        Hotkey, If, Cursor_EdgeHotkeyEnabled()
-        Hotkey, %downHotkey%, Cursor_MoveHotkeyEdge, On
     }
 
     for keyName, moveSpec in config.Grid {
         downHotkey := config.Modifier . " & " . keyName
         CursorHotkeyState.GridMap[downHotkey] := moveSpec
-
-        Hotkey, If, Cursor_GridHotkeyEnabled()
-        Hotkey, %downHotkey%, Cursor_MoveHotkeyGrid, On
     }
 
     for keyName, buttonName in config.ClickHold {
@@ -73,23 +72,23 @@ Cursor_RegisterHotkeys(config) {
         upHotkey := downHotkey . " Up"
         CursorHotkeyState.ClickDownMap[downHotkey] := buttonName
         CursorHotkeyState.ClickUpMap[upHotkey] := buttonName
-
-        Hotkey, If, Cursor_IsMouseMode()
-        Hotkey, %downHotkey%, Cursor_ClickHotkeyDown, On
-        Hotkey, %upHotkey%, Cursor_ClickHotkeyUp, On
     }
 
     for keyName, buttonName in config.ClickSingle {
         downHotkey := config.Modifier . " & " . keyName
         CursorHotkeyState.ClickSingleMap[downHotkey] := buttonName
-
-        Hotkey, If, Cursor_IsMouseMode()
-        Hotkey, %downHotkey%, Cursor_ClickHotkeySingle, On
     }
 
-    Hotkey, If, Cursor_IsMouseMode()
-    Hotkey, % CursorHotkeyState.ModifierUp, Cursor_MoveHotkeyModifierUp, On
-    Hotkey, If
+    for keyName, scrollDir in config.ScrollHold {
+        downHotkey := config.Modifier . " & " . keyName
+        upHotkey := downHotkey . " Up"
+        CursorHotkeyState.ScrollDownMap[downHotkey] := scrollDir
+        CursorHotkeyState.ScrollUpMap[upHotkey] := scrollDir
+    }
+}
+
+Cursor_RegisterHotkeys(config) {
+    return Cursor_ConfigureHotkeys(config)
 }
 
 Cursor_CanUseKeyboardMode() {
@@ -155,8 +154,10 @@ Cursor_SetMode(targetMode, reason := "", showToolTip := false, forceCleanup := f
     nextMode := targetMode ? 1 : 0
     changed := (prevMode != nextMode)
 
-    if (changed || forceCleanup)
+    if (changed || forceCleanup) {
         Cursor_StopContinuous()
+        Cursor_ScrollStop()
+    }
     if ((prevMode = 1 && nextMode = 0) || (forceCleanup && !Cursor_CanUseMouseMode()))
         Cursor_ReleaseHeldClicks()
 
@@ -201,6 +202,10 @@ ToggleMouseCursorMode() {
 
 ResetMouseCursorModeIfNeeded() {
     return Cursor_ResolveModeForFlags("legacy_reset")
+}
+
+Cursor_ToggleModeHotkey() {
+    ToggleMouseCursorMode()
 }
 
 Cursor_SetHeldClick(button, isDown) {
@@ -264,24 +269,6 @@ Cursor_ReleaseHeldClicks() {
     }
 }
 
-; AHK v1 requires Hotkey, If expressions to already exist as #If directives.
-#If Cursor_CanUseKeyboardMode()
-#If
-#If Cursor_IsKeyboardMode()
-#If
-#If Cursor_CanToggleModes()
-#If
-#If Cursor_IsMouseMode()
-#If
-#If Cursor_MoveHotkeyEnabled()
-#If
-#If Cursor_GridHotkeyEnabled()
-#If
-#If Cursor_JumpHotkeyEnabled()
-#If
-#If Cursor_EdgeHotkeyEnabled()
-#If
-
 Cursor_MoveHotkeyDown() {
     global CursorHotkeyState
 
@@ -334,12 +321,60 @@ Cursor_ClickHotkeySingle() {
         Cursor_MiddleClick()
 }
 
+Cursor_ScrollHotkeyDown() {
+    global CursorHotkeyState
+
+    scrollDir := CursorHotkeyState.ScrollDownMap[A_ThisHotkey]
+    if (scrollDir != "")
+        Cursor_ScrollStart(scrollDir)
+}
+
+Cursor_ScrollHotkeyUp() {
+    Cursor_ScrollStop()
+}
+
+Cursor_ScrollStart(direction) {
+    global CursorScrollDirection, CursorScrollHeld
+    static TimerFn := Func("Cursor_ScrollTick")
+
+    CursorScrollDirection := direction
+    CursorScrollHeld := true
+    Cursor_ScrollTick()
+    SetTimer, %TimerFn%, 80
+}
+
+Cursor_ScrollStop() {
+    global CursorScrollDirection, CursorScrollHeld
+    static TimerFn := Func("Cursor_ScrollTick")
+
+    if (!CursorScrollHeld)
+        return
+    SetTimer, %TimerFn%, Off
+    CursorScrollHeld := false
+    CursorScrollDirection := ""
+}
+
+Cursor_ScrollTick() {
+    global CursorScrollDirection
+
+    if (CursorScrollDirection = "Up")
+        Click, WheelUp
+    else if (CursorScrollDirection = "Down")
+        Click, WheelDown
+}
+
 Cursor_MoveHotkeyJump() {
     global CursorHotkeyState, CursorConfig
 
     direction := CursorHotkeyState.JumpMap[A_ThisHotkey]
     if (direction = "")
         return
+    Cursor_MoveJumpByDirection(direction)
+}
+
+Cursor_MoveJumpByDirection(direction) {
+    global CursorConfig
+
     jumpDist := CursorConfig.JumpDistance
     if (direction = "Up")
         MouseMove, 0, % -jumpDist, 0, R
@@ -357,6 +392,12 @@ Cursor_MoveHotkeyEdge() {
     direction := CursorHotkeyState.EdgeMap[A_ThisHotkey]
     if (direction = "")
         return
+    Cursor_MoveEdgeByDirection(direction)
+}
+
+Cursor_MoveEdgeByDirection(direction) {
+    global CursorGridConfig
+
     MouseGetPos, mx, my
     monitor := GetMonitorWorkAreaInfoFromPoint(mx, my)
     if !IsObject(monitor)
@@ -374,6 +415,7 @@ Cursor_MoveHotkeyEdge() {
 
 Cursor_MoveHotkeyModifierUp() {
     Cursor_StopContinuous()
+    Cursor_ScrollStop()
 }
 
 Cursor_StartContinuous() {
