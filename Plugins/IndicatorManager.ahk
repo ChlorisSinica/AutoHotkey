@@ -1912,8 +1912,10 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Ctrl+Alt+E", "ソースエクスポート", "PPT_ExportSources()", pptWhen, "", "^!e::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+Q", "ソース情報表示", "PPT_ShowSourcePath()", pptWhen, "", "^!q::", 1, 1, mainFile))
     d["EnablePPT"] := h
+    h.Push(SUI_HelpItem("Ctrl+Alt+S", "遡及ソーススキャン", "PPT_ScanAndTagSources()", pptWhen, "", "^!s::", 1, 1, mainFile))
 
     h := []
+    h.Push(SUI_HelpItem("Ctrl+Alt+F1", "ソース系ヘルプ", "PPT_ShowSourceCommands()", pptWhen, "", "^!F1::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Tab", "次のシート", "Send ^{PgDn}", excelWhen, "", "^Tab::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Shift+Tab", "前のシート", "Send ^{PgUp}", excelWhen, "", "^+Tab::", 1, 1, mainFile))
     d["EnableExcel"] := h

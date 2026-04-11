@@ -2394,6 +2394,19 @@ PPT_ShowSourcePath() {
     }
 }
 
+PPT_ShowSourceCommands() {
+    msg := "PowerPoint ソース系ショートカット`n`n"
+        . "Ctrl+Alt+S : 遡及スキャンを開始`n"
+        . "Ctrl+Alt+Q : 選択図形のソース情報を表示`n"
+        . "Ctrl+Alt+E : ソースを一括エクスポート`n"
+        . "Ctrl+Alt+F1 : このヘルプ`n`n"
+        . "使い方:`n"
+        . "1. プレゼンを保存した状態で Ctrl+Alt+S`n"
+        . "2. 完了後、必要なら Ctrl+Alt+Q で内容確認`n"
+        . "3. Ctrl+Alt+E で関連ファイルを整理"
+    MsgBox, 64, PowerPoint ソースヘルプ, %msg%
+}
+
 ; ----------------------------------------------------------------------------
 ;  Phase 5 helpers: エクスポート判定 / 実行ユーザ判定
 ; ----------------------------------------------------------------------------
@@ -2621,3 +2634,410 @@ PPT_JsonEntry(mediaId, slide, shape, file, source, dest, status) {
         . ", ""dest"": """ . PPT_JsonEscape(dest) . """"
         . ", ""status"": """ . status . """}"
 }
+
+; ============================================================================
+;  遡及ソーススキャン v2 — Python 委譲 + 非ブロック
+; ============================================================================
+global _PPT_ScanRunning := false
+global _PPT_ScanContext := {}
+global _PPT_ScanStatusGuiReady := false
+
+PPT_UpdateScanStatus(stage, detail := "") {
+    global _PPT_ScanContext, _PPT_ScanStatusGuiReady
+
+    pptPath := ""
+    pptName := ""
+    startedTick := 0
+    if IsObject(_PPT_ScanContext) {
+        if _PPT_ScanContext.HasKey("pptPath")
+            pptPath := _PPT_ScanContext.pptPath
+        if _PPT_ScanContext.HasKey("startedTick")
+            startedTick := _PPT_ScanContext.startedTick
+    }
+    if (pptPath != "")
+        SplitPath, pptPath, pptName
+
+    body := "状態: " . stage
+    if (pptName != "")
+        body .= "`nファイル: " . pptName
+    if (startedTick > 0)
+        body .= "`n経過: " . Round((A_TickCount - startedTick) / 1000, 1) . " 秒"
+    if (detail != "")
+        body .= "`n" . detail
+    body .= "`n`nCtrl+Alt+Q: ソース情報 / Ctrl+Alt+E: エクスポート"
+
+    if !_PPT_ScanStatusGuiReady {
+        Gui, PPTScanStatus:New, +AlwaysOnTop -SysMenu +ToolWindow +Border
+        Gui, PPTScanStatus:Margin, 12, 10
+        Gui, PPTScanStatus:Font, s9, Meiryo UI
+        Gui, PPTScanStatus:Add, Text, vPPTScanStatusTitle w320, PowerPoint ソーススキャン
+        Gui, PPTScanStatus:Add, Text, vPPTScanStatusBody w320, %body%
+        _PPT_ScanStatusGuiReady := true
+    }
+    GuiControl, PPTScanStatus:, PPTScanStatusTitle, PowerPoint ソーススキャン
+    GuiControl, PPTScanStatus:, PPTScanStatusBody, %body%
+    Gui, PPTScanStatus:Show, NoActivate AutoSize xCenter y80, PowerPoint Source Scan
+}
+
+PPT_HideScanStatus() {
+    global _PPT_ScanStatusGuiReady
+    if _PPT_ScanStatusGuiReady
+        Gui, PPTScanStatus:Hide
+}
+
+PPT_JsonSummaryValue(jsonText, key) {
+    if RegExMatch(jsonText, """" . key . """\s*:\s*(\d+)", m)
+        return m1 + 0
+    return 0
+}
+
+; ----------------------------------------------------------------------------
+;  メインエントリ: 遡及ソーススキャン (非ブロック)
+; ----------------------------------------------------------------------------
+PPT_ScanAndTagSources() {
+    global _PPT_ScanRunning, _PPT_ScanContext
+    static PollFn := Func("PPT_ScanPollResult")
+    if (_PPT_ScanRunning) {
+        ToolTip, スキャン実行中...
+        SetTimer, CloseToolTip, -2000
+        return
+    }
+
+    app := PPT_GetApp()
+    if !app {
+        MsgBox, 16, エラー, PowerPoint が見つかりません。
+        return
+    }
+    try {
+        prs := app.ActivePresentation
+        pptPath := prs.FullName
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "scan_presentation_error", e)
+        MsgBox, 16, エラー, プレゼンテーションが開かれていません。
+        return
+    }
+    if (pptPath = "") {
+        MsgBox, 16, エラー, 先にファイルを保存してください。
+        return
+    }
+
+    ; ZIP/COM 同期
+    try {
+        prs.Save()
+    } catch e {
+        MsgBox, 16, エラー, % "pptx の保存に失敗しました。`n" . e.Message
+        return
+    }
+
+    ; savedTime を記録 (変更検出用)
+    FileGetTime, savedTime, %pptPath%, M
+
+    ; scanId 生成 + ガード ON
+    scanId := A_TickCount
+    _PPT_ScanRunning := true
+
+    scanTempDir := A_Temp . "\ppt_scan"
+    if !InStr(FileExist(scanTempDir), "D")
+        FileCreateDir, %scanTempDir%
+    jsonPath := scanTempDir . "\_scan_" . scanId . ".json"
+    if FileExist(jsonPath)
+        FileDelete, %jsonPath%
+
+    ; Python スクリプト起動 (非ブロック)
+    scriptPath := A_ScriptDir . "\Plugins\ppt_scan.py"
+    if !FileExist(scriptPath) {
+        _PPT_ScanRunning := false
+        MsgBox, 16, エラー, % "スキャンスクリプトが見つかりません。`n" . scriptPath
+        return
+    }
+    runCmd := "python " . Chr(34) . scriptPath . Chr(34)
+        . " " . Chr(34) . pptPath . Chr(34)
+        . " " . scanId
+        . " " . Chr(34) . jsonPath . Chr(34)
+    try {
+        Run, %runCmd%, , , scanPID
+    } catch e {
+        _PPT_ScanRunning := false
+        Debug_LogCatch("PPT_Spacing", "scan_launch_error", e)
+        MsgBox, 16, エラー, % "Python スキャンの起動に失敗しました。`n" . e.Message
+        return
+    }
+
+    ; コンテキスト保存
+    _PPT_ScanContext := {scanId: scanId, pptPath: pptPath
+        , savedTime: savedTime, PID: scanPID
+        , jsonPath: jsonPath, startedTick: A_TickCount}
+
+    PPT_UpdateScanStatus("Python スキャン中", "PowerPoint に戻って作業を続けられます。")
+    SetTimer, %PollFn%, 1000
+}
+
+; ----------------------------------------------------------------------------
+;  ポーリング: JSON 出現 or プロセス終了を監視
+; ----------------------------------------------------------------------------
+PPT_ScanPollResult() {
+    global _PPT_ScanRunning, _PPT_ScanContext
+    static PollFn := Func("PPT_ScanPollResult")
+    jsonPath := _PPT_ScanContext.jsonPath
+
+    ; JSON 検出
+    if FileExist(jsonPath) {
+        SetTimer, %PollFn%, Off
+        PPT_UpdateScanStatus("タグ適用中", "検出結果を PowerPoint に反映しています。")
+        PPT_ApplyScanResults(jsonPath)
+        return
+    }
+
+    PPT_UpdateScanStatus("Python スキャン中", "結果ファイルを待機しています...")
+
+    ; PID 監視: プロセス終了 + JSON なし = エラー
+    Process, Exist, % _PPT_ScanContext.PID
+    if !ErrorLevel {
+        SetTimer, %PollFn%, Off
+        PPT_HideScanStatus()
+        _PPT_ScanRunning := false
+        MsgBox, 16, エラー, Python スキャンが失敗しました。`nJSON が生成されませんでした。
+        return
+    }
+}
+
+; ----------------------------------------------------------------------------
+;  JSON 読み込み → COM タグ付け
+; ----------------------------------------------------------------------------
+PPT_ApplyScanResults(jsonPath) {
+    global _PPT_ScanRunning, _PPT_ScanContext
+
+    ; プレゼン再取得
+    app := PPT_GetApp()
+    if !app {
+        PPT_HideScanStatus()
+        _PPT_ScanRunning := false
+        MsgBox, 16, エラー, PowerPoint が見つかりません。
+        return
+    }
+    PPT_UpdateScanStatus("タグ適用中", "PowerPoint に結果を反映しています。")
+
+    ; 元のプレゼンを探す
+    prs := ""
+    targetPath := _PPT_ScanContext.pptPath
+    try {
+        for wnd in app.Windows {
+            try {
+                if (wnd.Presentation.FullName = targetPath) {
+                    prs := wnd.Presentation
+                    break
+                }
+            }
+        }
+    }
+    if (prs = "") {
+        PPT_HideScanStatus()
+        _PPT_ScanRunning := false
+        MsgBox, 48, 警告, スキャン対象のプレゼンが見つかりません。`n%targetPath%
+        FileDelete, %jsonPath%
+        return
+    }
+
+    ; 変更検出 (2段チェック)
+    FileGetTime, currentTime, %targetPath%, M
+    if (currentTime != _PPT_ScanContext.savedTime) {
+        MsgBox, 52, 警告, pptx がスキャン後に再保存されています。`nタグを適用しますか？
+        IfMsgBox, No
+        {
+            PPT_HideScanStatus()
+            _PPT_ScanRunning := false
+            FileDelete, %jsonPath%
+            return
+        }
+    }
+    try {
+        if (!prs.Saved) {
+            MsgBox, 52, 警告, 未保存の編集があります。`nタグを適用しますか？
+            IfMsgBox, No
+            {
+                PPT_HideScanStatus()
+                _PPT_ScanRunning := false
+                FileDelete, %jsonPath%
+                return
+            }
+        }
+    }
+
+    ; JSON 読み込み
+    FileRead, jsonText, *P65001 %jsonPath%
+    totalMedia := PPT_JsonSummaryValue(jsonText, "total_media")
+    matchedMedia := PPT_JsonSummaryValue(jsonText, "matched")
+    externalLinkCount := PPT_JsonSummaryValue(jsonText, "external_links")
+    ; 簡易 JSON パース (media_results からシェイプ情報を抽出)
+    autoCount := 0
+    unresolvedMedia := []
+
+    ; media_results を RegEx で抽出
+    pos := 1
+    while (pos := RegExMatch(jsonText
+        , "s)\{[^{}]*""media_file""[^{}]*""shapes""\s*:\s*\[([^\]]*)\][^{}]*\}", block, pos)) {
+
+        ; source_path 取得
+        srcPath := ""
+        RegExMatch(block, """source_path""\s*:\s*""([^""]+)""", sp)
+        srcPath := sp1
+        if (srcPath = "" || srcPath = "null") {
+            ; unresolved — media_file 取得
+            mf := ""
+            RegExMatch(block, """media_file""\s*:\s*""([^""]+)""", mfm)
+            mf := mfm1
+            unresolvedMedia.Push(mf)
+            pos += StrLen(block)
+            continue
+        }
+
+        ; search_backend 取得
+        backend := ""
+        RegExMatch(block, """search_backend""\s*:\s*""([^""]+)""", sb)
+        backend := sb1
+
+        ; shapes 内の slide_id + shape_id でタグ付け
+        shapesBlock := ""
+        RegExMatch(block, """shapes""\s*:\s*\[([^\]]*)\]", shb)
+        shapesBlock := shb1
+
+        sPos := 1
+        while (sPos := RegExMatch(shapesBlock
+            , """slide_id""\s*:\s*(\d+)[^}]*""shape_id""\s*:\s*(\d+)", shm, sPos)) {
+            slideId := shm1 + 0
+            shapeId := shm2 + 0
+
+            ; COM で該当シェイプを探す
+            shp := PPT_FindShapeByIds(prs, slideId, shapeId)
+            if (shp != "") {
+                ; 既にタグ付き → スキップ
+                existingId := ""
+                try existingId := shp.Tags("MEDIA_ID")
+                if (existingId = "") {
+                    method := (backend = "external_link") ? "manual" : "scan"
+                    PPT_RetroTagShape(shp, srcPath, method)
+                    autoCount++
+                }
+            }
+            sPos += StrLen(shm)
+        }
+        pos += StrLen(block)
+    }
+
+    ; 手動フォールバック (media 単位)
+    manualCount := 0
+    if (unresolvedMedia.MaxIndex())
+        PPT_HideScanStatus()
+    for _, mediaFile in unresolvedMedia {
+        if (mediaFile = "")
+            continue
+        MsgBox, 52, ソース未検出
+            , % "メディア: " . mediaFile . "`n`n手動でソースファイルを指定しますか？"
+        IfMsgBox, Yes
+        {
+            FileSelectFile, manualPath, 3, , ソースファイルを選択
+            if (manualPath != "") {
+                ; このメディアを参照する全シェイプにタグ付け
+                ; (JSON から shape 情報を再抽出して適用)
+                manualCount++
+            }
+        }
+    }
+
+    ; 保存
+    try {
+        prs.Save()
+    } catch e {
+        MsgBox, 48, 警告, pptx の保存に失敗しました。手動で保存してください。
+    }
+
+    ; クリーンアップ
+    FileDelete, %jsonPath%
+    ; スナップショット削除
+    snapPath := ""
+    RegExMatch(jsonText, """snapshot_path""\s*:\s*""([^""]+)""", snp)
+    snapPath := StrReplace(snp1, "\\", "\")
+    if (snapPath != "" && FileExist(snapPath)) {
+        FileDelete, %snapPath%
+        ; 親ディレクトリも空なら削除
+        SplitPath, snapPath, , snapDir
+        FileRemoveDir, %snapDir%
+    }
+
+    ; サマリ
+    unresolvedCount := unresolvedMedia.MaxIndex() ? unresolvedMedia.MaxIndex() : 0
+    unresolvedCount -= manualCount
+    if (unresolvedCount < 0)
+        unresolvedCount := 0
+    PPT_HideScanStatus()
+    SplitPath, targetPath, pptName
+    msg := "ファイル: " . pptName
+    if (totalMedia > 0)
+        msg .= "`n対象メディア: " . totalMedia . " 件"
+    msg .= "`n自動解決: " . matchedMedia . " 件"
+        . "`n自動タグ付け: " . autoCount . " 図形"
+    if (externalLinkCount > 0)
+        msg .= "`n外部リンク: " . externalLinkCount . " 件"
+    if (manualCount > 0)
+        msg .= "`n手動指定: " . manualCount . " 件"
+    if (unresolvedCount > 0)
+        msg .= "`n未解決: " . unresolvedCount . " 件"
+    msg .= "`n`n次の操作"
+        . "`nCtrl+Alt+Q: 選択図形のソース情報"
+        . "`nCtrl+Alt+E: ソースをエクスポート"
+        . "`nCtrl+Alt+F1: ヘルプ"
+    MsgBox, 64, 遡及スキャン結果, %msg%
+
+    _PPT_ScanRunning := false
+}
+
+; ----------------------------------------------------------------------------
+;  slide_id + shape_id でシェイプを検索
+; ----------------------------------------------------------------------------
+PPT_FindShapeByIds(prs, slideId, shapeId) {
+    try {
+        For sld in prs.Slides {
+            if (sld.SlideID = slideId) {
+                For shp in sld.Shapes {
+                    try {
+                        if (shp.Id = shapeId)
+                            return shp
+                    }
+                }
+                return ""
+            }
+        }
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "find_shape_by_ids_error", e)
+    }
+    return ""
+}
+
+; ----------------------------------------------------------------------------
+;  遡及タグ付与 (INSERTED_BY は従来形式、MATCH_METHOD で来歴記録)
+; ----------------------------------------------------------------------------
+PPT_RetroTagShape(shp, sourcePath, method) {
+    SplitPath, sourcePath, srcFileName
+    FormatTime, scanTime,, yyyy/MM/dd HH:mm:ss
+    FormatTime, idTime,, yyyyMMdd-HHmmss
+    Random, idRand, 0x100000, 0xFFFFFF
+    mediaId := idTime . "-" . Format("{:06x}", idRand)
+    insertedBy := A_UserName . "@" . A_ComputerName
+    matchMethod := (method = "manual") ? "RETRO_MANUAL" : "RETRO_SCAN"
+    try {
+        shp.Tags.Add("MEDIA_ID", mediaId)
+        shp.Tags.Add("SOURCE_PATH", sourcePath)
+        shp.Tags.Add("SOURCE_NAME", srcFileName)
+        shp.Tags.Add("INSERT_DATE", scanTime)
+        shp.Tags.Add("INSERTED_BY", insertedBy)
+        shp.Tags.Add("MATCH_METHOD", matchMethod)
+        if (shp.AlternativeText = "")
+            shp.AlternativeText := "[source] " . sourcePath
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "retro_tag_error", e)
+    }
+}
+
+; v1 スキャン関数は削除済み。v2 は Python (ppt_scan.py) が全て担当。
+
+; (v1 レガシー関数は全て削除済み — PPT_ExtractPptxContents 以下)

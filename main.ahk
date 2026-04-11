@@ -252,6 +252,8 @@ Cursor_GetHotkeyConfig() {
 #If
 
 ; ==========================================================
+    ^!s::   PPT_ScanAndTagSources()
+    ^!F1::  PPT_ShowSourceCommands()
 ; ----- Excel -----
 ; ==========================================================
 #If (EnableExcel && WinActive("ahk_exe EXCEL.EXE"))
