@@ -72,7 +72,7 @@ vk1C & F4::Debug_DumpToClipboard()
 ; ==========================================================
 ; ----- vk1C(Convert) -----
 ; ==========================================================
-#If Cursor_CanUseKeyboardMode()
+#If EnableNavLayer
     vk1C & 1::IME_ToEnglish()
     vk1C & 2::IME_ToJapanese()
     vk1C & 3::Send,{Blind}^+2
@@ -82,129 +82,41 @@ vk1C & F4::Debug_DumpToClipboard()
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
 #If
 
-#If (EnableNavLayer || EnableMouseEmu)
-    vk1C & sc027::
-        if Cursor_CanToggleModes()
-            Cursor_ToggleModeHotkey()
-    return
+#If (EnableNavLayer && EnableMouseEmu)
+    vk1C & sc027::Main_ToggleCursorMode()
+#If
 
-    vk1C & i::
-        if Cursor_IsMouseMode() {
-            if GetKeyState("Ctrl", "P") {
-                if GetKeyState("Alt", "P")
-                    Cursor_MoveEdgeByDirection("Up")
-                else
-                    Cursor_MoveJumpByDirection("Up")
-            } else if GetKeyState("Alt", "P") {
-                Cursor_GridMoveByDirection("Up")
-            } else {
-                Cursor_KeyDown("Up")
-            }
-        } else if Cursor_IsKeyboardMode() {
-            Send,{Blind}{Up}
-        }
-    return
-
-    vk1C & j::
-        if Cursor_IsMouseMode() {
-            if GetKeyState("Ctrl", "P") {
-                if GetKeyState("Alt", "P")
-                    Cursor_MoveEdgeByDirection("Left")
-                else
-                    Cursor_MoveJumpByDirection("Left")
-            } else if GetKeyState("Alt", "P") {
-                Cursor_GridMoveByDirection("Left")
-            } else {
-                Cursor_KeyDown("Left")
-            }
-        } else if Cursor_IsKeyboardMode() {
-            Send,{Blind}{Left}
-        }
-    return
-
-    vk1C & k::
-        if Cursor_IsMouseMode() {
-            if GetKeyState("Ctrl", "P") {
-                if GetKeyState("Alt", "P")
-                    Cursor_MoveEdgeByDirection("Down")
-                else
-                    Cursor_MoveJumpByDirection("Down")
-            } else if GetKeyState("Alt", "P") {
-                Cursor_GridMoveByDirection("Down")
-            } else {
-                Cursor_KeyDown("Down")
-            }
-        } else if Cursor_IsKeyboardMode() {
-            Send,{Blind}{Down}
-        }
-    return
-
-    vk1C & l::
-        if Cursor_IsMouseMode() {
-            if GetKeyState("Ctrl", "P") {
-                if GetKeyState("Alt", "P")
-                    Cursor_MoveEdgeByDirection("Right")
-                else
-                    Cursor_MoveJumpByDirection("Right")
-            } else if GetKeyState("Alt", "P") {
-                Cursor_GridMoveByDirection("Right")
-            } else {
-                Cursor_KeyDown("Right")
-            }
-        } else if Cursor_IsKeyboardMode() {
-            Send,{Blind}{Right}
-        }
-    return
-
-    vk1C & u::
-        if Cursor_IsMouseMode()
-            Cursor_LeftClickDown()
-        else if Cursor_IsKeyboardMode()
-            Send,{Blind}{Home}
-    return
-
-    vk1C & o::
-        if Cursor_IsMouseMode()
-            Cursor_MiddleClick()
-        else if Cursor_IsKeyboardMode()
-            Send,{Blind}{End}
-    return
-
-    vk1C & sc033::
-        if Cursor_IsMouseMode()
-            Cursor_RightClickDown()
-    return
-
-    vk1C & m::
-        if Cursor_IsMouseMode()
-            Cursor_ScrollStart("Down")
-        else if Cursor_IsKeyboardMode()
-            Send,{Blind}{PgUp}
-    return
-
-    vk1C & sc034::
-        if Cursor_IsMouseMode()
-            Cursor_ScrollStart("Up")
-        else if Cursor_IsKeyboardMode()
-            Send,{Blind}{PgDn}
-    return
-
-    vk1C & /::
-        if Cursor_IsKeyboardMode()
-            Send,{Blind}{F2}
-    return
+#If (EnableNavLayer && (!EnableMouseEmu || !EnableMouseCursorMode))
+    vk1C & i::      Send,{Blind}{Up}
+    vk1C & j::      Send,{Blind}{Left}
+    vk1C & k::      Send,{Blind}{Down}
+    vk1C & l::      Send,{Blind}{Right}
+    vk1C & u::      Send,{Blind}{Home}
+    vk1C & o::      Send,{Blind}{End}
+    vk1C & m::      Send,{Blind}{PgUp}
+    vk1C & sc034::  Send,{Blind}{PgDn}
+    vk1C & /::      Send,{Blind}{F2}
 #If
 
 #If (EnableMouseEmu && EnableMouseCursorMode)
-    vk1C & i Up::Cursor_KeyUp("Up")
-    vk1C & j Up::Cursor_KeyUp("Left")
-    vk1C & k Up::Cursor_KeyUp("Down")
-    vk1C & l Up::Cursor_KeyUp("Right")
-    vk1C & u Up::Cursor_LeftClickUp()
-    vk1C & sc033 Up::Cursor_RightClickUp()
-    vk1C & m Up::Cursor_ScrollStop()
-    vk1C & sc034 Up::Cursor_ScrollStop()
-    *vk1C Up::Cursor_MoveHotkeyModifierUp()
+    vk1C & i::         Main_HandleVk1cMove("Up")
+    vk1C & j::         Main_HandleVk1cMove("Left")
+    vk1C & k::         Main_HandleVk1cMove("Down")
+    vk1C & l::         Main_HandleVk1cMove("Right")
+    vk1C & u::         Main_HandleVk1cClick("Left")
+    vk1C & o::         Main_HandleVk1cClick("Middle")
+    vk1C & sc033::     Main_HandleVk1cClick("Right")
+    vk1C & m::         Cursor_ScrollStart("Down")
+    vk1C & sc034::     Cursor_ScrollStart("Up")
+    vk1C & i Up::      Cursor_KeyUp("Up")
+    vk1C & j Up::      Cursor_KeyUp("Left")
+    vk1C & k Up::      Cursor_KeyUp("Down")
+    vk1C & l Up::      Cursor_KeyUp("Right")
+    vk1C & u Up::      Cursor_LeftClickUp()
+    vk1C & sc033 Up::  Cursor_RightClickUp()
+    vk1C & m Up::      Cursor_ScrollStop()
+    vk1C & sc034 Up::  Cursor_ScrollStop()
+    *vk1C Up::         Main_HandleVk1cModifierUp()
 #If
 
 ; ==========================================================
@@ -377,3 +289,43 @@ vk1C & F4::Debug_DumpToClipboard()
     WheelUp::   MG_ScrollAction("Up")
     WheelDown:: MG_ScrollAction("Down")
 #If
+
+; ==========================================================
+; ----- Toggle Function -----
+; ==========================================================
+Main_ToggleCursorMode() {
+    global EnableNavLayer, EnableMouseEmu, EnableMouseCursorMode
+    if !(EnableNavLayer && EnableMouseEmu)
+        return false
+    return Cursor_SetMode(!EnableMouseCursorMode, "toggle", true)
+}
+
+Main_HandleVk1cMove(direction) {
+    ctrl := GetKeyState("Ctrl", "P"), alt := GetKeyState("Alt", "P")
+
+    switch true {
+    case (ctrl && alt):
+        Cursor_MoveEdgeByDirection(direction)
+    case ctrl:
+        Cursor_MoveJumpByDirection(direction)
+    case alt:
+        Cursor_GridMoveByDirection(direction)
+    default:
+        Cursor_KeyDown(direction)
+    }
+}
+
+Main_HandleVk1cClick(button) {
+    switch button {
+    case "Left":
+        Cursor_LeftClickDown()
+    case "Middle":
+        Cursor_MiddleClick()
+    case "Right":
+        Cursor_RightClickDown()
+    }
+}
+
+Main_HandleVk1cModifierUp() {
+    Cursor_MoveHotkeyModifierUp()
+}

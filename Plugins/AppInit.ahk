@@ -7,25 +7,36 @@
 ; ==========================================================
 App_Init() {
     global profilePath
+    ; DPI スケーリング環境でも座標系を安定させる。
     DllCall("SetThreadDpiAwarenessContext", "ptr", -4)
+    ; 外部アプリ起動やパス組み立てで使うユーザープロファイルを保持する。
     EnvGet, profilePath, USERPROFILE
 
+    ; ランタイム例外は共通ハンドラで記録する。
     OnError(Func("App_OnError"))
 
+    ; インジケータと基本通知を先に立ち上げる。
     Indicator_Init()
     TrayTip, AutoHotkey, Script Reloaded, 2
 
+    ; 設定値を読み込んでから feature 依存の初期化へ進む。
     SUI_LoadConfig()
+    ; ChatterGuard はホットキーではなく低レベルマウスフック。
+    ; 設定で ON の場合のみ起動時に XButton1/XButton2 監視を開始する。
     if (EnableChatterGuard)
         CG_Init(["XButton1", "XButton2"])
+    ; 終了時は設定状態にかかわらずフック解放を保証する。
     OnExit("CG_Cleanup")
 
+    ; デバッグ出力先と各 feature の補助状態を初期化する。
     Debug_CreateChannel("_Runtime", A_ScriptDir . "\.claude\runtime_error.log", 262144, true)
     MG_DebugInit()
     MouseWheel_DebugInit()
     Browser_DebugInit()
     PPT_DebugInit()
+    ; MouseCursor 側の hotkey メタデータを構築して help/state 参照に使う。
     Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
+    ; PowerPoint のキャプション監視を開始する。
     PPT_CaptionInit()
 }
 

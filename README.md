@@ -62,6 +62,11 @@ vk1c(変換キー) + F1の設定欄でON/OFFが可能です．
    - `execute_passthrough_right_click` まで到達しているか
 4. `execute_empty_gesture_cancelled` が出ていれば，ジェスチャ状態により右クリックが抑止されています．
 
+## PowerPoint Source Manager
+
+- Plugins/PowerPoint.ahkでは.pptx内の画像のソース管理を行っています．エクスプローラーでコピーした画像をCtrl+Vでペーストするとメタデータを挿入するホットキーが発火します．
+- 当AHKプロジェクトの導入前に作成した.pptx内の画像ソース探索はCtrl+Alt+S でppt_scan.pyを走らせるため，Pythonと[Everything](./Plugins/ppt_scan_setup.md)の環境構築を行ってください
+
 ## UiaMonitor
 
 BracketWrap 廃止に伴い、`lib/UiaMonitor/` は repo から削除しました。

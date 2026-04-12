@@ -151,6 +151,7 @@ Grid_SetWindow(hwnd, State, gx, gy, gw, gh) {
     finalY := State.MonTop + (gy * State.PitchH)
     finalW := (gw * State.CellW) + ((gw - 1) * State.InnerX)
     finalH := (gh * State.CellH) + ((gh - 1) * State.InnerY)
+    Grid_ClampToWorkArea(State.Monitor, finalX, finalY, finalW, finalH)
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
 }
 
@@ -212,6 +213,7 @@ Grid_MoveAcrossMonitor(hwnd, State, direction) {
     finalY := layout.AreaTop + (gy * layout.PitchH)
     finalW := (gw * layout.CellW) + ((gw - 1) * layout.InnerX)
     finalH := (gh * layout.CellH) + ((gh - 1) * layout.InnerY)
+    Grid_ClampToWorkArea(targetMonitor, finalX, finalY, finalW, finalH)
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
     return true
 }
@@ -231,6 +233,19 @@ Grid_ClampRatio(value) {
     if (value > 1)
         return 1
     return value
+}
+
+Grid_ClampToWorkArea(monitor, ByRef x, ByRef y, ByRef w, ByRef h) {
+    if !IsObject(monitor)
+        return
+    if (y < monitor.Top)
+        y := monitor.Top
+    if (x < monitor.Left)
+        x := monitor.Left
+    if (x + w > monitor.Right)
+        x := monitor.Right - w
+    if (y + h > monitor.Bottom)
+        y := monitor.Bottom - h
 }
 
 Grid_NormalizeAxisGaps(axisSize, count, ByRef outerGap, ByRef innerGap, ByRef cellSize, ByRef pitchSize, ByRef areaSize) {

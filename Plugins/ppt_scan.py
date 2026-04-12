@@ -1,6 +1,6 @@
 """ppt_scan.py — 遡及ソーススキャン (Python 委譲スクリプト)
 
-Usage: python ppt_scan.py <pptxPath> <scanId> [jsonPath]
+Usage: python ppt_scan.py <pptxPath> <scanId> [jsonPath] [statusPath] [cancelPath] [stdoutPath] [stderrPath]
 
 pptx 内の埋め込みメディアに対してソースファイルを検索し、
 結果を _scan_<scanId>.json として出力する。
@@ -13,14 +13,11 @@ import shutil
 import hashlib
 import subprocess
 import tempfile
+import time
 import zipfile
-from pathlib import Path
 from datetime import datetime
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
-
-from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 
 # === Configuration ===
@@ -35,6 +32,134 @@ NS = {
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
     "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
 }
+
+STATUS_KEY_ORDER = (
+    "stage",
+    "message",
+    "backend",
+    "current_index",
+    "total_items",
+    "files_scanned",
+    "candidate_count",
+    "matched_count",
+    "cancel_requested",
+    "cancelled",
+    "done",
+    "current_media",
+    "snapshot_path",
+)
+
+
+class ScanCancelled(Exception):
+    """ユーザー要求による中断。"""
+
+
+def configure_output(stdout_path, stderr_path):
+    """標準出力/標準エラーを UTF-8 ログファイルへ向ける。"""
+    stdout_handle = None
+    stderr_handle = None
+
+    if stdout_path:
+        stdout_dir = os.path.dirname(stdout_path)
+        if stdout_dir:
+            os.makedirs(stdout_dir, exist_ok=True)
+        stdout_handle = open(stdout_path, "w", encoding="utf-8", buffering=1)
+        sys.stdout = stdout_handle
+    if stderr_path:
+        stderr_dir = os.path.dirname(stderr_path)
+        if stderr_dir:
+            os.makedirs(stderr_dir, exist_ok=True)
+        stderr_handle = open(stderr_path, "w", encoding="utf-8", buffering=1)
+        sys.stderr = stderr_handle
+
+    return stdout_handle, stderr_handle
+
+
+def sanitize_status_value(value):
+    """進捗ファイル向けに改行を潰した文字列へ正規化。"""
+    if value is None:
+        return ""
+    return str(value).replace("\r", " ").replace("\n", " ")
+
+
+def write_text_file(path, text, atomic=True):
+    """UTF-8 テキストを書き込む。進捗ファイルは共有競合回避のため直接上書きする。"""
+    if not path:
+        return
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    if not atomic:
+        last_error = None
+        for _ in range(20):
+            try:
+                with open(path, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(text)
+                return
+            except PermissionError as exc:
+                last_error = exc
+                time.sleep(0.05)
+        if last_error is not None:
+            raise last_error
+        return
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    last_error = None
+    for _ in range(20):
+        try:
+            os.replace(tmp_path, path)
+            return
+        except PermissionError as exc:
+            last_error = exc
+            time.sleep(0.05)
+    if last_error is not None:
+        raise last_error
+
+
+def write_status(status_path, state):
+    """AHK 側が読みやすい key=value 形式で進捗を書き出す。"""
+    if not status_path:
+        return
+
+    lines = []
+    written = set()
+    for key in STATUS_KEY_ORDER:
+        if key in state:
+            lines.append(f"{key}={sanitize_status_value(state.get(key, ''))}")
+            written.add(key)
+    for key in sorted(state):
+        if key in written:
+            continue
+        lines.append(f"{key}={sanitize_status_value(state.get(key, ''))}")
+
+    write_text_file(status_path, "\n".join(lines) + "\n", atomic=False)
+
+
+def update_status(state, status_path, **changes):
+    """状態を更新して進捗ファイルへ反映する。"""
+    state.update(changes)
+    write_status(status_path, state)
+
+
+def is_cancel_requested(cancel_path):
+    """キャンセルフラグの有無を返す。"""
+    return bool(cancel_path) and os.path.isfile(cancel_path)
+
+
+def raise_if_cancelled(cancel_path, state=None, status_path=""):
+    """キャンセル要求が来ていれば例外を投げる。"""
+    if not is_cancel_requested(cancel_path):
+        return
+    if state is not None and status_path:
+        update_status(
+            state,
+            status_path,
+            stage="キャンセル中",
+            message="キャンセル要求を受け付けました。",
+            cancel_requested=1,
+        )
+    raise ScanCancelled()
 
 
 def find_es_exe():
@@ -57,6 +182,22 @@ def md5_file(path):
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def try_md5_file(path):
+    """読めないファイルは None を返す。"""
+    try:
+        return md5_file(path)
+    except OSError:
+        return None
+
+
+def safe_getmtime(path):
+    """更新日時を安全に取得する。失敗時は最小値扱い。"""
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return float("-inf")
 
 
 def get_slide_order(snap_path):
@@ -169,11 +310,19 @@ def normalize_uri(uri):
     return unquote(uri)
 
 
-def search_everything(es_exe, file_size):
+def search_everything(es_exe, file_size, cancel_path="", exclude_dirs=None):
     """Everything で指定サイズのファイルを検索。"""
     try:
+        raise_if_cancelled(cancel_path)
+        # es.exe は複数引数を AND 検索として結合する
+        args = [es_exe, f"size:={file_size}"]
+        if exclude_dirs:
+            for d in exclude_dirs:
+                # !path: で配下を除外。末尾 \ は不要 (部分一致で効く)
+                normalized = os.path.normpath(d)
+                args.append(f"!path:{normalized}")
         result = subprocess.run(
-            [es_exe, f"size:={file_size}"],
+            args,
             capture_output=True,
             text=True,
             timeout=30,
@@ -183,18 +332,28 @@ def search_everything(es_exe, file_size):
         candidates = [
             line.strip() for line in result.stdout.splitlines() if line.strip()
         ]
+        raise_if_cancelled(cancel_path)
         return candidates
+    except ScanCancelled:
+        raise
     except Exception:
         return []
 
 
-def search_wds(file_size):
+def search_wds(file_size, cancel_path="", exclude_dirs=None):
     """WDS (Windows Desktop Search) で指定サイズのファイルを検索。"""
     try:
+        raise_if_cancelled(cancel_path)
+        where_clause = f"System.Size = {file_size}"
+        if exclude_dirs:
+            for d in exclude_dirs:
+                # WDS SQL の LIKE: バックスラッシュはリテラル (エスケープ不要)
+                escaped = os.path.normpath(d).replace("'", "''")
+                where_clause += f" AND System.ItemPathDisplay NOT LIKE '{escaped}\\%'"
         ps_cmd = (
             f'$conn = New-Object -ComObject ADODB.Connection; '
             f"$conn.Open('Provider=Search.CollatorDSO;Extended Properties=''Application=Windows'''); "
-            f"$rs = $conn.Execute(\"SELECT System.ItemPathDisplay FROM SYSTEMINDEX WHERE System.Size = {file_size}\"); "
+            f'$rs = $conn.Execute("SELECT System.ItemPathDisplay FROM SYSTEMINDEX WHERE {where_clause}"); '
             f'while (-not $rs.EOF) {{ Write-Output $rs.Fields("System.ItemPathDisplay").Value; $rs.MoveNext() }}; '
             f'$rs.Close(); $conn.Close()'
         )
@@ -206,19 +365,25 @@ def search_wds(file_size):
             encoding="utf-8",
             errors="replace",
         )
+        raise_if_cancelled(cancel_path)
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    except ScanCancelled:
+        raise
     except Exception:
         return []
 
 
-def search_directories(file_size, pptx_dir):
+def search_directories(file_size, pptx_dir, status_path="", state=None, cancel_path="",
+                       exclude_dirs=None):
     """ディレクトリスキャンで指定サイズのファイルを検索。"""
     candidates = []
+    scanned = 0
+    last_report_at = 0.0
     user_profile = os.environ.get("USERPROFILE", "")
-    dirs = [pptx_dir]
+    raw_dirs = [pptx_dir]
     parent = os.path.dirname(pptx_dir)
     if parent and parent != pptx_dir:
-        dirs.append(parent)
+        raw_dirs.append(parent)
     for d in [
         os.path.join(user_profile, "Desktop"),
         os.path.join(user_profile, "Downloads"),
@@ -226,22 +391,65 @@ def search_directories(file_size, pptx_dir):
         os.path.join(user_profile, "Documents"),
     ]:
         if os.path.isdir(d):
-            dirs.append(d)
+            raw_dirs.append(d)
+
+    dirs = []
+    seen = set()
+    for d in raw_dirs:
+        norm = os.path.normcase(os.path.abspath(d))
+        if norm in seen:
+            continue
+        seen.add(norm)
+        dirs.append(d)
 
     for d in dirs:
+        raise_if_cancelled(cancel_path, state, status_path)
         if not os.path.isdir(d):
             continue
+        display_dir = os.path.basename(os.path.normpath(d)) or d
         try:
-            for root, _, files in os.walk(d):
+            for root, subdirs, files in os.walk(d):
+                # 除外ディレクトリ配下を丸ごとスキップ (os.walk の subdirs を剪定)
+                if exclude_dirs:
+                    subdirs[:] = [
+                        s for s in subdirs
+                        if not _is_under_excluded_dir(os.path.join(root, s), exclude_dirs)
+                    ]
+                    if _is_under_excluded_dir(root, exclude_dirs):
+                        continue
+                raise_if_cancelled(cancel_path, state, status_path)
                 for fname in files:
+                    raise_if_cancelled(cancel_path, state, status_path)
                     fpath = os.path.join(root, fname)
+                    scanned += 1
                     try:
                         if os.path.getsize(fpath) == file_size:
                             candidates.append(fpath)
                     except OSError:
                         pass
+                    now = time.monotonic()
+                    if state is not None and status_path and (
+                        scanned == 1
+                        or scanned % 200 == 0
+                        or (now - last_report_at) >= 0.4
+                    ):
+                        update_status(
+                            state,
+                            status_path,
+                            message=f"フォルダ探索中: {display_dir}",
+                            files_scanned=scanned,
+                            candidate_count=len(candidates),
+                        )
+                        last_report_at = now
         except OSError:
             pass
+    if state is not None and status_path:
+        update_status(
+            state,
+            status_path,
+            files_scanned=scanned,
+            candidate_count=len(candidates),
+        )
     return candidates
 
 
@@ -262,67 +470,256 @@ def select_best_match(matches, pptx_dir):
             return m
 
     # Priority 3: 最終更新日が新しい方
-    best = max(matches, key=lambda p: os.path.getmtime(p), default=matches[0])
+    best = max(matches, key=safe_getmtime, default=matches[0])
     return best
 
 
-def resolve_source(media_path, es_exe, pptx_dir):
+def _get_volatile_cache_dirs():
+    """揮発性キャッシュディレクトリの一覧を返す。
+
+    クラウドストレージのローカルキャッシュなど、パスが一時的で
+    キャッシュ消去により消える可能性があるディレクトリ。
+    """
+    dirs = []
+    local_appdata = os.environ.get("LOCALAPPDATA", "")
+    if local_appdata:
+        # Google Drive for Desktop (DriveFS content_cache)
+        drivefs = os.path.join(local_appdata, "Google", "DriveFS")
+        if os.path.isdir(drivefs):
+            dirs.append(drivefs)
+        # OneDrive cache
+        onedrive_cache = os.path.join(local_appdata, "Microsoft", "OneDrive")
+        if os.path.isdir(onedrive_cache):
+            # OneDrive のメインフォルダは除外しない (同期フォルダは正規パス)
+            # キャッシュ用の内部ディレクトリだけ除外
+            for subdir in ["cache", "logs"]:
+                candidate = os.path.join(onedrive_cache, subdir)
+                if os.path.isdir(candidate):
+                    dirs.append(candidate)
+    # Windows Temp (ppt_scan 以外の一時ファイルも除外)
+    temp_dir = os.environ.get("TEMP", os.environ.get("TMP", ""))
+    if temp_dir and os.path.isdir(temp_dir):
+        dirs.append(temp_dir)
+    return dirs
+
+
+def _is_under_excluded_dir(path, exclude_dirs):
+    """パスが除外ディレクトリ配下かどうかを判定する。"""
+    if not exclude_dirs:
+        return False
+    norm = os.path.normcase(os.path.abspath(path))
+    for d in exclude_dirs:
+        prefix = os.path.normcase(os.path.abspath(d))
+        if not prefix.endswith(os.sep):
+            prefix += os.sep
+        if norm.startswith(prefix) or norm == prefix.rstrip(os.sep):
+            return True
+    return False
+
+
+def filter_hash_matches(candidates, internal_hash, cancel_path="", state=None, status_path="",
+                        exclude_dirs=None):
+    """候補群からハッシュ一致するファイルだけを残す。"""
+    matches = []
+    checked = 0
+    total = len(candidates)
+    unreadable_count = 0
+    excluded_count = 0
+    for candidate in candidates:
+        raise_if_cancelled(cancel_path, state, status_path)
+        checked += 1
+        if _is_under_excluded_dir(candidate, exclude_dirs):
+            excluded_count += 1
+            continue
+        if os.path.isfile(candidate):
+            candidate_hash = try_md5_file(candidate)
+            if candidate_hash is None:
+                unreadable_count += 1
+            elif candidate_hash == internal_hash:
+                matches.append(candidate)
+        if state is not None and status_path and (
+            checked == total or checked % 25 == 0
+        ):
+            update_status(
+                state,
+                status_path,
+                message=f"候補ハッシュを検証中 ({checked}/{total})"
+                + (f" / 読めない候補 {unreadable_count}" if unreadable_count else "")
+                + (f" / 除外 {excluded_count}" if excluded_count else ""),
+                candidate_count=total,
+            )
+    return matches
+
+
+def resolve_source(media_path, es_exe, pptx_dir, status_path="", state=None, cancel_path="",
+                    exclude_dirs=None):
     """1つの内部メディアファイルに対してソースを検索。
+
+    exclude_dirs: 候補から除外するディレクトリパスのリスト。
+                  temp 展開先を自分自身のソースとして検出しないために使う。
 
     Returns: (source_path, search_backend) or (None, None)
     """
+    raise_if_cancelled(cancel_path, state, status_path)
     file_size = os.path.getsize(media_path)
     internal_hash = md5_file(media_path)
 
     # Stage 1: Everything
     if es_exe:
-        candidates = search_everything(es_exe, file_size)
-        matches = [c for c in candidates if os.path.isfile(c) and md5_file(c) == internal_hash]
+        if state is not None and status_path:
+            update_status(
+                state,
+                status_path,
+                backend="Everything",
+                message="Everything で候補を検索中",
+                files_scanned=0,
+                candidate_count=0,
+            )
+        candidates = search_everything(es_exe, file_size, cancel_path=cancel_path,
+                                       exclude_dirs=exclude_dirs)
+        matches = filter_hash_matches(
+            candidates,
+            internal_hash,
+            cancel_path=cancel_path,
+            state=state,
+            status_path=status_path,
+            exclude_dirs=exclude_dirs,
+        )
+        if state is not None and status_path:
+            update_status(state, status_path, candidate_count=len(candidates))
         if matches:
-            return select_best_match(matches, pptx_dir), "everything"
+            return select_best_match(matches, pptx_dir), "Everything"
 
     # Stage 2: WDS
-    candidates = search_wds(file_size)
-    matches = [c for c in candidates if os.path.isfile(c) and md5_file(c) == internal_hash]
+    if state is not None and status_path:
+        update_status(
+            state,
+            status_path,
+            backend="Windows Search",
+            message="Windows Search を照会中",
+            files_scanned=0,
+            candidate_count=0,
+        )
+    candidates = search_wds(file_size, cancel_path=cancel_path,
+                            exclude_dirs=exclude_dirs)
+    matches = filter_hash_matches(
+        candidates,
+        internal_hash,
+        cancel_path=cancel_path,
+        state=state,
+        status_path=status_path,
+        exclude_dirs=exclude_dirs,
+    )
+    if state is not None and status_path:
+        update_status(state, status_path, candidate_count=len(candidates))
     if matches:
-        return select_best_match(matches, pptx_dir), "wds"
+        return select_best_match(matches, pptx_dir), "Windows Search"
 
     # Stage 3: ディレクトリスキャン
-    candidates = search_directories(file_size, pptx_dir)
-    matches = [c for c in candidates if md5_file(c) == internal_hash]
+    if state is not None and status_path:
+        update_status(
+            state,
+            status_path,
+            backend="Directory",
+            message="フォルダを再帰探索中",
+            files_scanned=0,
+            candidate_count=0,
+        )
+    candidates = search_directories(
+        file_size,
+        pptx_dir,
+        status_path=status_path,
+        state=state,
+        cancel_path=cancel_path,
+        exclude_dirs=exclude_dirs,
+    )
+    matches = filter_hash_matches(
+        candidates,
+        internal_hash,
+        cancel_path=cancel_path,
+        state=state,
+        status_path=status_path,
+        exclude_dirs=exclude_dirs,
+    )
+    if state is not None and status_path:
+        update_status(state, status_path, candidate_count=len(candidates))
     if matches:
-        return select_best_match(matches, pptx_dir), "directory"
+        return select_best_match(matches, pptx_dir), "Directory"
 
     return None, None
 
 
-def main():
-    if len(sys.argv) < 3:
-        print("Usage: python ppt_scan.py <pptxPath> <scanId> [jsonPath]", file=sys.stderr)
-        sys.exit(1)
+def run_scan(pptx_path, scan_id, json_path, status_path="", cancel_path="",
+             stdout_path="", stderr_path="", keep_media=False,
+             on_map_built=None, on_media_resolved=None):
+    """スキャンを実行し結果を返す。
 
-    pptx_path = sys.argv[1]
-    scan_id = sys.argv[2]
+    keep_media=True の場合、media_dir を削除せず呼び出し元に返す (GUI プレビュー用)。
+
+    Callbacks (GUI 逐次更新用、すべてオプション):
+        on_map_built(media_map, external_links, media_dir):
+            メディアマップ構築＋展開完了時に呼ばれる。GUI 側で初期テーブルを構築できる。
+        on_media_resolved(index, total, media_file, source_path, search_backend, shapes, *, source_exists):
+            各メディアの解決完了時に呼ばれる。GUI 側で対応行を更新できる。
+            source_exists: source_path の実体がディスク上に存在するかどうか。
+
+    Returns:
+        dict: {"result": dict|None, "media_dir": str|None,
+               "snap_dir": str, "completed": bool}
+
+    Raises:
+        ScanCancelled: キャンセル要求を受けた場合
+        FileNotFoundError: pptx が見つからない場合
+        その他の例外: スキャン中のエラー
+    """
     pptx_dir = os.path.dirname(os.path.abspath(pptx_path))
-    json_path = sys.argv[3] if len(sys.argv) >= 4 else os.path.join(pptx_dir, f"_scan_{scan_id}.json")
-    json_path = os.path.abspath(json_path)
+
+    stdout_handle, stderr_handle = configure_output(stdout_path, stderr_path)
+
+    status = {
+        "stage": "初期化中",
+        "message": "スキャン準備中",
+        "backend": "",
+        "current_index": 0,
+        "total_items": 0,
+        "files_scanned": 0,
+        "candidate_count": 0,
+        "matched_count": 0,
+        "cancel_requested": 1 if is_cancel_requested(cancel_path) else 0,
+        "cancelled": 0,
+        "done": 0,
+        "current_media": "",
+        "snapshot_path": "",
+    }
+    write_status(status_path, status)
 
     if not os.path.isfile(pptx_path):
+        update_status(status, status_path, stage="エラー", message=f"pptx が見つかりません: {pptx_path}")
         print(f"ERROR: pptx not found: {pptx_path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"pptx not found: {pptx_path}")
 
     print(f"=== ppt_scan.py ===")
     print(f"pptx: {pptx_path}")
     print(f"scanId: {scan_id}")
     print()
 
+    # 除外対象ディレクトリを構築
+    pptx_base = os.path.splitext(os.path.basename(pptx_path))[0]
+    sources_dir = os.path.join(pptx_dir, pptx_base + "_sources")
+    volatile_cache_dirs = _get_volatile_cache_dirs()
+
     # スナップショット作成
     snap_dir = tempfile.mkdtemp(prefix="ppt_scan_")
     snap_path = os.path.join(snap_dir, f"scan_{scan_id}.pptx")
     shutil.copy2(pptx_path, snap_path)
     print(f"snapshot: {snap_path}")
+    media_dir = None
+    completed = False
+    update_status(status, status_path, snapshot_path=snap_path)
 
     try:
+        raise_if_cancelled(cancel_path, status, status_path)
+
         # Everything CLI
         es_exe = find_es_exe()
         if es_exe:
@@ -331,6 +728,13 @@ def main():
             print("Everything: not found (WDS fallback)")
 
         # メディア→シェイプ マッピング構築
+        update_status(
+            status,
+            status_path,
+            stage="メディア解析中",
+            message="PowerPoint 内の図形とメディア対応を解析しています。",
+            backend="",
+        )
         print("\n--- Building media-shape map ---")
         media_map, external_links = build_media_shape_map(snap_path)
         print(f"  internal media: {len(media_map)} files")
@@ -341,6 +745,7 @@ def main():
         os.makedirs(media_dir, exist_ok=True)
         with zipfile.ZipFile(snap_path, "r") as zf:
             for name in zf.namelist():
+                raise_if_cancelled(cancel_path, status, status_path)
                 if name.startswith("ppt/media/"):
                     fname = name.split("/")[-1]
                     if fname:
@@ -353,10 +758,33 @@ def main():
         total = len(media_map) + len(external_links)
         count = 0
         matched_count = 0
+        update_status(
+            status,
+            status_path,
+            stage="ソース探索中",
+            message="ソース探索を開始します。",
+            total_items=total,
+        )
+
+        if on_map_built:
+            on_map_built(media_map, external_links, media_dir)
 
         for media_file, info in media_map.items():
+            raise_if_cancelled(cancel_path, status, status_path)
             count += 1
             media_path = os.path.join(media_dir, media_file)
+            update_status(
+                status,
+                status_path,
+                stage="ソース探索中",
+                message="ソース候補を探索しています。",
+                current_index=count,
+                current_media=media_file,
+                backend="",
+                files_scanned=0,
+                candidate_count=0,
+                matched_count=matched_count,
+            )
             if not os.path.isfile(media_path):
                 print(f"  [{count}/{total}] {media_file} -> SKIP (not extracted)")
                 media_results.append({
@@ -368,39 +796,120 @@ def main():
                         for s in info["shapes"]
                     ],
                 })
+                update_status(
+                    status,
+                    status_path,
+                    message="メディア展開に失敗したためスキップしました。",
+                )
                 continue
 
-            source_path, backend = resolve_source(media_path, es_exe, pptx_dir)
+            source_path, backend = resolve_source(
+                media_path,
+                es_exe,
+                pptx_dir,
+                status_path=status_path,
+                state=status,
+                cancel_path=cancel_path,
+                exclude_dirs=[snap_dir, sources_dir] + volatile_cache_dirs,
+            )
             if source_path:
                 print(f"  [{count}/{total}] {media_file} -> MATCH ({backend}): {source_path}")
                 matched_count += 1
+                update_status(
+                    status,
+                    status_path,
+                    message="一致するソースを検出しました。",
+                    backend=backend,
+                    matched_count=matched_count,
+                )
             else:
                 print(f"  [{count}/{total}] {media_file} -> UNRESOLVED")
+                update_status(
+                    status,
+                    status_path,
+                    message="一致するソースは見つかりませんでした。",
+                    matched_count=matched_count,
+                )
 
+            shapes_list = [
+                {"slide_index": s[0], "slide_id": s[1], "shape_id": s[2]}
+                for s in info["shapes"]
+            ]
+            src_exists = bool(source_path) and os.path.isfile(source_path)
             media_results.append({
                 "media_file": media_file,
                 "source_path": source_path,
                 "search_backend": backend,
-                "shapes": [
-                    {"slide_index": s[0], "slide_id": s[1], "shape_id": s[2]}
-                    for s in info["shapes"]
-                ],
+                "source_exists": src_exists,
+                "shapes": shapes_list,
             })
+            if on_media_resolved:
+                on_media_resolved(count, total, media_file, source_path, backend, shapes_list,
+                                  source_exists=src_exists)
 
         # 外部リンク
         for slide_idx, sld_id, shape_id, ext_path in external_links:
+            raise_if_cancelled(cancel_path, status, status_path)
             count += 1
+            ext_label = os.path.basename(ext_path) or ext_path or "(external)"
+            update_status(
+                status,
+                status_path,
+                stage="ソース探索中",
+                message="外部リンクを確認しています。",
+                current_index=count,
+                current_media=ext_label,
+                backend="External Link",
+                files_scanned=0,
+                candidate_count=0,
+                matched_count=matched_count,
+            )
             print(f"  [{count}/{total}] EXTERNAL -> {ext_path}")
+            ext_shapes = [
+                {"slide_index": slide_idx, "slide_id": sld_id, "shape_id": shape_id}
+            ]
+            ext_exists = os.path.isfile(ext_path)
             media_results.append({
                 "media_file": None,
                 "source_path": ext_path,
                 "search_backend": "external_link",
-                "shapes": [
-                    {"slide_index": slide_idx, "slide_id": sld_id, "shape_id": shape_id}
-                ],
+                "source_exists": ext_exists,
+                "shapes": ext_shapes,
             })
-            if os.path.isfile(ext_path):
+            if ext_exists:
                 matched_count += 1
+            if on_media_resolved:
+                on_media_resolved(count, total, None, ext_path, "external_link", ext_shapes,
+                                  source_exists=ext_exists)
+            update_status(
+                status,
+                status_path,
+                message="外部リンク確認が完了しました。",
+                matched_count=matched_count,
+            )
+
+        # 未解決メディアを _unresolved/ に元バイナリのまま保存 (best-effort)
+        unresolved_dir = os.path.join(pptx_dir, pptx_base + "_sources", "_unresolved")
+        unresolved_count = 0
+        try:
+            for mr in media_results:
+                if mr["source_path"] is not None:
+                    continue
+                mf = mr.get("media_file")
+                if not mf or not media_dir:
+                    continue
+                src = os.path.join(media_dir, mf)
+                if not os.path.isfile(src):
+                    continue
+                os.makedirs(unresolved_dir, exist_ok=True)
+                dest = os.path.join(unresolved_dir, mf)
+                if not os.path.isfile(dest):
+                    shutil.copy2(src, dest)
+                    unresolved_count += 1
+        except OSError as exc:
+            print(f"  WARNING: unresolved export failed: {exc}", file=sys.stderr)
+        if unresolved_count:
+            print(f"  Saved {unresolved_count} unresolved media to {unresolved_dir}")
 
         # JSON 出力 (atomic rename)
         result = {
@@ -422,20 +931,94 @@ def main():
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         os.replace(tmp_path, json_path)
+        completed = True
+        update_status(
+            status,
+            status_path,
+            stage="完了",
+            message="JSON を生成しました。",
+            current_index=total,
+            current_media="",
+            backend="",
+            files_scanned=0,
+            candidate_count=0,
+            matched_count=matched_count,
+            done=1,
+        )
 
         print(f"\n=== Done ===")
         print(f"matched: {matched_count}/{total}")
         print(f"JSON: {json_path}")
 
+        return {"result": result, "media_dir": media_dir,
+                "snap_dir": snap_dir, "completed": True}
+
+    except ScanCancelled:
+        update_status(
+            status,
+            status_path,
+            stage="キャンセル完了",
+            message="スキャンを中断しました。",
+            cancel_requested=1,
+            cancelled=1,
+        )
+        print("\nCANCELLED", file=sys.stderr)
+        raise
     except Exception as e:
+        update_status(
+            status,
+            status_path,
+            stage="エラー",
+            message=str(e),
+        )
         print(f"\nERROR: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        raise
     finally:
-        # メディア展開先のみ削除。スナップショットは AHK 側で削除
-        if os.path.isdir(media_dir):
+        if media_dir and os.path.isdir(media_dir) and not keep_media:
             shutil.rmtree(media_dir, ignore_errors=True)
+        if not completed and os.path.isdir(snap_dir):
+            shutil.rmtree(snap_dir, ignore_errors=True)
+        if stdout_handle:
+            stdout_handle.flush()
+        if stderr_handle:
+            stderr_handle.flush()
+
+
+def main():
+    if len(sys.argv) < 3:
+        print(
+            "Usage: python ppt_scan.py <pptxPath> <scanId> [jsonPath] [statusPath] [cancelPath] [stdoutPath] [stderrPath]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    pptx_path = sys.argv[1]
+    scan_id = sys.argv[2]
+    pptx_dir = os.path.dirname(os.path.abspath(pptx_path))
+    json_path = sys.argv[3] if len(sys.argv) >= 4 else os.path.join(pptx_dir, f"_scan_{scan_id}.json")
+    status_path = sys.argv[4] if len(sys.argv) >= 5 else ""
+    cancel_path = sys.argv[5] if len(sys.argv) >= 6 else ""
+    stdout_path = sys.argv[6] if len(sys.argv) >= 7 else ""
+    stderr_path = sys.argv[7] if len(sys.argv) >= 8 else ""
+    json_path = os.path.abspath(json_path)
+    if status_path:
+        status_path = os.path.abspath(status_path)
+    if cancel_path:
+        cancel_path = os.path.abspath(cancel_path)
+    if stdout_path:
+        stdout_path = os.path.abspath(stdout_path)
+    if stderr_path:
+        stderr_path = os.path.abspath(stderr_path)
+
+    try:
+        run_scan(pptx_path, scan_id, json_path, status_path, cancel_path,
+                 stdout_path, stderr_path, keep_media=False)
+    except ScanCancelled:
+        sys.exit(2)
+    except Exception:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

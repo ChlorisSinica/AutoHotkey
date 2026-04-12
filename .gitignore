@@ -15,6 +15,7 @@
 .claude/
 .codex_tmp/
 .logs/
+_*/
 
 # UiaMonitor: ソースとビルド成果物のみ管理、中間ファイルは除外
 lib/UiaMonitor/bin/
@@ -36,4 +37,4 @@ temp/
 auth.json
 config/
 lib/MGLahk141/
-archive/
+archive/v2/
