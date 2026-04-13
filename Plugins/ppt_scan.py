@@ -1,4 +1,4 @@
-"""ppt_scan.py — 遡及ソーススキャン (Python 委譲スクリプト)
+"""ppt_scan.py — ソース探索スキャン (Python 委譲スクリプト)
 
 Usage: python ppt_scan.py <pptxPath> <scanId> [jsonPath] [statusPath] [cancelPath] [stdoutPath] [stderrPath]
 
@@ -328,6 +328,7 @@ def search_everything(es_exe, file_size, cancel_path="", exclude_dirs=None):
             timeout=30,
             encoding="utf-8",
             errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
         )
         candidates = [
             line.strip() for line in result.stdout.splitlines() if line.strip()
@@ -364,6 +365,7 @@ def search_wds(file_size, cancel_path="", exclude_dirs=None):
             timeout=30,
             encoding="utf-8",
             errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
         )
         raise_if_cancelled(cancel_path)
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -852,6 +854,7 @@ def run_scan(pptx_path, scan_id, json_path, status_path="", cancel_path="",
             raise_if_cancelled(cancel_path, status, status_path)
             count += 1
             ext_label = os.path.basename(ext_path) or ext_path or "(external)"
+            is_volatile_external = _is_under_excluded_dir(ext_path, volatile_cache_dirs)
             update_status(
                 status,
                 status_path,
@@ -864,52 +867,36 @@ def run_scan(pptx_path, scan_id, json_path, status_path="", cancel_path="",
                 candidate_count=0,
                 matched_count=matched_count,
             )
-            print(f"  [{count}/{total}] EXTERNAL -> {ext_path}")
+            if is_volatile_external:
+                print(f"  [{count}/{total}] EXTERNAL -> VOLATILE (ignored): {ext_path}")
+            else:
+                print(f"  [{count}/{total}] EXTERNAL -> {ext_path}")
             ext_shapes = [
                 {"slide_index": slide_idx, "slide_id": sld_id, "shape_id": shape_id}
             ]
-            ext_exists = os.path.isfile(ext_path)
+            ext_exists = bool(ext_path) and os.path.isfile(ext_path) and not is_volatile_external
+            resolved_ext_path = None if is_volatile_external else ext_path
+            resolved_backend = None if is_volatile_external else "external_link"
             media_results.append({
                 "media_file": None,
-                "source_path": ext_path,
-                "search_backend": "external_link",
+                "source_path": resolved_ext_path,
+                "search_backend": resolved_backend,
                 "source_exists": ext_exists,
                 "shapes": ext_shapes,
             })
             if ext_exists:
                 matched_count += 1
             if on_media_resolved:
-                on_media_resolved(count, total, None, ext_path, "external_link", ext_shapes,
+                on_media_resolved(count, total, None, resolved_ext_path, resolved_backend, ext_shapes,
                                   source_exists=ext_exists)
             update_status(
                 status,
                 status_path,
-                message="外部リンク確認が完了しました。",
+                message=is_volatile_external
+                    and "揮発パスの外部リンクを未解決として扱いました。"
+                    or "外部リンク確認が完了しました。",
                 matched_count=matched_count,
             )
-
-        # 未解決メディアを _unresolved/ に元バイナリのまま保存 (best-effort)
-        unresolved_dir = os.path.join(pptx_dir, pptx_base + "_sources", "_unresolved")
-        unresolved_count = 0
-        try:
-            for mr in media_results:
-                if mr["source_path"] is not None:
-                    continue
-                mf = mr.get("media_file")
-                if not mf or not media_dir:
-                    continue
-                src = os.path.join(media_dir, mf)
-                if not os.path.isfile(src):
-                    continue
-                os.makedirs(unresolved_dir, exist_ok=True)
-                dest = os.path.join(unresolved_dir, mf)
-                if not os.path.isfile(dest):
-                    shutil.copy2(src, dest)
-                    unresolved_count += 1
-        except OSError as exc:
-            print(f"  WARNING: unresolved export failed: {exc}", file=sys.stderr)
-        if unresolved_count:
-            print(f"  Saved {unresolved_count} unresolved media to {unresolved_dir}")
 
         # JSON 出力 (atomic rename)
         result = {

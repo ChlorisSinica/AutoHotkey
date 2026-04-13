@@ -976,6 +976,59 @@ PPT_ScanSummarizeConsole(text, maxLines := 6) {
     return out
 }
 
+PPT_ToLower(text) {
+    StringLower, lowerText, text
+    return lowerText
+}
+
+PPT_PathIsUnderDir(path, dirPath) {
+    if (path = "" || dirPath = "")
+        return false
+    normPath := PPT_ToLower(RTrim(StrReplace(path, "/", "\"), "\"))
+    normDir := PPT_ToLower(RTrim(StrReplace(dirPath, "/", "\"), "\"))
+    return (normPath = normDir) || (SubStr(normPath, 1, StrLen(normDir) + 1) = normDir . "\")
+}
+
+PPT_IsVolatileSourcePath(path) {
+    if (path = "")
+        return false
+
+    volatileDirs := []
+    EnvGet, localAppData, LOCALAPPDATA
+    EnvGet, tempDir, TEMP
+    EnvGet, tmpDir, TMP
+
+    if (localAppData != "") {
+        volatileDirs.Push(localAppData . "\Google\DriveFS")
+        volatileDirs.Push(localAppData . "\Microsoft\OneDrive\cache")
+        volatileDirs.Push(localAppData . "\Microsoft\OneDrive\logs")
+    }
+    if (tempDir != "")
+        volatileDirs.Push(tempDir)
+    if (tmpDir != "" && PPT_ToLower(tmpDir) != PPT_ToLower(tempDir))
+        volatileDirs.Push(tmpDir)
+
+    for _, dirPath in volatileDirs {
+        if PPT_PathIsUnderDir(path, dirPath)
+            return true
+    }
+    return false
+}
+
+PPT_ClearSourceTags(shp) {
+    cleared := false
+    for _, tagName in ["MEDIA_ID", "SOURCE_PATH", "SOURCE_NAME", "EMBED_FILE"
+        , "INSERT_DATE", "INSERTED_BY", "MATCH_METHOD"] {
+        try {
+            shp.Tags.Delete(tagName)
+            cleared := true
+        }
+    }
+    if (SubStr(shp.AlternativeText, 1, 9) = "[source] ")
+        shp.AlternativeText := ""
+    return cleared
+}
+
 PPT_CaptionFormatSettingValue(value) {
     if (value = "")
         return ""
@@ -2532,12 +2585,26 @@ PPT_ShowSourcePath() {
         srcName := shp.Tags("SOURCE_NAME")
         insDate := shp.Tags("INSERT_DATE")
         insBy   := shp.Tags("INSERTED_BY")
+        matchMethod := ""
+        embedFile := ""
+        try matchMethod := shp.Tags("MATCH_METHOD")
+        try embedFile := shp.Tags("EMBED_FILE")
         if (srcPath != "") {
             info := "ID:       " . mediaId
                 . "`nFile:     " . srcName
                 . "`nSource: " . srcPath
                 . "`nDate:    " . insDate
                 . "`nBy:       " . insBy
+            MsgBox, 64, 図のソース情報, %info%
+        } else if (mediaId != "") {
+            info := "ID:       " . mediaId
+                . "`nFile:     " . srcName
+                . (embedFile != "" ? "`nEmbed:   " . embedFile : "")
+                . "`nStatus: " . (matchMethod = "RETRO_UNRESOLVED" ? "未解決" : "ソース未設定")
+                . "`nDate:    " . insDate
+                . "`nBy:       " . insBy
+            if (matchMethod = "RETRO_UNRESOLVED")
+                info .= "`nHint:     Ctrl+Alt+E で unresolved に保存できます"
             MsgBox, 64, 図のソース情報, %info%
         } else {
             MsgBox, 48, , このマクロ経由で挿入されていない図です。
@@ -2549,7 +2616,7 @@ PPT_ShowSourcePath() {
 
 PPT_ShowSourceCommands() {
     msg := "PowerPoint ソース系ショートカット`n`n"
-        . "Ctrl+Alt+S : 遡及スキャンを開始`n"
+        . "Ctrl+Alt+S : ソース探索を開始`n"
         . "Ctrl+Alt+Q : 選択図形のソース情報を表示`n"
         . "Ctrl+Alt+E : ソースを一括エクスポート`n"
         . "Ctrl+Alt+F1 : このヘルプ`n`n"
@@ -2588,6 +2655,101 @@ PPT_LoadExportedIds(manifestPath) {
     return exportedIds
 }
 
+PPT_DeleteMatchingFiles(dirPath, pattern) {
+    deletedCount := 0
+    if !InStr(FileExist(dirPath), "D")
+        return 0
+    Loop, Files, % dirPath . "\" . pattern, F
+    {
+        FileDelete, %A_LoopFileFullPath%
+        if !ErrorLevel
+            deletedCount++
+    }
+    return deletedCount
+}
+
+PPT_RemoveDirIfEmpty(dirPath) {
+    if !InStr(FileExist(dirPath), "D")
+        return false
+    FileRemoveDir, %dirPath%
+    return !ErrorLevel
+}
+
+PPT_CleanupUnresolvedExports(destDir, mediaId) {
+    deletedCount := 0
+    if (destDir = "" || mediaId = "")
+        return 0
+    deletedCount += PPT_DeleteMatchingFiles(destDir . "\unresolved", mediaId . "_*")
+    deletedCount += PPT_DeleteMatchingFiles(destDir . "\_unresolved", mediaId . "_*")
+    PPT_RemoveDirIfEmpty(destDir . "\unresolved")
+    PPT_RemoveDirIfEmpty(destDir . "\_unresolved")
+    return deletedCount
+}
+
+PPT_ExportEmbeddedMedia(pptPath, mediaFile, destPath) {
+    scriptPath := A_ScriptDir . "\Plugins\ppt_extract_media.py"
+    if (pptPath = "" || mediaFile = "" || destPath = "" || !FileExist(scriptPath))
+        return false
+
+    SplitPath, destPath,, destDir
+    if (destDir != "" && !InStr(FileExist(destDir), "D"))
+        FileCreateDir, %destDir%
+
+    cmd := "python " . Chr(34) . scriptPath . Chr(34)
+        . " " . Chr(34) . pptPath . Chr(34)
+        . " " . Chr(34) . mediaFile . Chr(34)
+        . " " . Chr(34) . destPath . Chr(34)
+    RunWait, %cmd%, , Hide
+    return (!ErrorLevel && FileExist(destPath))
+}
+
+PPT_FindPythonGuiCommand() {
+    pathEnv := ""
+    EnvGet, pathEnv, PATH
+    Loop, Parse, pathEnv, `;
+    {
+        dir := Trim(A_LoopField)
+        if (dir = "")
+            continue
+        if FileExist(dir . "\pythonw.exe")
+            return Chr(34) . dir . "\pythonw.exe" . Chr(34)
+    }
+    return "python"
+}
+
+; CreateProcessW + CREATE_NO_WINDOW でコンソール点滅なしにプロセスを起動
+; Returns: PID (成功時) / 0 (失敗時)
+PPT_CreateProcessSilent(cmd) {
+    static CREATE_NO_WINDOW := 0x08000000
+    siSize := A_PtrSize = 8 ? 104 : 68
+    piSize := 8 + 2 * A_PtrSize
+
+    VarSetCapacity(SI, siSize, 0)
+    NumPut(siSize, SI, 0, "UInt")      ; STARTUPINFO.cb
+
+    VarSetCapacity(PI, piSize, 0)
+
+    ok := DllCall("CreateProcessW"
+        , "Ptr",  0                    ; lpApplicationName = NULL
+        , "WStr", cmd                  ; lpCommandLine
+        , "Ptr",  0                    ; lpProcessAttributes
+        , "Ptr",  0                    ; lpThreadAttributes
+        , "Int",  0                    ; bInheritHandles = FALSE
+        , "UInt", CREATE_NO_WINDOW     ; dwCreationFlags
+        , "Ptr",  0                    ; lpEnvironment
+        , "Ptr",  0                    ; lpCurrentDirectory = inherit
+        , "Ptr",  &SI                  ; lpStartupInfo
+        , "Ptr",  &PI)                 ; lpProcessInformation
+
+    if (!ok)
+        return 0
+
+    pid := NumGet(PI, 2 * A_PtrSize, "UInt")
+    DllCall("CloseHandle", "Ptr", NumGet(PI, 0, "Ptr"))            ; hProcess
+    DllCall("CloseHandle", "Ptr", NumGet(PI, A_PtrSize, "Ptr"))    ; hThread
+    return pid
+}
+
 ; ----------------------------------------------------------------------------
 ;  Phase 5: 一括整理コマンド（For each ループ修正版）
 ; ----------------------------------------------------------------------------
@@ -2614,6 +2776,8 @@ PPT_ExportSources() {
     destDir := pptDir . "\" . pptBaseName . "_sources"
     if !FileExist(destDir)
         FileCreateDir, %destDir%
+    resolvedDir := destDir . "\resolved"
+    unresolvedDir := destDir . "\unresolved"
 
     manifestPath := destDir . "\sources_list.json"
     exportedIds := PPT_LoadExportedIds(manifestPath)
@@ -2621,6 +2785,9 @@ PPT_ExportSources() {
 
     jsonEntries       := []
     copyCount         := 0
+    unresolvedExportCount := 0
+    unresolvedSkipCount := 0
+    unresolvedCleanupCount := 0
     exportedSkipCount := 0
     missingCount      := 0
     foreignSkipCount  := 0
@@ -2668,14 +2835,35 @@ PPT_ExportSources() {
             } catch e {
                 Debug_LogCatch("PPT_Spacing", "export_tag_inserted_by_error", e)
             }
+            matchMethod := ""
+            embedFile := ""
+            try matchMethod := shp.Tags("MATCH_METHOD")
+            try embedFile := shp.Tags("EMBED_FILE")
 
             destName := mediaId . "_" . srcName
-            destPath := destDir . "\" . destName
+            destPath := resolvedDir . "\" . destName
 
             if FileExist(srcPath) {
+                if !InStr(FileExist(resolvedDir), "D")
+                    FileCreateDir, %resolvedDir%
                 FileCopy, %srcPath%, %destPath%, 1
+                unresolvedCleanupCount += PPT_CleanupUnresolvedExports(destDir, mediaId)
                 jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, srcPath, destPath, "copied"))
                 copyCount++
+            } else if (matchMethod = "RETRO_UNRESOLVED" && embedFile != "") {
+                unresolvedName := mediaId . "_" . embedFile
+                unresolvedPath := unresolvedDir . "\" . unresolvedName
+                if FileExist(unresolvedPath) {
+                    unresolvedSkipCount++
+                    continue
+                }
+                if PPT_ExportEmbeddedMedia(pptPath, embedFile, unresolvedPath) {
+                    jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, embedFile, "", unresolvedPath, "unresolved"))
+                    unresolvedExportCount++
+                } else {
+                    jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, embedFile, "", "", "unresolved_failed"))
+                    missingCount++
+                }
             } else {
                 isForeignSource := (insertedBy != "" && insertedBy != currentUserKey)
                 if (isForeignSource) {
@@ -2691,7 +2879,10 @@ PPT_ExportSources() {
                     FileSelectFile, manualPath, 3, , ファイルを選択
                         , メディアファイル (*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff;*.gif;*.mp4;*.avi;*.wmv;*.mov;*.mkv;*.mp3;*.wav;*.wma;*.m4a;*.m4v;*.webm)
                     if (manualPath != "") {
+                        if !InStr(FileExist(resolvedDir), "D")
+                            FileCreateDir, %resolvedDir%
                         FileCopy, %manualPath%, %destPath%, 1
+                        unresolvedCleanupCount += PPT_CleanupUnresolvedExports(destDir, mediaId)
                         jsonEntries.Push(PPT_JsonEntry(mediaId, slideIdx, shapeIdx, srcName, manualPath, destPath, "manual"))
                         copyCount++
                     } else {
@@ -2706,8 +2897,7 @@ PPT_ExportSources() {
         }
     }
 
-    ; 未解決メディアの _unresolved/ 保存は Python (ppt_scan.py) 側で実行済み
-    ; (pptx ZIP から元バイナリをそのままコピー)
+    ; ファイル出力は Ctrl+Alt+E のみで行う
 
     ; sources_list.json 生成（既存エントリ + 新規エントリをマージ）
     FormatTime, genTime,, yyyy/MM/dd HH:mm:ss
@@ -2761,15 +2951,22 @@ PPT_ExportSources() {
     }
 
     msg := copyCount . " 枚をコピーしました。"
+    if (unresolvedExportCount > 0)
+        msg .= "`n" . unresolvedExportCount . " 枚を unresolved に保存。"
+    if (unresolvedSkipCount > 0)
+        msg .= "`n" . unresolvedSkipCount . " 枚は unresolved 済みのためスキップ。"
     if (exportedSkipCount > 0)
         msg .= "`n" . exportedSkipCount . " 枚はエクスポート済みのためスキップ。"
     if (foreignSkipCount > 0)
         msg .= "`n" . foreignSkipCount . " 枚は別ユーザ/別PCのソースのため手動指定せずスキップ。"
     if (missingCount > 0)
         msg .= "`n※ " . missingCount . " 枚はファイル未発見（sources_list.jsonを確認）。"
-    if (copyCount = 0 && exportedSkipCount > 0 && missingCount = 0 && foreignSkipCount = 0)
+    if (unresolvedCleanupCount > 0)
+        msg .= "`n" . unresolvedCleanupCount . " 件の古い未解決ファイルを整理。"
+    if (copyCount = 0 && unresolvedCleanupCount = 0
+        && exportedSkipCount > 0 && missingCount = 0 && foreignSkipCount = 0)
         msg := "新規エクスポート対象はありません。`n(" . exportedSkipCount . " 枚はエクスポート済み)"
-    MsgBox, 64, 整理完了, %msg%`n`n%destDir%
+    MsgBox, 64, 整理完了, %msg%`n`nmanifest: %manifestPath%`nresolved: %resolvedDir%`nunresolved: %unresolvedDir%
 }
 
 PPT_JsonEscape(str) {
@@ -2792,7 +2989,7 @@ PPT_JsonEntry(mediaId, slide, shape, file, source, dest, status) {
 }
 
 ; ============================================================================
-;  遡及ソーススキャン v2 — Python 委譲 + 非ブロック
+;  ソース探索スキャン v2 — Python 委譲 + 非ブロック
 ; ============================================================================
 global _PPT_ScanRunning := false
 global _PPT_ScanContext := {}
@@ -2874,7 +3071,7 @@ PPT_JsonSummaryValue(jsonText, key) {
 }
 
 ; ----------------------------------------------------------------------------
-;  メインエントリ: 遡及ソーススキャン (非ブロック)
+;  メインエントリ: ソース探索スキャン (非ブロック)
 ; ----------------------------------------------------------------------------
 PPT_ScanAndTagSources() {
     global _PPT_ScanRunning, _PPT_ScanContext
@@ -2948,9 +3145,12 @@ PPT_ScanAndTagSources() {
         MsgBox, 16, エラー, % "スキャンスクリプトが見つかりません。`n" . scriptPath
         return
     }
-    ; Python GUI スクリプト起動 (PID を直接追跡するため cmd /c は使わない)
-    ; パースエラー等は ppt_scan_gui.py 内の起動時 try/except でキャプチャ
-    runCmd := "python " . Chr(34) . scriptPath . Chr(34)
+    ; Python GUI スクリプト起動
+    ; CreateProcessW + CREATE_NO_WINDOW でコンソール点滅を完全に防止
+    ; (AHK Run は STARTF_USESHOWWINDOW+SW_HIDE = 作成後に隠す → 点滅する)
+    ; (CreateProcessW + 0x08000000 = ウィンドウを最初から作らない → 点滅しない)
+    pythonGuiCmd := PPT_FindPythonGuiCommand()
+    runCmd := pythonGuiCmd . " " . Chr(34) . scriptPath . Chr(34)
         . " " . Chr(34) . pptPath . Chr(34)
         . " " . scanId
         . " " . Chr(34) . jsonPath . Chr(34)
@@ -2959,7 +3159,9 @@ PPT_ScanAndTagSources() {
         . " " . Chr(34) . PPT_ScanStdoutLogPath . Chr(34)
         . " " . Chr(34) . PPT_ScanStderrLogPath . Chr(34)
     try {
-        Run, %runCmd%, , , scanPID
+        scanPID := PPT_CreateProcessSilent(runCmd)
+        if (!scanPID)
+            throw Exception("CreateProcessW failed")
     } catch e {
         PPT_DeleteFileIfExists(jsonPath)
         PPT_DeleteFileIfExists(statusPath)
@@ -3147,7 +3349,9 @@ PPT_ApplyScanResults(jsonPath) {
     externalLinkCount := PPT_JsonSummaryValue(jsonText, "external_links")
     ; 簡易 JSON パース (media_results からシェイプ情報を抽出)
     autoCount := 0
+    clearedVolatileCount := 0
     unresolvedMedia := []
+    currentUserKey := PPT_GetCurrentUserKey()
 
     ; media_results を RegEx で抽出
     pos := 1
@@ -3158,12 +3362,51 @@ PPT_ApplyScanResults(jsonPath) {
         srcPath := ""
         RegExMatch(block, """source_path""\s*:\s*""([^""]+)""", sp)
         srcPath := sp1
+
+        ; shapes 内の slide_id + shape_id を取得
+        shapesBlock := ""
+        RegExMatch(block, """shapes""\s*:\s*\[([^\]]*)\]", shb)
+        shapesBlock := shb1
+
         if (srcPath = "" || srcPath = "null") {
             ; unresolved — media_file 取得
             mf := ""
             RegExMatch(block, """media_file""\s*:\s*""([^""]+)""", mfm)
             mf := mfm1
             unresolvedMedia.Push(mf)
+
+            ; 旧タグが揮発パスなら除去して誤エクスポートを防ぐ
+            sPos := 1
+            while (sPos := RegExMatch(shapesBlock
+                , """slide_id""\s*:\s*(\d+)[^}]*""shape_id""\s*:\s*(\d+)", shm, sPos)) {
+                slideId := shm1 + 0
+                shapeId := shm2 + 0
+                shp := PPT_FindShapeByIds(prs, slideId, shapeId)
+                if (shp != "") {
+                    existingId := ""
+                    existingMethod := ""
+                    existingBy := ""
+                    existingSourcePath := ""
+                    try existingId := shp.Tags("MEDIA_ID")
+                    try existingMethod := shp.Tags("MATCH_METHOD")
+                    try existingBy := shp.Tags("INSERTED_BY")
+                    try existingSourcePath := shp.Tags("SOURCE_PATH")
+                    if PPT_IsVolatileSourcePath(existingSourcePath) {
+                        if PPT_ClearSourceTags(shp)
+                            clearedVolatileCount++
+                    }
+                    isRetro := (existingMethod = "RETRO_SCAN" || existingMethod = "RETRO_MANUAL")
+                    isUnresolved := (existingMethod = "RETRO_UNRESOLVED")
+                    isMine := (existingBy = "" || existingBy = currentUserKey)
+                    canTagUnresolved := (existingId = "")
+                        || (isRetro && isMine)
+                        || (isUnresolved && isMine)
+                        || PPT_IsVolatileSourcePath(existingSourcePath)
+                    if (canTagUnresolved)
+                        PPT_TagUnresolvedShape(shp, mf, existingId)
+                }
+                sPos += StrLen(shm)
+            }
             pos += StrLen(block)
             continue
         }
@@ -3174,10 +3417,6 @@ PPT_ApplyScanResults(jsonPath) {
         backend := sb1
 
         ; shapes 内の slide_id + shape_id でタグ付け
-        shapesBlock := ""
-        RegExMatch(block, """shapes""\s*:\s*\[([^\]]*)\]", shb)
-        shapesBlock := shb1
-
         sPos := 1
         while (sPos := RegExMatch(shapesBlock
             , """slide_id""\s*:\s*(\d+)[^}]*""shape_id""\s*:\s*(\d+)", shm, sPos)) {
@@ -3190,9 +3429,11 @@ PPT_ApplyScanResults(jsonPath) {
                 existingId := ""
                 existingMethod := ""
                 existingBy := ""
+                existingSourcePath := ""
                 try existingId := shp.Tags("MEDIA_ID")
                 try existingMethod := shp.Tags("MATCH_METHOD")
                 try existingBy := shp.Tags("INSERTED_BY")
+                try existingSourcePath := shp.Tags("SOURCE_PATH")
 
                 ; 上書き判定:
                 ;   タグなし → 新規タグ付け
@@ -3200,13 +3441,16 @@ PPT_ApplyScanResults(jsonPath) {
                 ;   RETRO_SCAN / RETRO_MANUAL:
                 ;     自分のPC → 上書き (修正結果を反映)
                 ;     他のPC → スキップ (他PC の正しいパスを保護)
+                ;   揮発パス (DriveFS/TEMP 等) → 由来に関係なく上書き
                 isRetro := (existingMethod = "RETRO_SCAN" || existingMethod = "RETRO_MANUAL")
-                isMine := (existingBy = "" || existingBy = PPT_GetCurrentUserKey())
+                isMine := (existingBy = "" || existingBy = currentUserKey)
+                isVolatileExisting := PPT_IsVolatileSourcePath(existingSourcePath)
                 canTag := (existingId = "")
                     || (isRetro && isMine)
+                    || isVolatileExisting
                 if (canTag) {
                     method := (backend = "external_link") ? "manual" : "scan"
-                    PPT_RetroTagShape(shp, srcPath, method)
+                    PPT_RetroTagShape(shp, srcPath, method, existingId)
                     autoCount++
                 }
             }
@@ -3248,12 +3492,14 @@ PPT_ApplyScanResults(jsonPath) {
         msg .= "`n外部リンク: " . externalLinkCount . " 件"
     if (unresolvedCount > 0)
         msg .= "`n未解決: " . unresolvedCount . " 件"
-            . "`n未解決分は未タグ付けのままです"
+            . "`n未解決分は Ctrl+Alt+E で unresolved に保存できます"
+    if (clearedVolatileCount > 0)
+        msg .= "`n揮発パス削除: " . clearedVolatileCount . " 図形"
     msg .= "`n`n次の操作"
         . "`nCtrl+Alt+Q: 選択図形のソース情報"
         . "`nCtrl+Alt+E: ソースをエクスポート"
         . "`nCtrl+Alt+F1: ヘルプ"
-    MsgBox, 64, 遡及スキャン結果, %msg%
+    MsgBox, 64, ソース探索結果, %msg%
 
     PPT_CleanupScanControlFiles(false)
     _PPT_ScanRunning := false
@@ -3283,19 +3529,23 @@ PPT_FindShapeByIds(prs, slideId, shapeId) {
 }
 
 ; ----------------------------------------------------------------------------
-;  遡及タグ付与 (INSERTED_BY は従来形式、MATCH_METHOD で来歴記録)
+;  探索結果タグ付与 (INSERTED_BY は従来形式、MATCH_METHOD で来歴記録)
 ; ----------------------------------------------------------------------------
-PPT_RetroTagShape(shp, sourcePath, method) {
+PPT_RetroTagShape(shp, sourcePath, method, keepMediaId := "") {
     SplitPath, sourcePath, srcFileName
     FormatTime, scanTime,, yyyy/MM/dd HH:mm:ss
-    FormatTime, idTime,, yyyyMMdd-HHmmss
-    Random, idRand, 0x100000, 0xFFFFFF
-    mediaId := idTime . "-" . Format("{:06x}", idRand)
+    if (keepMediaId != "")
+        mediaId := keepMediaId
+    else {
+        FormatTime, idTime,, yyyyMMdd-HHmmss
+        Random, idRand, 0x100000, 0xFFFFFF
+        mediaId := idTime . "-" . Format("{:06x}", idRand)
+    }
     insertedBy := A_UserName . "@" . A_ComputerName
     matchMethod := (method = "manual") ? "RETRO_MANUAL" : "RETRO_SCAN"
     try {
         ; 既存タグを削除してから書き直す (再スキャンで上書き可能にするため)
-        for _, tagName in ["MEDIA_ID", "SOURCE_PATH", "SOURCE_NAME"
+        for _, tagName in ["MEDIA_ID", "SOURCE_PATH", "SOURCE_NAME", "EMBED_FILE"
             , "INSERT_DATE", "INSERTED_BY", "MATCH_METHOD"] {
             try shp.Tags.Delete(tagName)
         }
@@ -3305,14 +3555,44 @@ PPT_RetroTagShape(shp, sourcePath, method) {
         shp.Tags.Add("INSERT_DATE", scanTime)
         shp.Tags.Add("INSERTED_BY", insertedBy)
         shp.Tags.Add("MATCH_METHOD", matchMethod)
-        if (shp.AlternativeText = "")
+        if (shp.AlternativeText = "" || SubStr(shp.AlternativeText, 1, 9) = "[source] ")
             shp.AlternativeText := "[source] " . sourcePath
     } catch e {
         Debug_LogCatch("PPT_Spacing", "retro_tag_error", e)
     }
 }
 
-; (未解決メディアの _unresolved/ 保存は Python ppt_scan.py 側で実行)
+PPT_TagUnresolvedShape(shp, mediaFile, keepMediaId := "") {
+    SplitPath, mediaFile, mediaName
+    FormatTime, scanTime,, yyyy/MM/dd HH:mm:ss
+    if (keepMediaId != "")
+        mediaId := keepMediaId
+    else {
+        FormatTime, idTime,, yyyyMMdd-HHmmss
+        Random, idRand, 0x100000, 0xFFFFFF
+        mediaId := idTime . "-" . Format("{:06x}", idRand)
+    }
+    insertedBy := A_UserName . "@" . A_ComputerName
+    try {
+        for _, tagName in ["MEDIA_ID", "SOURCE_PATH", "SOURCE_NAME", "EMBED_FILE"
+            , "INSERT_DATE", "INSERTED_BY", "MATCH_METHOD"] {
+            try shp.Tags.Delete(tagName)
+        }
+        shp.Tags.Add("MEDIA_ID", mediaId)
+        shp.Tags.Add("SOURCE_PATH", "")
+        shp.Tags.Add("SOURCE_NAME", mediaName)
+        shp.Tags.Add("EMBED_FILE", mediaName)
+        shp.Tags.Add("INSERT_DATE", scanTime)
+        shp.Tags.Add("INSERTED_BY", insertedBy)
+        shp.Tags.Add("MATCH_METHOD", "RETRO_UNRESOLVED")
+        if (SubStr(shp.AlternativeText, 1, 9) = "[source] ")
+            shp.AlternativeText := ""
+    } catch e {
+        Debug_LogCatch("PPT_Spacing", "unresolved_tag_error", e)
+    }
+}
+
+; Ctrl+Alt+S はタグ付けのみ。ファイル出力は行わない。
 
 ; v1 スキャン関数は削除済み。v2 は Python (ppt_scan.py) が全て担当。
 

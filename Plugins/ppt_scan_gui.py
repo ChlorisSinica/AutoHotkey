@@ -70,17 +70,17 @@ class ScanGUI:
         self._start_tick = None
 
         self.root = tk.Tk()
+        self.root.withdraw()  # 位置決定まで非表示 (点滅防止)
         self.root.title("PowerPoint Source Scan")
         self.root.minsize(700, 420)
 
-        # マウスカーソル (= PowerPoint) があるモニターに画面の 50%x60% で配置
         self._place_on_cursor_monitor(ratio_w=0.50, ratio_h=0.60)
-
         self._build_ui()
         self._start_scan_thread()
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         atexit.register(self._cleanup_temp)
+        self.root.deiconify()  # 準備完了後に表示
         self.root.mainloop()
 
     # ==================================================================
