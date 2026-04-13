@@ -1777,6 +1777,7 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Win+Ctrl+9", "横幅最大化 (※タイトルバー分下寄せ)", "MoveWindowRatio(...)", winWhen, "", "^#9::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+G", "Gridモード切替", "Grid_ToggleMode()", winWhen, "", "^#g::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+G", "Window Island 切替", "WindowIsland_Toggle()", winWhen, "", "^+#g::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+Shift+N", "テキストエディタ切替", "TextEditor_ToggleProvider()", winWhen, "vk1C + N / Ctrl + N で開くエディタを切替", "^+#n::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+J/K/I/L", "Grid移動 (←↓↑→)", "Grid_Move(dx, dy)", winWhen, "", "^#j::", 1, 3, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+J/K/I/L", "Gridリサイズ", "Grid_Resize(...)", winWhen, "", "^+#j::", 1, 3, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+F11", "Downloadsフォルダ", "OpenMoveExplorer(profilePath . ""\Downloads"", ...)", winWhen, "", "^#F11::", 1, 1, mainFile))

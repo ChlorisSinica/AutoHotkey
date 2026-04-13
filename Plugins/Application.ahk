@@ -77,6 +77,50 @@ IsNotepadsAvailable() {
     return FileExist(localAppData . "\Microsoft\WindowsApps\Notepads.exe") ? 1 : 0
 }
 
+TextEditor_GetProviderCycle() {
+    global TextEditorCustomPath
+
+    providers := ["Notepad"]
+    if IsNotepadsAvailable()
+        providers.Push("Notepads")
+    providers.Push("VSCode")
+    if (Trim(TextEditorCustomPath) != "")
+        providers.Push("Custom")
+    return providers
+}
+
+TextEditor_GetProviderDisplayName(provider) {
+    if (provider = "Notepads")
+        return "Notepads"
+    if (provider = "VSCode")
+        return "VSCode"
+    if (provider = "Custom")
+        return "Custom"
+    return "Notepad"
+}
+
+TextEditor_ToggleProvider() {
+    global TextEditorProvider
+
+    providers := TextEditor_GetProviderCycle()
+    current := Trim(TextEditorProvider)
+    nextIndex := 1
+
+    for index, provider in providers {
+        if (provider = current) {
+            nextIndex := (index >= providers.Length()) ? 1 : index + 1
+            break
+        }
+    }
+
+    TextEditorProvider := providers[nextIndex]
+    if IsFunc("SUI_SaveConfig")
+        SUI_SaveConfig()
+
+    ToolTip, % "Text Editor: " . TextEditor_GetProviderDisplayName(TextEditorProvider)
+    SetTimer, CloseToolTip, -1500
+}
+
 TextEditor_CollectTargetArgs(withFile := 1) {
     TargetArgs := ""
     if (withFile = 1) {

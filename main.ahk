@@ -80,6 +80,7 @@ vk1C & F4::Debug_DumpToClipboard()
     vk1C & n::OpenTextEditor(GetKeyState("Ctrl", "P") ? 1 : 0)
     vk1C & p::OpenWithMspaint(GetKeyState("Ctrl", "P") ? 1 : 0)
     vk1C & t::InsertDateTime("yyyy/MM/dd (ddd) HH:mm ")
+    ^+#n::    TextEditor_ToggleProvider()
 #If
 
 #If (EnableNavLayer && EnableMouseEmu)
