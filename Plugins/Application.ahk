@@ -155,7 +155,7 @@ TextEditor_RunProvider(provider, targetArgs := "", customPath := "", argsTemplat
             return
         }
 
-        OpenVSCode()
+        OpenVSCodeNewWindow()
         return
     }
 
@@ -217,6 +217,15 @@ OpenWithNotePad(withFile = 1, editorType = 2) {
         TextEditorProvider := "Notepad"
 
     OpenTextEditor(withFile)
+}
+
+OpenVSCodeNewWindow() {
+    launchCmd := "code -n"
+    try {
+        Run, %launchCmd%
+    } catch {
+        Run, "%A_AppData%\..\Local\Programs\Microsoft VS Code\Code.exe" -n
+    }
 }
 
 ; アプリケーション起動ヘルパー

@@ -1909,8 +1909,7 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Alt+4", "書式設定パネル開閉", "OpenFormatObject()", pptWhen, "", "!4::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Shift+Alt+4", "書式設定パネルを閉じる", "CloseFormatObject()", pptWhen, "", "+!4::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+V / F15", "画像メタデータ付き貼付け", "PasteImageWithMetadata()", pptWhen, "同じ機能を F15 にも割当", "^v::", 1, 2, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+Alt+S", "遡及ソーススキャン", "PPT_ScanAndTagSources()", pptWhen, "", "^!s::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Ctrl+Alt+E", "ソースエクスポート", "PPT_ExportSources()", pptWhen, "", "^!e::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Alt+E", "ソースマネージャー", "PPT_OpenSourceManager(""view"")", pptWhen, "source manager を開く / 既存ウィンドウを前面化", "^!e::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+Q", "ソース情報表示", "PPT_ShowSourcePath()", pptWhen, "", "^!q::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Alt+F1", "ソース系ヘルプ", "PPT_ShowSourceCommands()", pptWhen, "", "^!F1::", 1, 1, mainFile))
     d["EnablePPT"] := h

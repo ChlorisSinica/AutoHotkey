@@ -12,6 +12,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\lib\DebugUtil.ahk
 #Include %A_ScriptDir%\lib\FeatureState.ahk
 #Include %A_ScriptDir%\lib\HotkeyRegistry.ahk
+#Include %A_ScriptDir%\lib\OCRCapture.ahk
 
 ; ==========================================================
 ; --- Pluginsファイルの読み込み ---
@@ -65,6 +66,8 @@ vk1C & F1::Settings_Open()
 vk1C & F2::App_DebugStatus()
 vk1C & F3::MG_DebugSnapshot("manual-hotkey")
 vk1C & F4::Debug_DumpToClipboard()
+vk1C & F5::OCR_CaptureAndRead()
+vk1C & F6::OCR_ReadClipboard()
 #If WinActive("機能設定")
     Escape::Settings_Close()
 #If
@@ -259,9 +262,8 @@ vk1C & F4::Debug_DumpToClipboard()
     +!4::   PPT_CloseFormatObject()
     ^v::    PPT_PasteImageWithMetadata()
     F15::   PPT_PasteImageWithMetadata()
-    ^!e::   PPT_ExportSources()
+    ^!e::   PPT_OpenSourceManager("view")
     ^!q::   PPT_ShowSourcePath()
-    ^!s::   PPT_ScanAndTagSources()
     ^!F1::  PPT_ShowSourceCommands()
 #If
 

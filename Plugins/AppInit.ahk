@@ -2,6 +2,8 @@
 ; --- アプリケーション初期化 + ユーティリティ ---
 ; ==========================================================
 
+global App_RuntimeWatcherPid := 0
+
 ; ==========================================================
 ; --- 初期化 ---
 ; ==========================================================
@@ -14,6 +16,7 @@ App_Init() {
 
     ; ランタイム例外は共通ハンドラで記録する。
     OnError(Func("App_OnError"))
+    App_StartRuntimeDialogWatcher()
 
     ; インジケータと基本通知を先に立ち上げる。
     Indicator_Init()
@@ -27,9 +30,11 @@ App_Init() {
         CG_Init(["XButton1", "XButton2"])
     ; 終了時は設定状態にかかわらずフック解放を保証する。
     OnExit("CG_Cleanup")
+    OnExit("App_StopRuntimeDialogWatcher")
 
     ; デバッグ出力先と各 feature の補助状態を初期化する。
     Debug_CreateChannel("_Runtime", A_ScriptDir . "\.claude\runtime_error.log", 262144, true)
+    OCR_Init()
     MG_DebugInit()
     MouseWheel_DebugInit()
     Browser_DebugInit()
@@ -38,6 +43,39 @@ App_Init() {
     Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
     ; PowerPoint のキャプション監視を開始する。
     PPT_CaptionInit()
+}
+
+App_StartRuntimeDialogWatcher() {
+    global App_RuntimeWatcherPid
+
+    watcherPath := A_ScriptDir . "\scripts\runtime_dialog_watcher.ahk"
+    if !FileExist(watcherPath)
+        return false
+
+    runCmd := Chr(34) . A_AhkPath . Chr(34)
+        . " " . Chr(34) . watcherPath . Chr(34)
+        . " " . Chr(34) . A_Pid . Chr(34)
+        . " " . Chr(34) . A_ScriptFullPath . Chr(34)
+
+    Run, %runCmd%, %A_ScriptDir%, UseErrorLevel, watcherPid
+    if (ErrorLevel)
+        return false
+
+    App_RuntimeWatcherPid := watcherPid
+    return true
+}
+
+App_StopRuntimeDialogWatcher(exitReason := "", exitCode := 0) {
+    global App_RuntimeWatcherPid
+
+    watcherPid := App_RuntimeWatcherPid
+    App_RuntimeWatcherPid := 0
+    if !watcherPid
+        return
+
+    Process, Exist, %watcherPid%
+    if (ErrorLevel = watcherPid)
+        Process, Close, %watcherPid%
 }
 
 ; ==========================================================

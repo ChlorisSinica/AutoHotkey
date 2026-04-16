@@ -826,12 +826,27 @@ PPT_CaptionOpenLog() {
     Debug_OpenLog("PPT_Caption")
 }
 
-PPT_ReadTextFile(path) {
+PPT_ReadTextFile(path, logContext := "", maxAttempts := 6) {
     text := ""
     if !FileExist(path)
         return ""
-    FileRead, text, *P65001 %path%
-    return text
+    Loop, %maxAttempts%
+    {
+        text := ""
+        FileRead, text, *P65001 %path%
+        if (!ErrorLevel)
+            return text
+        if (logContext != "")
+            PPT_SpacingLog("scan_text_read_retry"
+                , "kind=" . logContext . " attempt=" . A_Index . "/" . maxAttempts . " path=" . path . " error=" . ErrorLevel)
+        if (A_Index >= maxAttempts)
+            break
+        Sleep, % (20 * A_Index)
+    }
+    if (logContext != "")
+        PPT_SpacingLog("scan_text_read_retry_exhausted"
+            , "kind=" . logContext . " attempts=" . maxAttempts . " path=" . path . " error=" . ErrorLevel)
+    return ""
 }
 
 PPT_DeleteFileIfExists(path) {
@@ -841,7 +856,7 @@ PPT_DeleteFileIfExists(path) {
 
 PPT_ReadScanStatus(path) {
     status := {}
-    text := PPT_ReadTextFile(path)
+    text := PPT_ReadTextFile(path, "status")
     if (text = "")
         return status
     Loop, Parse, text, `n, `r
@@ -903,6 +918,161 @@ PPT_CleanupScanControlFiles(deleteJson := false) {
         PPT_DeleteFileIfExists(_PPT_ScanContext.statusPath)
     if (_PPT_ScanContext.HasKey("cancelPath"))
         PPT_DeleteFileIfExists(_PPT_ScanContext.cancelPath)
+    if (_PPT_ScanContext.HasKey("rescanPath"))
+        PPT_DeleteFileIfExists(_PPT_ScanContext.rescanPath)
+}
+
+PPT_IsScanManagerAlive() {
+    global _PPT_ScanContext
+
+    if !IsObject(_PPT_ScanContext)
+        return false
+    if !_PPT_ScanContext.HasKey("PID")
+        return false
+    Process, Exist, % _PPT_ScanContext.PID
+    return !!ErrorLevel
+}
+
+PPT_FindScanManagerWindowByPid(pid) {
+    if (pid = "")
+        return 0
+
+    oldDetectHidden := A_DetectHiddenWindows
+    oldTitleMatchMode := A_TitleMatchMode
+    DetectHiddenWindows, On
+    SetTitleMatchMode, 2
+    WinGet, windowCount, List, % "ahk_pid " . pid
+    preferredHwnd := 0
+    fallbackHwnd := 0
+    Loop, %windowCount% {
+        hwnd := windowCount%A_Index%
+        if (!hwnd)
+            continue
+        if (!fallbackHwnd)
+            fallbackHwnd := hwnd
+        if !DllCall("IsWindowVisible", "Ptr", hwnd)
+            continue
+        WinGetTitle, windowTitle, ahk_id %hwnd%
+        if InStr(windowTitle, "PowerPoint Source Manager") {
+            preferredHwnd := hwnd
+            break
+        }
+        if (!preferredHwnd && windowTitle != "")
+            preferredHwnd := hwnd
+    }
+    DetectHiddenWindows, %oldDetectHidden%
+    SetTitleMatchMode, %oldTitleMatchMode%
+    return preferredHwnd ? preferredHwnd : fallbackHwnd
+}
+
+PPT_TryActivateScanManager() {
+    global _PPT_ScanContext
+
+    if !PPT_IsScanManagerAlive()
+        return false
+    if !IsObject(_PPT_ScanContext)
+        return false
+    if !_PPT_ScanContext.HasKey("PID")
+        return false
+
+    managerHwnd := PPT_FindScanManagerWindowByPid(_PPT_ScanContext.PID)
+    if (!managerHwnd)
+    {
+        PPT_SpacingLog("scan_manager_activate_missing", "pid=" . _PPT_ScanContext.PID)
+        return false
+    }
+
+    WinShow, ahk_id %managerHwnd%
+    WinGet, minMaxState, MinMax, ahk_id %managerHwnd%
+    if (minMaxState = -1)
+        WinRestore, ahk_id %managerHwnd%
+    WinActivate, ahk_id %managerHwnd%
+    WinWaitActive, ahk_id %managerHwnd%,, 1
+    activated := !!WinActive("ahk_id " . managerHwnd)
+    PPT_SpacingLog("scan_manager_activate", "pid=" . _PPT_ScanContext.PID . " hwnd=" . managerHwnd . " activated=" . activated)
+    return activated
+}
+
+PPT_EnsurePresentationSavedForManager(prs) {
+    MsgBox, 33, Source Manager, source manager を開くには保存済みの pptx が必要です。`n保存して続行しますか？
+    IfMsgBox, Cancel
+        return false
+    try {
+        prs.Save()
+    } catch e {
+        MsgBox, 16, エラー, % "保存に失敗したため source manager を開けませんでした。`n" . e.Message
+        return false
+    }
+    return !!(prs.FullName != "")
+}
+
+PPT_KeepSourceManagerSession(deleteJson := false) {
+    global _PPT_ScanRunning, _PPT_ScanContext
+
+    if !IsObject(_PPT_ScanContext)
+        return false
+    PPT_CleanupScanControlFiles(deleteJson)
+    _PPT_ScanRunning := true
+    _PPT_ScanContext.idleManager := true
+    _PPT_ScanContext.cancelRequested := false
+    _PPT_ScanContext.forceStopRequested := false
+    _PPT_ScanContext.cancelTick := 0
+    return true
+}
+
+PPT_RequestManagerRescan() {
+    global _PPT_ScanRunning, _PPT_ScanContext
+
+    if !_PPT_ScanRunning
+        return false
+    if !IsObject(_PPT_ScanContext)
+        return false
+    if !(_PPT_ScanContext.HasKey("idleManager") && _PPT_ScanContext.idleManager)
+        return false
+    if !_PPT_ScanContext.HasKey("rescanPath")
+        return false
+    if !PPT_IsScanManagerAlive()
+        return false
+
+    rescanPath := _PPT_ScanContext.rescanPath
+    if (rescanPath = "")
+        return false
+    SplitPath, rescanPath,, rescanDir
+    if (rescanDir != "" && !InStr(FileExist(rescanDir), "D"))
+        FileCreateDir, %rescanDir%
+    if FileExist(rescanPath)
+        FileDelete, %rescanPath%
+    FileAppend, rescan`n, %rescanPath%, UTF-8
+    _PPT_ScanContext.idleManager := false
+    _PPT_ScanContext.cancelRequested := false
+    _PPT_ScanContext.forceStopRequested := false
+    PPT_SpacingLog("scan_rescan_requested", "pid=" . _PPT_ScanContext.PID . " rescanPath=" . rescanPath)
+    return true
+}
+
+PPT_WriteManagerSyncSignal(result, detail := "") {
+    global _PPT_ScanContext
+
+    if !IsObject(_PPT_ScanContext)
+        return false
+    if !_PPT_ScanContext.HasKey("syncPath")
+        return false
+    syncPath := _PPT_ScanContext.syncPath
+    if (syncPath = "")
+        return false
+
+    SplitPath, syncPath,, syncDir
+    if (syncDir != "" && !InStr(FileExist(syncDir), "D"))
+        FileCreateDir, %syncDir%
+    if FileExist(syncPath)
+        FileDelete, %syncPath%
+    detail := StrReplace(detail, "`r", " ")
+    detail := StrReplace(detail, "`n", " ")
+    payload := result
+    if (detail != "")
+        payload .= "|" . detail
+    FileAppend, %payload%, %syncPath%, UTF-8
+    return !ErrorLevel
 }
 
 PPT_TerminateScanProcess(pid) {
@@ -926,7 +1096,7 @@ PPT_ForceStopScan() {
     PPT_SpacingLog("scan_force_stop_requested", "pid=" . _PPT_ScanContext.PID)
     PPT_TerminateScanProcess(_PPT_ScanContext.PID)
     status := PPT_ReadScanStatus(_PPT_ScanContext.statusPath)
-    detail := PPT_BuildScanStatusDetail("Python プロセスを強制停止しています。", status)
+    detail := PPT_BuildScanStatusDetail("ソースマネージャーを強制停止しています。", status)
     PPT_UpdateScanStatus("強制停止中", detail, false)
     return true
 }
@@ -2604,7 +2774,7 @@ PPT_ShowSourcePath() {
                 . "`nDate:    " . insDate
                 . "`nBy:       " . insBy
             if (matchMethod = "RETRO_UNRESOLVED")
-                info .= "`nHint:     Ctrl+Alt+E で unresolved に保存できます"
+                info .= "`nHint:     Ctrl+Alt+E でソースマネージャーを開けます"
             MsgBox, 64, 図のソース情報, %info%
         } else {
             MsgBox, 48, , このマクロ経由で挿入されていない図です。
@@ -2616,14 +2786,14 @@ PPT_ShowSourcePath() {
 
 PPT_ShowSourceCommands() {
     msg := "PowerPoint ソース系ショートカット`n`n"
-        . "Ctrl+Alt+S : ソース探索を開始`n"
+        . "Ctrl+Alt+E : ソースマネージャーを開く`n"
         . "Ctrl+Alt+Q : 選択図形のソース情報を表示`n"
-        . "Ctrl+Alt+E : ソースを一括エクスポート`n"
         . "Ctrl+Alt+F1 : このヘルプ`n`n"
         . "使い方:`n"
-        . "1. プレゼンを保存した状態で Ctrl+Alt+S`n"
-        . "2. 完了後、必要なら Ctrl+Alt+Q で内容確認`n"
-        . "3. Ctrl+Alt+E で関連ファイルを整理"
+        . "1. Ctrl+Alt+E でソースマネージャーを開く`n"
+        . "2. manager 内で Scan / Re-scan を実行する`n"
+        . "3. 必要なら Manual Pick / Export Sources を使う`n"
+        . "4. Ctrl+Alt+Q で選択図形の内容確認"
     MsgBox, 64, PowerPoint ソースヘルプ, %msg%
 }
 
@@ -2687,7 +2857,7 @@ PPT_CleanupUnresolvedExports(destDir, mediaId) {
 }
 
 PPT_ExportEmbeddedMedia(pptPath, mediaFile, destPath) {
-    scriptPath := A_ScriptDir . "\Plugins\ppt_extract_media.py"
+    scriptPath := A_ScriptDir . "\Plugins\ppt_extract_media.ps1"
     if (pptPath = "" || mediaFile = "" || destPath = "" || !FileExist(scriptPath))
         return false
 
@@ -2695,26 +2865,14 @@ PPT_ExportEmbeddedMedia(pptPath, mediaFile, destPath) {
     if (destDir != "" && !InStr(FileExist(destDir), "D"))
         FileCreateDir, %destDir%
 
-    cmd := "python " . Chr(34) . scriptPath . Chr(34)
+    powerShellExe := A_WinDir . "\System32\WindowsPowerShell\v1.0\powershell.exe"
+    cmd := Chr(34) . powerShellExe . Chr(34)
+        . " -NoProfile -ExecutionPolicy Bypass -File " . Chr(34) . scriptPath . Chr(34)
         . " " . Chr(34) . pptPath . Chr(34)
         . " " . Chr(34) . mediaFile . Chr(34)
         . " " . Chr(34) . destPath . Chr(34)
     RunWait, %cmd%, , Hide
     return (!ErrorLevel && FileExist(destPath))
-}
-
-PPT_FindPythonGuiCommand() {
-    pathEnv := ""
-    EnvGet, pathEnv, PATH
-    Loop, Parse, pathEnv, `;
-    {
-        dir := Trim(A_LoopField)
-        if (dir = "")
-            continue
-        if FileExist(dir . "\pythonw.exe")
-            return Chr(34) . dir . "\pythonw.exe" . Chr(34)
-    }
-    return "python"
 }
 
 ; CreateProcessW + CREATE_NO_WINDOW でコンソール点滅なしにプロセスを起動
@@ -2754,6 +2912,8 @@ PPT_CreateProcessSilent(cmd) {
 ;  Phase 5: 一括整理コマンド（For each ループ修正版）
 ; ----------------------------------------------------------------------------
 PPT_ExportSources() {
+    return PPT_OpenSourceManager("view")
+
     app := PPT_GetApp()
     if !app {
         MsgBox, 16, エラー, PowerPoint が見つかりません。
@@ -2989,19 +3149,19 @@ PPT_JsonEntry(mediaId, slide, shape, file, source, dest, status) {
 }
 
 ; ============================================================================
-;  ソース探索スキャン v2 — Python 委譲 + 非ブロック
+;  ソース探索スキャン v2 — PowerShell ソースマネージャー委譲 + 非ブロック
 ; ============================================================================
 global _PPT_ScanRunning := false
 global _PPT_ScanContext := {}
 global _PPT_ScanStatusGuiReady := false
-global _PPT_ScanHasPythonGui := true  ; Python GUI が進捗表示を担当
+global _PPT_ScanHasExternalGui := true  ; 外部 GUI が進捗表示を担当
 
 PPT_UpdateScanStatus(stage, detail := "", allowCancel := false) {
-    global _PPT_ScanContext, _PPT_ScanStatusGuiReady, _PPT_ScanHasPythonGui
+    global _PPT_ScanContext, _PPT_ScanStatusGuiReady, _PPT_ScanHasExternalGui
     global PPTScanStatusTitle, PPTScanStatusBody, PPTScanStatusCancelButton
 
-    ; Python tkinter GUI が進捗表示を担当するため AHK 側 GUI は抑制
-    if (_PPT_ScanHasPythonGui)
+    ; 外部 GUI が進捗表示を担当するため AHK 側 GUI は抑制
+    if (_PPT_ScanHasExternalGui)
         return
 
     pptPath := ""
@@ -3023,7 +3183,7 @@ PPT_UpdateScanStatus(stage, detail := "", allowCancel := false) {
         body .= "`n経過: " . Round((A_TickCount - startedTick) / 1000, 1) . " 秒"
     if (detail != "")
         body .= "`n" . detail
-    body .= "`n`nCtrl+Alt+Q: ソース情報 / Ctrl+Alt+E: エクスポート"
+    body .= "`n`nCtrl+Alt+Q: ソース情報 / Ctrl+Alt+E: ソースマネージャー"
 
     if !_PPT_ScanStatusGuiReady {
         Gui, PPTScanStatus:New, +AlwaysOnTop -SysMenu +ToolWindow +Border
@@ -3057,8 +3217,8 @@ PPT_UpdateScanStatus(stage, detail := "", allowCancel := false) {
 }
 
 PPT_HideScanStatus() {
-    global _PPT_ScanStatusGuiReady, _PPT_ScanHasPythonGui
-    if (_PPT_ScanHasPythonGui)
+    global _PPT_ScanStatusGuiReady, _PPT_ScanHasExternalGui
+    if (_PPT_ScanHasExternalGui)
         return
     if _PPT_ScanStatusGuiReady
         Gui, PPTScanStatus:Hide
@@ -3070,19 +3230,52 @@ PPT_JsonSummaryValue(jsonText, key) {
     return 0
 }
 
+PPT_NormalizePresentationPath(path) {
+    path := Trim(path)
+    if (path = "")
+        return ""
+    StringReplace, path, path, /, \, All
+    StringLower, normalizedPath, path
+    return normalizedPath
+}
+
 ; ----------------------------------------------------------------------------
 ;  メインエントリ: ソース探索スキャン (非ブロック)
 ; ----------------------------------------------------------------------------
-PPT_ScanAndTagSources() {
+PPT_OpenSourceManager(mode := "view") {
     global _PPT_ScanRunning, _PPT_ScanContext
     global PPT_ScanStdoutLogPath, PPT_ScanStderrLogPath
     static PollFn := Func("PPT_ScanPollResult")
+
+    PPT_SpacingLog("scan_manager_open_request", "mode=" . mode . " scanRunning=" . _PPT_ScanRunning)
+
     if (_PPT_ScanRunning) {
-        if PPT_RequestScanCancel() {
-            ToolTip, スキャン停止を要求しました
-            SetTimer, CloseToolTip, -2000
+        activePptPath := ""
+        contextPptPath := _PPT_ScanContext.HasKey("pptPath") ? _PPT_ScanContext.pptPath : ""
+        scanApp := PPT_GetApp()
+        if (scanApp) {
+            try activePptPath := scanApp.ActivePresentation.FullName
         }
-        return
+        if (PPT_NormalizePresentationPath(activePptPath) != PPT_NormalizePresentationPath(contextPptPath)) {
+            if (_PPT_ScanContext.HasKey("idleManager") && _PPT_ScanContext.idleManager) {
+                ToolTip, 別のプレゼンテーションでソースマネージャーを開いています
+                SetTimer, CloseToolTip, -2000
+                return
+            } else {
+                ToolTip, 別のプレゼンテーションでスキャン中です
+                SetTimer, CloseToolTip, -2000
+                return
+            }
+        } else {
+            if PPT_TryActivateScanManager()
+                return
+            if (_PPT_ScanContext.HasKey("idleManager") && _PPT_ScanContext.idleManager)
+                ToolTip, ソースマネージャーは既に開いています
+            else
+                ToolTip, ソースマネージャーでスキャン中です
+            SetTimer, CloseToolTip, -2000
+            return
+        }
     }
 
     app := PPT_GetApp()
@@ -3099,22 +3292,22 @@ PPT_ScanAndTagSources() {
         return
     }
     if (pptPath = "") {
-        MsgBox, 16, エラー, 先にファイルを保存してください。
+        if !PPT_EnsurePresentationSavedForManager(prs)
+            return
+        try pptPath := prs.FullName
+    }
+    if (pptPath = "") {
+        MsgBox, 16, エラー, 保存済みの pptx が必要です。
         return
     }
 
-    ; ZIP/COM 同期
-    try {
-        prs.Save()
-    } catch e {
-        MsgBox, 16, エラー, % "pptx の保存に失敗しました。`n" . e.Message
-        return
-    }
+    SplitPath, pptPath, , pptDir, , pptBaseName
+    manifestPath := pptDir . "\" . pptBaseName . "_sources\sources_list.json"
+    actualMode := "view"
 
-    ; savedTime を記録 (変更検出用)
+    savedTime := ""
     FileGetTime, savedTime, %pptPath%, M
 
-    ; scanId 生成 + ガード ON
     scanId := A_TickCount
     _PPT_ScanRunning := true
 
@@ -3124,64 +3317,82 @@ PPT_ScanAndTagSources() {
     jsonPath := scanTempDir . "\_scan_" . scanId . ".json"
     statusPath := scanTempDir . "\_scan_" . scanId . ".status"
     cancelPath := scanTempDir . "\_scan_" . scanId . ".cancel"
+    rescanPath := scanTempDir . "\_scan_" . scanId . ".rescan"
+    syncPath := scanTempDir . "\_scan_" . scanId . ".sync"
     if FileExist(jsonPath)
         FileDelete, %jsonPath%
     if FileExist(statusPath)
         FileDelete, %statusPath%
     if FileExist(cancelPath)
         FileDelete, %cancelPath%
+    if FileExist(rescanPath)
+        FileDelete, %rescanPath%
+    if FileExist(syncPath)
+        FileDelete, %syncPath%
     if FileExist(PPT_ScanStdoutLogPath)
         FileDelete, %PPT_ScanStdoutLogPath%
     if FileExist(PPT_ScanStderrLogPath)
         FileDelete, %PPT_ScanStderrLogPath%
 
-    ; Python GUI スクリプト起動 (非ブロック — tkinter ウィンドウが表示される)
-    scriptPath := A_ScriptDir . "\Plugins\ppt_scan_gui.py"
+    scriptPath := A_ScriptDir . "\Plugins\ppt_scan_gui.ps1"
     if !FileExist(scriptPath) {
         PPT_DeleteFileIfExists(jsonPath)
         PPT_DeleteFileIfExists(statusPath)
         PPT_DeleteFileIfExists(cancelPath)
+        PPT_DeleteFileIfExists(rescanPath)
         _PPT_ScanRunning := false
         MsgBox, 16, エラー, % "スキャンスクリプトが見つかりません。`n" . scriptPath
         return
     }
-    ; Python GUI スクリプト起動
-    ; CreateProcessW + CREATE_NO_WINDOW でコンソール点滅を完全に防止
-    ; (AHK Run は STARTF_USESHOWWINDOW+SW_HIDE = 作成後に隠す → 点滅する)
-    ; (CreateProcessW + 0x08000000 = ウィンドウを最初から作らない → 点滅しない)
-    pythonGuiCmd := PPT_FindPythonGuiCommand()
-    runCmd := pythonGuiCmd . " " . Chr(34) . scriptPath . Chr(34)
+
+    powerShellExe := A_WinDir . "\System32\WindowsPowerShell\v1.0\powershell.exe"
+    runCmd := Chr(34) . powerShellExe . Chr(34)
+        . " -NoProfile -ExecutionPolicy Bypass -File " . Chr(34) . scriptPath . Chr(34)
+        . " " . Chr(34) . actualMode . Chr(34)
         . " " . Chr(34) . pptPath . Chr(34)
-        . " " . scanId
+        . " " . Chr(34) . scanId . Chr(34)
         . " " . Chr(34) . jsonPath . Chr(34)
         . " " . Chr(34) . statusPath . Chr(34)
         . " " . Chr(34) . cancelPath . Chr(34)
+        . " " . Chr(34) . ((manifestPath != "" && FileExist(manifestPath)) ? manifestPath : "") . Chr(34)
         . " " . Chr(34) . PPT_ScanStdoutLogPath . Chr(34)
         . " " . Chr(34) . PPT_ScanStderrLogPath . Chr(34)
+        . " " . Chr(34) . rescanPath . Chr(34)
+        . " " . Chr(34) . syncPath . Chr(34)
+
     try {
         scanPID := PPT_CreateProcessSilent(runCmd)
         if (!scanPID)
             throw Exception("CreateProcessW failed")
+        PPT_SpacingLog("scan_manager_launch", "mode=" . actualMode . " pid=" . scanPID . " pptPath=" . pptPath)
     } catch e {
         PPT_DeleteFileIfExists(jsonPath)
         PPT_DeleteFileIfExists(statusPath)
         PPT_DeleteFileIfExists(cancelPath)
+        PPT_DeleteFileIfExists(rescanPath)
+        PPT_DeleteFileIfExists(syncPath)
         _PPT_ScanRunning := false
+        _PPT_ScanContext := {}
         Debug_LogCatch("PPT_Spacing", "scan_launch_error", e)
-        MsgBox, 16, エラー, % "Python スキャンの起動に失敗しました。`n" . e.Message
+        MsgBox, 16, エラー, % "PowerShell ソースマネージャーの起動に失敗しました。`n" . e.Message
         return
     }
 
-    ; コンテキスト保存
     _PPT_ScanContext := {scanId: scanId, pptPath: pptPath
         , savedTime: savedTime, PID: scanPID
         , jsonPath: jsonPath, startedTick: A_TickCount
         , stdoutPath: PPT_ScanStdoutLogPath, stderrPath: PPT_ScanStderrLogPath
-        , statusPath: statusPath, cancelPath: cancelPath
-        , cancelRequested: false, forceStopRequested: false}
+        , statusPath: statusPath, cancelPath: cancelPath, rescanPath: rescanPath, syncPath: syncPath
+        , cancelRequested: false, forceStopRequested: false
+        , requestedMode: mode, mode: actualMode, manifestPath: manifestPath
+        , idleManager: true, applyCount: 0}
 
-    PPT_UpdateScanStatus("Python スキャン中", "PowerPoint に戻って作業を続けられます。", true)
+    PPT_HideScanStatus()
     SetTimer, %PollFn%, 1000
+}
+
+PPT_ScanAndTagSources() {
+    return PPT_OpenSourceManager("view")
 }
 
 ; ----------------------------------------------------------------------------
@@ -3190,22 +3401,43 @@ PPT_ScanAndTagSources() {
 PPT_ScanPollResult() {
     global _PPT_ScanRunning, _PPT_ScanContext
     static PollFn := Func("PPT_ScanPollResult")
+    if !IsObject(_PPT_ScanContext) {
+        SetTimer, %PollFn%, Off
+        return
+    }
+    if !(_PPT_ScanContext.HasKey("jsonPath") && _PPT_ScanContext.HasKey("statusPath")) {
+        SetTimer, %PollFn%, Off
+        return
+    }
     jsonPath := _PPT_ScanContext.jsonPath
     status := PPT_ReadScanStatus(_PPT_ScanContext.statusPath)
+    if (_PPT_ScanContext.HasKey("idleManager") && _PPT_ScanContext.idleManager && FileExist(_PPT_ScanContext.statusPath))
+        _PPT_ScanContext.idleManager := false
 
     ; JSON 検出
     if FileExist(jsonPath) {
         SetTimer, %PollFn%, Off
         detail := PPT_BuildScanStatusDetail("検出結果を PowerPoint に反映しています。", status)
         PPT_UpdateScanStatus("タグ適用中", detail, false)
-        PPT_ApplyScanResults(jsonPath)
+        savedTimeFromStatus := PPT_ScanStatusValue(status, "saved_time")
+        if (savedTimeFromStatus != "")
+            _PPT_ScanContext.savedTime := savedTimeFromStatus
+        Process, Exist, % _PPT_ScanContext.PID
+        keepManagerSession := !!ErrorLevel
+        PPT_ApplyScanResults(jsonPath, keepManagerSession)
+        if (_PPT_ScanRunning && IsObject(_PPT_ScanContext) && keepManagerSession) {
+            _PPT_ScanContext.idleManager := true
+            _PPT_ScanContext.cancelRequested := false
+            _PPT_ScanContext.forceStopRequested := false
+            SetTimer, %PollFn%, 1000
+        }
         return
     }
 
     stage := PPT_ScanStatusValue(status, "stage"
-        , _PPT_ScanContext.cancelRequested ? "キャンセル中" : "Python スキャン中")
+        , _PPT_ScanContext.cancelRequested ? "キャンセル中" : "PowerShell スキャン中")
     if (_PPT_ScanContext.HasKey("forceStopRequested") && _PPT_ScanContext.forceStopRequested)
-        baseDetail := "Python プロセスの終了を待機しています。"
+        baseDetail := "ソースマネージャーの終了を待機しています。"
     else if (_PPT_ScanContext.HasKey("cancelRequested") && _PPT_ScanContext.cancelRequested)
         baseDetail := "停止要求を送信しました。もう一度押すと強制停止します。"
     else
@@ -3224,9 +3456,17 @@ PPT_ScanPollResult() {
         SetTimer, %PollFn%, Off
         PPT_HideScanStatus()
         PPT_SpacingLog("scan_cancelled", "pid=" . _PPT_ScanContext.PID)
-        PPT_CleanupScanControlFiles(true)
-        _PPT_ScanRunning := false
-        _PPT_ScanContext := {}
+        keepManagerSession := (statusCancelled = "1")
+            && !(_PPT_ScanContext.HasKey("forceStopRequested") && _PPT_ScanContext.forceStopRequested)
+            && PPT_IsScanManagerAlive()
+        if (keepManagerSession) {
+            PPT_KeepSourceManagerSession(true)
+            SetTimer, %PollFn%, 1000
+        } else {
+            PPT_CleanupScanControlFiles(true)
+            _PPT_ScanRunning := false
+            _PPT_ScanContext := {}
+        }
         ToolTip, スキャンをキャンセルしました
         SetTimer, CloseToolTip, -2000
         return
@@ -3238,11 +3478,22 @@ PPT_ScanPollResult() {
         SetTimer, %PollFn%, Off
         PPT_HideScanStatus()
         statusMsg := PPT_ScanStatusValue(status, "message")
-        PPT_SpacingLog("scan_error_from_status", "msg=" . statusMsg)
-        PPT_CleanupScanControlFiles(false)
-        _PPT_ScanRunning := false
-        _PPT_ScanContext := {}
+        keepManagerSession := PPT_IsScanManagerAlive()
+        PPT_SpacingLog("scan_error_from_status"
+            , "msg=" . statusMsg
+            . " keepManager=" . keepManagerSession
+            . " cancelRequested=" . (_PPT_ScanContext.HasKey("cancelRequested") ? _PPT_ScanContext.cancelRequested : 0)
+            . " forceStopRequested=" . (_PPT_ScanContext.HasKey("forceStopRequested") ? _PPT_ScanContext.forceStopRequested : 0))
+        if (keepManagerSession) {
+            PPT_KeepSourceManagerSession(false)
+        } else {
+            PPT_CleanupScanControlFiles(false)
+            _PPT_ScanRunning := false
+            _PPT_ScanContext := {}
+        }
         MsgBox, 16, エラー, % "スキャンエラー:`n" . statusMsg
+        if (keepManagerSession)
+            SetTimer, %PollFn%, 1000
         return
     }
 
@@ -3252,17 +3503,32 @@ PPT_ScanPollResult() {
         SetTimer, %PollFn%, Off
         PPT_HideScanStatus()
 
-        stderrText := PPT_ReadTextFile(_PPT_ScanContext.stderrPath)
-        stdoutText := PPT_ReadTextFile(_PPT_ScanContext.stdoutPath)
+        stderrText := PPT_ReadTextFile(_PPT_ScanContext.stderrPath, "stderr")
+        stdoutText := PPT_ReadTextFile(_PPT_ScanContext.stdoutPath, "stdout")
         stderrPath := _PPT_ScanContext.stderrPath
         summaryText := PPT_ScanSummarizeConsole(stderrText != "" ? stderrText : stdoutText)
-        PPT_SpacingLog("scan_python_failed"
-            , "stderr=" . Debug_Sanitize(stderrText)
+        idleManager := _PPT_ScanContext.HasKey("idleManager") ? _PPT_ScanContext.idleManager : false
+        if (idleManager) {
+            PPT_SpacingLog("scan_source_manager_exit_idle"
+                , "statusStage=" . statusStage
+                . " statusDone=" . statusDone
+                . " statusCancelled=" . statusCancelled)
+            PPT_CleanupScanControlFiles(false)
+            _PPT_ScanRunning := false
+            _PPT_ScanContext := {}
+            return
+        }
+        PPT_SpacingLog("scan_source_manager_failed"
+            , "statusStage=" . statusStage
+            . " statusDone=" . statusDone
+            . " statusCancelled=" . statusCancelled
+            . " idleManager=" . idleManager
+            . " stderr=" . Debug_Sanitize(stderrText)
             . " stdout=" . Debug_Sanitize(stdoutText))
         PPT_CleanupScanControlFiles(false)
         _PPT_ScanRunning := false
         _PPT_ScanContext := {}
-        msg := "Python スキャンが失敗しました。`nJSON が生成されませんでした。"
+        msg := "PowerShell ソースマネージャーが失敗しました。`nJSON が生成されませんでした。"
         if (summaryText != "")
             msg .= "`n`n" . summaryText
         if (stderrPath != "")
@@ -3275,13 +3541,15 @@ PPT_ScanPollResult() {
 ; ----------------------------------------------------------------------------
 ;  JSON 読み込み → COM タグ付け
 ; ----------------------------------------------------------------------------
-PPT_ApplyScanResults(jsonPath) {
+PPT_ApplyScanResults(jsonPath, keepManagerSession := false) {
     global _PPT_ScanRunning, _PPT_ScanContext
 
     ; プレゼン再取得
     app := PPT_GetApp()
     if !app {
         PPT_HideScanStatus()
+        if (keepManagerSession)
+            PPT_WriteManagerSyncSignal("apply_failed", "PowerPoint not found")
         PPT_CleanupScanControlFiles(true)
         _PPT_ScanRunning := false
         _PPT_ScanContext := {}
@@ -3305,6 +3573,8 @@ PPT_ApplyScanResults(jsonPath) {
     }
     if (prs = "") {
         PPT_HideScanStatus()
+        if (keepManagerSession)
+            PPT_WriteManagerSyncSignal("apply_failed", "presentation not found")
         PPT_CleanupScanControlFiles(true)
         _PPT_ScanRunning := false
         _PPT_ScanContext := {}
@@ -3320,9 +3590,18 @@ PPT_ApplyScanResults(jsonPath) {
         IfMsgBox, No
         {
             PPT_HideScanStatus()
-            PPT_CleanupScanControlFiles(true)
-            _PPT_ScanRunning := false
-            _PPT_ScanContext := {}
+            if (keepManagerSession) {
+                PPT_WriteManagerSyncSignal("apply_skipped", "pptx changed after scan")
+                PPT_CleanupScanControlFiles(true)
+                if (IsObject(_PPT_ScanContext)) {
+                    _PPT_ScanContext.applyCount := _PPT_ScanContext.applyCount + 1
+                    _PPT_ScanContext.idleManager := true
+                }
+            } else {
+                PPT_CleanupScanControlFiles(true)
+                _PPT_ScanRunning := false
+                _PPT_ScanContext := {}
+            }
             FileDelete, %jsonPath%
             return
         }
@@ -3333,9 +3612,18 @@ PPT_ApplyScanResults(jsonPath) {
             IfMsgBox, No
             {
                 PPT_HideScanStatus()
-                PPT_CleanupScanControlFiles(true)
-                _PPT_ScanRunning := false
-                _PPT_ScanContext := {}
+                if (keepManagerSession) {
+                    PPT_WriteManagerSyncSignal("apply_skipped", "unsaved edits blocked tag apply")
+                    PPT_CleanupScanControlFiles(true)
+                    if (IsObject(_PPT_ScanContext)) {
+                        _PPT_ScanContext.applyCount := _PPT_ScanContext.applyCount + 1
+                        _PPT_ScanContext.idleManager := true
+                    }
+                } else {
+                    PPT_CleanupScanControlFiles(true)
+                    _PPT_ScanRunning := false
+                    _PPT_ScanContext := {}
+                }
                 FileDelete, %jsonPath%
                 return
             }
@@ -3357,6 +3645,10 @@ PPT_ApplyScanResults(jsonPath) {
     pos := 1
     while (pos := RegExMatch(jsonText
         , "s)\{[^{}]*""media_file""[^{}]*""shapes""\s*:\s*\[([^\]]*)\][^{}]*\}", block, pos)) {
+
+        resultMediaId := ""
+        RegExMatch(block, """media_id""\s*:\s*""([^""]+)""", mid)
+        resultMediaId := mid1
 
         ; source_path 取得
         srcPath := ""
@@ -3395,15 +3687,17 @@ PPT_ApplyScanResults(jsonPath) {
                         if PPT_ClearSourceTags(shp)
                             clearedVolatileCount++
                     }
-                    isRetro := (existingMethod = "RETRO_SCAN" || existingMethod = "RETRO_MANUAL")
+                    isRetroScan := (existingMethod = "RETRO_SCAN")
                     isUnresolved := (existingMethod = "RETRO_UNRESOLVED")
                     isMine := (existingBy = "" || existingBy = currentUserKey)
                     canTagUnresolved := (existingId = "")
-                        || (isRetro && isMine)
+                        || (isRetroScan && isMine)
                         || (isUnresolved && isMine)
                         || PPT_IsVolatileSourcePath(existingSourcePath)
-                    if (canTagUnresolved)
-                        PPT_TagUnresolvedShape(shp, mf, existingId)
+                    if (canTagUnresolved) {
+                        stableMediaId := (existingId != "") ? existingId : resultMediaId
+                        PPT_TagUnresolvedShape(shp, mf, stableMediaId)
+                    }
                 }
                 sPos += StrLen(shm)
             }
@@ -3438,19 +3732,22 @@ PPT_ApplyScanResults(jsonPath) {
                 ; 上書き判定:
                 ;   タグなし → 新規タグ付け
                 ;   PASTE / (レガシー空文字) → Ctrl+V 由来なのでスキップ
-                ;   RETRO_SCAN / RETRO_MANUAL:
+                ;   RETRO_SCAN:
                 ;     自分のPC → 上書き (修正結果を反映)
                 ;     他のPC → スキップ (他PC の正しいパスを保護)
+                ;   RETRO_MANUAL:
+                ;     自動再scanでは上書きしない (ユーザー確定値を保護)
                 ;   揮発パス (DriveFS/TEMP 等) → 由来に関係なく上書き
-                isRetro := (existingMethod = "RETRO_SCAN" || existingMethod = "RETRO_MANUAL")
+                isRetroScan := (existingMethod = "RETRO_SCAN")
                 isMine := (existingBy = "" || existingBy = currentUserKey)
                 isVolatileExisting := PPT_IsVolatileSourcePath(existingSourcePath)
                 canTag := (existingId = "")
-                    || (isRetro && isMine)
+                    || (isRetroScan && isMine)
                     || isVolatileExisting
                 if (canTag) {
                     method := (backend = "external_link") ? "manual" : "scan"
-                    PPT_RetroTagShape(shp, srcPath, method, existingId)
+                    stableMediaId := (existingId != "") ? existingId : resultMediaId
+                    PPT_RetroTagShape(shp, srcPath, method, stableMediaId)
                     autoCount++
                 }
             }
@@ -3465,6 +3762,9 @@ PPT_ApplyScanResults(jsonPath) {
     } catch e {
         MsgBox, 48, 警告, pptx の保存に失敗しました。手動で保存してください。
     }
+    FileGetTime, updatedTime, %targetPath%, M
+    if (IsObject(_PPT_ScanContext))
+        _PPT_ScanContext.savedTime := updatedTime
 
     ; クリーンアップ
     FileDelete, %jsonPath%
@@ -3492,12 +3792,23 @@ PPT_ApplyScanResults(jsonPath) {
         msg .= "`n外部リンク: " . externalLinkCount . " 件"
     if (unresolvedCount > 0)
         msg .= "`n未解決: " . unresolvedCount . " 件"
-            . "`n未解決分は Ctrl+Alt+E で unresolved に保存できます"
+            . "`n未解決分は Ctrl+Alt+E でソースマネージャーから整理できます"
     if (clearedVolatileCount > 0)
         msg .= "`n揮発パス削除: " . clearedVolatileCount . " 図形"
+    if (keepManagerSession) {
+        PPT_WriteManagerSyncSignal("apply_ok")
+        PPT_HideScanStatus()
+        PPT_CleanupScanControlFiles(false)
+        if (IsObject(_PPT_ScanContext)) {
+            _PPT_ScanContext.applyCount := _PPT_ScanContext.applyCount + 1
+            _PPT_ScanContext.idleManager := true
+        }
+        return
+    }
+
     msg .= "`n`n次の操作"
         . "`nCtrl+Alt+Q: 選択図形のソース情報"
-        . "`nCtrl+Alt+E: ソースをエクスポート"
+        . "`nCtrl+Alt+E: ソースマネージャーを開く"
         . "`nCtrl+Alt+F1: ヘルプ"
     MsgBox, 64, ソース探索結果, %msg%
 
@@ -3592,8 +3903,8 @@ PPT_TagUnresolvedShape(shp, mediaFile, keepMediaId := "") {
     }
 }
 
-; Ctrl+Alt+S はタグ付けのみ。ファイル出力は行わない。
+; source manager の正式入口は Ctrl+Alt+E。scan/export/manual は manager 側で扱う。
 
-; v1 スキャン関数は削除済み。v2 は Python (ppt_scan.py) が全て担当。
+; v1 スキャン関数は削除済み。v2 は PowerShell ソースマネージャーが担当。
 
 ; (v1 レガシー関数は全て削除済み — PPT_ExtractPptxContents 以下)

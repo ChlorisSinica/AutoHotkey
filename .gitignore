@@ -38,3 +38,4 @@ auth.json
 config/
 lib/MGLahk141/
 archive/v2/
+.agents/

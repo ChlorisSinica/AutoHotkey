@@ -65,7 +65,9 @@ vk1c(変換キー) + F1の設定欄でON/OFFが可能です．
 ## PowerPoint Source Manager
 
 - Plugins/PowerPoint.ahkでは.pptx内の画像のソース管理を行っています．エクスプローラーでコピーした画像をCtrl+Vでペーストするとメタデータを挿入するホットキーが発火します．
-- 当AHKプロジェクトの導入前に作成した.pptx内の画像ソース探索はCtrl+Alt+S でppt_scan.pyを走らせるため，Pythonと[Everything](./Plugins/ppt_scan_setup.md)の環境構築を行ってください
+- source manager の正式入口は `Ctrl+Alt+E` です。scan / re-scan / export / manual pick は manager 内から行います。
+- 現行の source manager 本体は PowerShell 版です。旧 `ppt_scan.py` / `ppt_scan_gui.py` は `_tmp/` に退避しています。
+- `Plugins/ppt_extract_media.ps1` にも置き換えたため，PowerPoint source manager の Python 依存は外れました。[Everything](./docs/ppt_scan_setup.md) は引き続き有効です。
 
 ## UiaMonitor
 
