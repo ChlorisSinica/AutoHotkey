@@ -1278,6 +1278,16 @@ function Get-StatusDisplayForKind {
     }
 }
 
+function Get-BackendDisplayLabel {
+    param([string]$Backend)
+    switch (($Backend + '').ToLowerInvariant()) {
+        'external_link' { return 'External' }
+        'tag' { return 'Tag' }
+        'manifest' { return 'Manifest' }
+        default { return ($Backend + '') }
+    }
+}
+
 function Get-CanonicalRowStatusKind {
     param([object]$Row)
     if (-not $Row) { return 'unresolved' }
@@ -1367,11 +1377,62 @@ function Replace-ManagerRows {
     foreach ($row in @($Rows)) {
         $AppState.Rows.Add($row) | Out-Null
     }
-    $WindowRefs.ResultsList.Items.Refresh()
+    Refresh-ResultsListPreservingState -WindowRefs $WindowRefs
     if ($WindowRefs.ResultsList.SelectedItem) {
         Set-PreviewFromRow -WindowRefs $WindowRefs -Row $WindowRefs.ResultsList.SelectedItem
     } else {
         Set-PreviewFromRow -WindowRefs $WindowRefs -Row $null
+    }
+}
+
+function Refresh-ResultsListPreservingState {
+    param([object]$WindowRefs)
+    if (-not $WindowRefs -or -not $WindowRefs.ResultsList) { return }
+    $list = $WindowRefs.ResultsList
+    $selectedItem = $list.SelectedItem
+    $selectedIndex = [int]$list.SelectedIndex
+    $hadKeyboardFocus = [bool]$list.IsKeyboardFocusWithin
+
+    $list.Items.Refresh()
+
+    $restoreItem = $null
+    if ($selectedItem -and ($list.Items.IndexOf($selectedItem) -ge 0)) {
+        if ($list.SelectedItem -ne $selectedItem) {
+            $list.SelectedItem = $selectedItem
+        }
+        $restoreItem = $selectedItem
+    } elseif ($selectedIndex -ge 0 -and $selectedIndex -lt $list.Items.Count) {
+        if ($list.SelectedIndex -ne $selectedIndex) {
+            $list.SelectedIndex = $selectedIndex
+        }
+        $restoreItem = $list.Items[$selectedIndex]
+    }
+
+    try {
+        $view = if ($list.ItemsSource) { [System.Windows.Data.CollectionViewSource]::GetDefaultView($list.ItemsSource) } else { $null }
+        if ($view -and $restoreItem) {
+            [void]$view.MoveCurrentTo($restoreItem)
+        } elseif ($view -and $selectedIndex -ge 0 -and $list.Items.Count -gt 0) {
+            [void]$view.MoveCurrentToPosition([Math]::Min($selectedIndex, ($list.Items.Count - 1)))
+        }
+    } catch {}
+
+    if (-not $hadKeyboardFocus) { return }
+    try {
+        if ($restoreItem) {
+            $list.ScrollIntoView($restoreItem)
+            $list.UpdateLayout()
+            $container = $list.ItemContainerGenerator.ContainerFromItem($restoreItem)
+            if ($container -is [System.Windows.Controls.ListViewItem]) {
+                [void]$container.Focus()
+            } else {
+                [void]$list.Focus()
+            }
+        } else {
+            [void]$list.Focus()
+        }
+    } catch {
+        try { [void]$list.Focus() } catch {}
     }
 }
 
@@ -1828,9 +1889,25 @@ function Get-RowHintMap {
             StatusKind = ($row.StatusKind + '')
             Backend = ($row.Backend + '')
             ExportStatus = ($row.ExportStatus + '')
+            PreviewPath = ($row.PreviewPath + '')
+            LastVerifiedAt = ($row.LastVerifiedAt + '')
         }
     }
     return $map
+}
+
+function Get-NextResolvableRowIndex {
+    param([object[]]$Rows, [int]$StartIndex = 0)
+    if (-not $Rows) { return -1 }
+    $begin = if ($StartIndex -gt 0) { $StartIndex } else { 0 }
+    for ($index = $begin; $index -lt $Rows.Count; $index++) {
+        $row = $Rows[$index]
+        if (-not $row) { continue }
+        if ($row.PSObject.Properties['NeedsResolve'] -and [bool]$row.NeedsResolve) {
+            return $index
+        }
+    }
+    return -1
 }
 
 function Verify-StartupRows {
@@ -1863,6 +1940,9 @@ function Verify-StartupRows {
         $WindowRefs.ProgressBar.Value = $index + 1
         $WindowRefs.ProgressLabel.Text = ('{0} / {1}' -f ($index + 1), $total)
         $WindowRefs.SummaryLabel.Text = ('起動時検証中: {0} / {1}' -f ($index + 1), $total)
+        if ((($index + 1) -eq $total) -or ((($index + 1) % 10) -eq 0)) {
+            Flush-UiRender -WindowRefs $WindowRefs
+        }
     }
     $AppState.IsStale = Test-StartupStale -PptPath $AppState.PptPath -ManifestMeta $AppState.ManifestMeta -HasUnsavedChanges $AppState.HasUnsavedChanges -Rows @($AppState.Rows)
     $WindowRefs.ResultsList.Items.Refresh()
@@ -2199,12 +2279,139 @@ function Show-OpenFileDialog {
     return $null
 }
 
+function Get-PreviewImageExtensions {
+    return @('png', 'jpg', 'jpeg', 'bmp', 'gif', 'tif', 'tiff', 'ico', 'wdp')
+}
+
+function Test-PreviewImageExtension {
+    param([string]$PathOrName)
+    if (-not $PathOrName) { return $false }
+    $ext = [System.IO.Path]::GetExtension(($PathOrName + '')).TrimStart('.').ToLowerInvariant()
+    if (-not $ext) { return $false }
+    return (@(Get-PreviewImageExtensions) -contains $ext)
+}
+
 function Get-PreviewablePath {
     param([object]$Row)
     foreach ($candidate in @($Row.SourcePath, $Row.PreviewPath, $Row.DestinationPath, $Row.EmbeddedPath)) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $candidate }
+        if ($candidate -and (Test-PathSafe -Path $candidate -PathType Leaf)) { return $candidate }
     }
     return $null
+}
+
+function Get-PreviewImagePath {
+    param([object]$Row)
+    foreach ($candidate in @($Row.SourcePath, $Row.PreviewPath, $Row.DestinationPath, $Row.EmbeddedPath)) {
+        if (-not $candidate) { continue }
+        if (-not (Test-PreviewImageExtension -PathOrName $candidate)) { continue }
+        if (Test-PathSafe -Path $candidate -PathType Leaf) { return $candidate }
+    }
+    return $null
+}
+
+function Test-EmbeddedPreviewCandidate {
+    param([object]$Row)
+    if (-not $Row) { return $false }
+    if (($Row.ExternalPath + '')) { return $false }
+    if (-not (($Row.MediaFile + ''))) { return $false }
+    return (Test-PreviewImageExtension -PathOrName ($Row.MediaFile + ''))
+}
+
+function Get-PreviewCacheDirectory {
+    param([object]$AppState)
+    if (-not $AppState -or -not ($AppState.ScanTempDir + '')) { return '' }
+    $previewDir = Join-Path $AppState.ScanTempDir 'preview_cache'
+    Ensure-Directory -Path $previewDir
+    return $previewDir
+}
+
+function Get-EmbeddedPreviewCachePath {
+    param([object]$AppState, [object]$Row)
+    if (-not $AppState -or -not $Row) { return '' }
+    $previewDir = Get-PreviewCacheDirectory -AppState $AppState
+    if (-not $previewDir) { return '' }
+    $mediaFile = [System.IO.Path]::GetFileName(($Row.MediaFile + ''))
+    if (-not $mediaFile) { return '' }
+    $cacheKey = if (($Row.MediaId + '')) {
+        ($Row.MediaId + '')
+    } else {
+        New-StableLegacyMediaId -Seed ('preview|' + (Get-ShapeRefsExactKey -ShapeRefs @($Row.Shapes)))
+    }
+    return (Join-Path $previewDir ($cacheKey + '_' + $mediaFile))
+}
+
+function Ensure-EmbeddedPreviewPath {
+    param([object]$AppState, [object]$Row)
+    if (-not (Test-EmbeddedPreviewCandidate -Row $Row)) { return $null }
+    if (($Row.EmbeddedPath + '') -and (Test-PathSafe -Path $Row.EmbeddedPath -PathType Leaf)) {
+        return ($Row.EmbeddedPath + '')
+    }
+    $cachePath = Get-EmbeddedPreviewCachePath -AppState $AppState -Row $Row
+    if (-not $cachePath) { return $null }
+    if (Test-PathSafe -Path $cachePath -PathType Leaf) {
+        $Row.EmbeddedPath = $cachePath
+        return $cachePath
+    }
+    if (-not (Test-PathSafe -Path $AppState.PptPath -PathType Leaf)) { return $null }
+    $zip = $null
+    try {
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($AppState.PptPath)
+        $entryName = 'ppt/media/' + [System.IO.Path]::GetFileName(($Row.MediaFile + ''))
+        [void](Copy-ZipEntryToFile -Zip $zip -EntryName $entryName -DestinationPath $cachePath)
+        if (Test-PathSafe -Path $cachePath -PathType Leaf) {
+            $Row.EmbeddedPath = $cachePath
+            return $cachePath
+        }
+    } catch {
+        Write-TraceLog -Logger $AppState.Logger -Message ('embedded preview extraction failed: media_id={0} media_file={1} detail={2}' -f ($Row.MediaId + ''), ($Row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)) -Error
+    } finally {
+        if ($zip) { $zip.Dispose() }
+    }
+    return $null
+}
+
+function Ensure-RowPreviewReady {
+    param([object]$AppState, [object]$Row)
+    if (-not $AppState -or -not $Row) { return }
+    if (Get-PreviewImagePath -Row $Row) { return }
+    [void](Ensure-EmbeddedPreviewPath -AppState $AppState -Row $Row)
+}
+
+function Get-InitialPreviewCandidateIndex {
+    param([object[]]$Rows)
+    if (-not $Rows) { return -1 }
+    for ($index = 0; $index -lt $Rows.Count; $index++) {
+        if (Get-PreviewImagePath -Row $Rows[$index]) {
+            return $index
+        }
+    }
+    for ($index = 0; $index -lt $Rows.Count; $index++) {
+        if (Test-EmbeddedPreviewCandidate -Row $Rows[$index]) {
+            return $index
+        }
+    }
+    return -1
+}
+
+function Initialize-StartupPreviewSelection {
+    param([object]$AppState, [object]$WindowRefs)
+    if (-not $AppState -or -not $WindowRefs -or -not $WindowRefs.ResultsList) { return }
+    if ($WindowRefs.ResultsList.SelectedItem) {
+        Ensure-RowPreviewReady -AppState $AppState -Row $WindowRefs.ResultsList.SelectedItem
+        Set-PreviewFromRow -WindowRefs $WindowRefs -Row $WindowRefs.ResultsList.SelectedItem
+        return
+    }
+    $rows = @($AppState.Rows)
+    $candidateIndex = Get-InitialPreviewCandidateIndex -Rows $rows
+    if ($candidateIndex -lt 0 -or $candidateIndex -ge $rows.Count) {
+        Set-PreviewFromRow -WindowRefs $WindowRefs -Row $null
+        return
+    }
+    $candidateRow = $rows[$candidateIndex]
+    Ensure-RowPreviewReady -AppState $AppState -Row $candidateRow
+    $WindowRefs.ResultsList.SelectedIndex = $candidateIndex
+    $WindowRefs.ResultsList.ScrollIntoView($candidateRow)
+    Set-PreviewFromRow -WindowRefs $WindowRefs -Row $candidateRow
 }
 
 function Set-PreviewFromRow {
@@ -2218,8 +2425,7 @@ function Set-PreviewFromRow {
         $WindowRefs.PreviewText.Text = if ($line1 -or $line2) { (($line1, $line2) -join [Environment]::NewLine) } else { '' }
         return
     }
-    $ext = [System.IO.Path]::GetExtension($path).TrimStart('.').ToLowerInvariant()
-    if (@('png', 'jpg', 'jpeg', 'bmp', 'gif', 'tif', 'tiff', 'ico', 'wdp') -notcontains $ext) {
+    if (-not (Test-PreviewImageExtension -PathOrName $path)) {
         $WindowRefs.PreviewImage.Source = $null
         $line1 = [System.IO.Path]::GetFileName($path)
         $WindowRefs.PreviewText.Text = (($line1, $line2) -join [Environment]::NewLine)
@@ -2313,6 +2519,55 @@ function Flush-UiRender {
     } catch {}
 }
 
+function Set-ProgressStageState {
+    param(
+        [object]$WindowRefs,
+        [string]$Stage,
+        [string]$Message = '',
+        [string]$Backend = '',
+        [string]$Files = '',
+        [string]$Candidates = '',
+        [switch]$Indeterminate
+    )
+    if (-not $WindowRefs) { return }
+    $WindowRefs.StageLabel.Text = ($Stage + '')
+    $WindowRefs.ProgressBar.IsIndeterminate = [bool]$Indeterminate
+    $WindowRefs.ProgressBar.Maximum = 1
+    $WindowRefs.ProgressBar.Value = 0
+    $WindowRefs.ProgressLabel.Text = ''
+    $WindowRefs.BackendLabel.Text = ($Backend + '')
+    $WindowRefs.FilesLabel.Text = ($Files + '')
+    $WindowRefs.CandidatesLabel.Text = ($Candidates + '')
+    if (($Message + '') -ne '') {
+        $WindowRefs.SummaryLabel.Text = ($Message + '')
+    }
+    Flush-UiRender -WindowRefs $WindowRefs
+}
+
+function Set-IndeterminateProgressState {
+    param(
+        [object]$WindowRefs,
+        [string]$Stage,
+        [string]$Message = '',
+        [string]$Backend = '',
+        [string]$Files = '',
+        [string]$Candidates = ''
+    )
+    Set-ProgressStageState -WindowRefs $WindowRefs -Stage $Stage -Message $Message -Backend $Backend -Files $Files -Candidates $Candidates -Indeterminate
+}
+
+function Set-StaticProgressState {
+    param(
+        [object]$WindowRefs,
+        [string]$Stage,
+        [string]$Message = '',
+        [string]$Backend = '',
+        [string]$Files = '',
+        [string]$Candidates = ''
+    )
+    Set-ProgressStageState -WindowRefs $WindowRefs -Stage $Stage -Message $Message -Backend $Backend -Files $Files -Candidates $Candidates
+}
+
 function Reset-ProgressIndicators {
     param([object]$WindowRefs, [string]$Stage = 'Ready')
     if (-not $WindowRefs) { return }
@@ -2369,16 +2624,6 @@ function Export-RowsToSources {
     $resolvedDir = $layout.ResolvedDir
     $unresolvedDir = $layout.UnresolvedDir
     $manifestPath = $layout.ManifestPath
-    try {
-        Ensure-Directory -Path $resolvedDir
-        Ensure-Directory -Path $unresolvedDir
-    } catch {
-        $message = 'Export root creation failed: {0}' -f (Format-ExceptionDetail -ExceptionRecord $_)
-        Add-LogLine -WindowRefs $WindowRefs -Text ('WARN: {0}' -f $message)
-        $WindowRefs.SummaryLabel.Text = $message
-        return $false
-    }
-
     $targetRows = if ($OnlySelected) {
         if ($WindowRefs.ResultsList.SelectedItem) { @($WindowRefs.ResultsList.SelectedItem) } else { @() }
     } else {
@@ -2398,6 +2643,17 @@ function Export-RowsToSources {
         $WindowRefs.ManualButton.IsEnabled = $false
         $WindowRefs.RescanButton.IsEnabled = $false
         $WindowRefs.CloseButton.IsEnabled = $false
+        Set-IndeterminateProgressState -WindowRefs $WindowRefs -Stage 'Preparing Export' -Message 'Export フォルダを準備しています...'
+        try {
+            Ensure-Directory -Path $resolvedDir
+            Ensure-Directory -Path $unresolvedDir
+        } catch {
+            $message = 'Export root creation failed: {0}' -f (Format-ExceptionDetail -ExceptionRecord $_)
+            Add-LogLine -WindowRefs $WindowRefs -Text ('WARN: {0}' -f $message)
+            $WindowRefs.SummaryLabel.Text = $message
+            Reset-ProgressIndicators -WindowRefs $WindowRefs -Stage 'Warning'
+            return $false
+        }
         Update-ProgressLabels -WindowRefs $WindowRefs -Status @{
             stage = 'Exporting'
             current_index = 0
@@ -2460,6 +2716,7 @@ function Export-RowsToSources {
             Reset-ProgressIndicators -WindowRefs $WindowRefs -Stage 'Warning'
             return $false
         }
+        Set-IndeterminateProgressState -WindowRefs $WindowRefs -Stage 'Writing Manifest' -Message 'sources_list.json を更新しています...'
         try {
             Write-ManifestFile -ManifestPath $manifestPath -PptPath $AppState.PptPath -Rows @($AppState.Rows)
             $AppState.ManifestPath = $manifestPath
@@ -2653,6 +2910,128 @@ function Get-ScanWorkerScript {
             $Queue.Enqueue([pscustomobject]$event)
         }
 
+        function Test-WorkerPathExists {
+            param([string]$Path)
+            if (-not $Path) { return $false }
+            try {
+                return (Test-Path -LiteralPath $Path -PathType Leaf)
+            } catch {
+                return $false
+            }
+        }
+
+        function Get-WorkerStatusDisplay {
+            param([string]$Kind)
+            switch ($Kind) {
+                'matched' { return '✓' }
+                'missing' { return '✓?' }
+                'external' { return '→' }
+                'external_missing' { return '✗→' }
+                'pending' { return 'Pending' }
+                'running' { return 'Running' }
+                default { return '✗' }
+            }
+        }
+
+        function Get-EmbeddedBootstrapState {
+            param([object]$Row, [object]$Spec, [string]$LocalIdentity)
+            $state = [ordered]@{
+                SourcePath = ''
+                Backend = ''
+                SourceExists = $false
+                StatusKind = 'unresolved'
+                StatusDisplay = '✗'
+                MatchMethod = ''
+                InsertedBy = ''
+                PreviewPath = ''
+                LastVerifiedAt = ''
+                NeedsResolve = $true
+            }
+            $rowExactKey = Get-ShapeRefsExactKey -ShapeRefs @($Row.Shapes)
+            $rowHint = if ($Spec.RowHints -and $rowExactKey -and $Spec.RowHints.ContainsKey($rowExactKey)) { $Spec.RowHints[$rowExactKey] } else { $null }
+            if (-not $rowHint) {
+                return [pscustomobject]$state
+            }
+
+            $hintSourcePath = ($rowHint.SourcePath + '')
+            $hintMethod = ($rowHint.MatchMethod + '')
+            $hintBy = ($rowHint.InsertedBy + '')
+            $hintBackend = ($rowHint.Backend + '')
+            $hintPreviewPath = ($rowHint.PreviewPath + '')
+            $hintVerifiedAt = ($rowHint.LastVerifiedAt + '')
+            $isMine = (-not $hintBy -or $hintBy -eq $LocalIdentity)
+
+            $state.MatchMethod = $hintMethod
+            $state.InsertedBy = $hintBy
+            $state.LastVerifiedAt = $hintVerifiedAt
+            $state.PreviewPath = $hintPreviewPath
+
+            if ($hintSourcePath) {
+                $state.SourcePath = $hintSourcePath
+                $state.SourceExists = [bool](Test-WorkerPathExists -Path $hintSourcePath)
+                if ($state.SourceExists) {
+                    $state.PreviewPath = $hintSourcePath
+                }
+                if ($hintMethod -eq 'RETRO_MANUAL') {
+                    $state.Backend = if ($hintBackend) { $hintBackend } else { 'Manual' }
+                    $state.NeedsResolve = $false
+                } elseif ($state.SourceExists) {
+                    $state.Backend = if ($hintBackend) { $hintBackend } else { 'Tag' }
+                    $state.NeedsResolve = $false
+                } elseif ($isMine -and ($hintMethod -eq 'PASTE' -or $hintMethod -eq 'RETRO_SCAN')) {
+                    if ($hintBackend) {
+                        $state.Backend = $hintBackend
+                    } elseif ($hintMethod) {
+                        $state.Backend = 'Tag'
+                    }
+                    $state.NeedsResolve = $true
+                } else {
+                    if ($hintBackend) {
+                        $state.Backend = $hintBackend
+                    } elseif ($hintMethod -eq 'RETRO_MANUAL') {
+                        $state.Backend = 'Manual'
+                    } elseif ($hintMethod) {
+                        $state.Backend = 'Tag'
+                    }
+                    $state.NeedsResolve = $false
+                }
+            }
+
+            if ($state.SourcePath) {
+                $state.StatusKind = if ($state.SourceExists) { 'matched' } else { 'missing' }
+            }
+            $state.StatusDisplay = Get-WorkerStatusDisplay -Kind $state.StatusKind
+            return [pscustomobject]$state
+        }
+
+        function Get-ExternalBootstrapState {
+            param([string]$ExternalPath, [string[]]$ExcludeDirs)
+            $state = [ordered]@{
+                SourcePath = ''
+                Backend = ''
+                SourceExists = $false
+                StatusKind = 'unresolved'
+                StatusDisplay = '✗'
+                MatchMethod = 'EXTERNAL'
+                InsertedBy = ''
+                PreviewPath = ''
+                LastVerifiedAt = ''
+                NeedsResolve = $false
+            }
+            if (-not $ExternalPath) {
+                return [pscustomobject]$state
+            }
+            if (Test-ExcludedPath -Path $ExternalPath -ExcludeDirs $ExcludeDirs) {
+                return [pscustomobject]$state
+            }
+            $state.SourcePath = $ExternalPath
+            $state.Backend = 'external_link'
+            $state.SourceExists = [bool](Test-WorkerPathExists -Path $ExternalPath)
+            $state.StatusKind = if ($state.SourceExists) { 'external' } else { 'external_missing' }
+            $state.StatusDisplay = Get-WorkerStatusDisplay -Kind $state.StatusKind
+            return [pscustomobject]$state
+        }
+
         $status = New-StatusState
         try {
             Write-TraceLog -Logger $logger -Message ('worker start: mode={0} ppt={1} scanId={2}' -f $Spec.Mode, $Spec.PptPath, $Spec.ScanId)
@@ -2706,16 +3085,36 @@ function Get-ScanWorkerScript {
 
             $initialRows = New-Object System.Collections.Generic.List[object]
             $counter = 1
+            $localIdentity = ('{0}@{1}' -f $env:USERNAME, $env:COMPUTERNAME)
             foreach ($mediaName in $mapResult.MediaMap.Keys) {
                 $shapeRefs = @($mapResult.MediaMap[$mediaName].shapes.ToArray())
                 $existingMediaId = Get-ExistingMediaIdForShapeRefs -ShapeRefs $shapeRefs -MediaIdByShapeKey $Spec.MediaIdByShapeKey
+                $row = [pscustomobject]@{
+                    MediaId = if ($existingMediaId) { $existingMediaId } else { (New-MediaId -Counter $counter) }
+                    MediaFile = $mediaName
+                    Slide = [int]$shapeRefs[0].slide_index
+                    Shapes = $shapeRefs
+                    EmbeddedPath = (Join-Path $mediaDir $mediaName)
+                    ExternalPath = ''
+                }
+                $bootstrap = Get-EmbeddedBootstrapState -Row $row -Spec $Spec -LocalIdentity $localIdentity
                 $initialRows.Add([pscustomobject]@{
-                        MediaId = if ($existingMediaId) { $existingMediaId } else { (New-MediaId -Counter $counter) }
-                        MediaFile = $mediaName
-                        Slide = [int]$shapeRefs[0].slide_index
+                        MediaId = ($row.MediaId + '')
+                        MediaFile = $row.MediaFile
+                        Slide = [int]$row.Slide
                         Shapes = $shapeRefs
-                        EmbeddedPath = (Join-Path $mediaDir $mediaName)
+                        EmbeddedPath = ($row.EmbeddedPath + '')
                         ExternalPath = ''
+                        SourcePath = ($bootstrap.SourcePath + '')
+                        Backend = ($bootstrap.Backend + '')
+                        SourceExists = [bool]$bootstrap.SourceExists
+                        StatusKind = ($bootstrap.StatusKind + '')
+                        StatusDisplay = ($bootstrap.StatusDisplay + '')
+                        MatchMethod = ($bootstrap.MatchMethod + '')
+                        InsertedBy = ($bootstrap.InsertedBy + '')
+                        PreviewPath = ($bootstrap.PreviewPath + '')
+                        LastVerifiedAt = ($bootstrap.LastVerifiedAt + '')
+                        NeedsResolve = [bool]$bootstrap.NeedsResolve
                     })
                 $counter++
             }
@@ -2727,13 +3126,24 @@ function Get-ScanWorkerScript {
                         shape_index = [int]($external.ShapeIndex + 0)
                     })
                 $existingMediaId = Get-ExistingMediaIdForShapeRefs -ShapeRefs $shapeRefs -MediaIdByShapeKey $Spec.MediaIdByShapeKey
+                $bootstrap = Get-ExternalBootstrapState -ExternalPath ($external.ExternalPath + '') -ExcludeDirs $excludeDirs
                 $initialRows.Add([pscustomobject]@{
                         MediaId = if ($existingMediaId) { $existingMediaId } else { (New-MediaId -Counter $counter) }
                         MediaFile = $null
                         Slide = [int]$external.SlideIndex
                         Shapes = $shapeRefs
                         EmbeddedPath = ''
-                        ExternalPath = $external.ExternalPath
+                        ExternalPath = ($external.ExternalPath + '')
+                        SourcePath = ($bootstrap.SourcePath + '')
+                        Backend = ($bootstrap.Backend + '')
+                        SourceExists = [bool]$bootstrap.SourceExists
+                        StatusKind = ($bootstrap.StatusKind + '')
+                        StatusDisplay = ($bootstrap.StatusDisplay + '')
+                        MatchMethod = ($bootstrap.MatchMethod + '')
+                        InsertedBy = ''
+                        PreviewPath = ''
+                        LastVerifiedAt = ''
+                        NeedsResolve = [bool]$bootstrap.NeedsResolve
                     })
                 $counter++
             }
@@ -2742,7 +3152,6 @@ function Get-ScanWorkerScript {
             $resolvedRows = New-Object System.Collections.Generic.List[object]
             $total = $initialRows.Count
             $matchedCount = 0
-            $localIdentity = ('{0}@{1}' -f $env:USERNAME, $env:COMPUTERNAME)
             Update-StatusState -State $status -StatusPath $Spec.StatusPath -Changes @{ stage = 'ソース探索中'; message = 'ソース探索を開始します。'; total_items = $total }
 
             foreach ($row in $initialRows) {
@@ -2755,51 +3164,25 @@ function Get-ScanWorkerScript {
                 }
 
                 if ($row.MediaFile) {
-                    $rowExactKey = Get-ShapeRefsExactKey -ShapeRefs @($row.Shapes)
-                    $rowHint = if ($Spec.RowHints -and $rowExactKey -and $Spec.RowHints.ContainsKey($rowExactKey)) { $Spec.RowHints[$rowExactKey] } else { $null }
-                    $sourcePath = $null
-                    $backend = $null
-                    $sourceExists = $false
-                    $shouldResolve = $true
-                    if ($rowHint) {
-                        $hintSourcePath = ($rowHint.SourcePath + '')
-                        $hintMethod = ($rowHint.MatchMethod + '')
-                        $hintBy = ($rowHint.InsertedBy + '')
-                        $hintStatus = ($rowHint.StatusKind + '')
-                        $hintBackend = ($rowHint.Backend + '')
-                        $isMine = (-not $hintBy -or $hintBy -eq $localIdentity)
-                        if ($hintSourcePath) {
-                            $sourceExists = Test-Path -LiteralPath $hintSourcePath -PathType Leaf
-                            if ($hintMethod -eq 'RETRO_MANUAL') {
-                                $sourcePath = $hintSourcePath
-                                $backend = 'Manual'
-                                $shouldResolve = $false
-                            } elseif ($sourceExists) {
-                                $sourcePath = $hintSourcePath
-                                $backend = if ($hintBackend) { $hintBackend } else { 'Tag' }
-                                $shouldResolve = $false
-                            } elseif ($isMine -and ($hintMethod -eq 'PASTE' -or $hintMethod -eq 'RETRO_SCAN') -and $hintStatus -eq 'missing') {
-                                $shouldResolve = $true
-                            } else {
-                                $sourcePath = $hintSourcePath
-                                if ($hintBackend) {
-                                    $backend = $hintBackend
-                                } elseif ($hintMethod -eq 'RETRO_MANUAL') {
-                                    $backend = 'Manual'
-                                } elseif ($hintMethod) {
-                                    $backend = 'Tag'
-                                } else {
-                                    $backend = $null
-                                }
-                                $shouldResolve = $false
-                            }
-                        }
-                    }
+                    $sourcePath = ($row.SourcePath + '')
+                    $backend = ($row.Backend + '')
+                    $sourceExists = [bool]$row.SourceExists
+                    $shouldResolve = [bool]$row.NeedsResolve
+                    $resolvedMatchMethod = ($row.MatchMethod + '')
+                    $resolvedInsertedBy = ($row.InsertedBy + '')
                     if ($shouldResolve) {
                         $resolved = Resolve-Source -MediaPath $row.EmbeddedPath -PptDirectory $pptDirectory -EsExe $esExe -ExcludeDirs $excludeDirs -CancelPath $Spec.CancelPath -StatusState $status -StatusPath $Spec.StatusPath
                         $sourcePath = $resolved.SourcePath
                         $backend = $resolved.Backend
-                        $sourceExists = ($sourcePath -and (Test-Path -LiteralPath $sourcePath -PathType Leaf))
+                        $sourceExists = ($sourcePath -and (Test-WorkerPathExists -Path $sourcePath))
+                        $resolvedInsertedBy = $localIdentity
+                        if ($sourcePath) {
+                            $resolvedMatchMethod = 'RETRO_SCAN'
+                        } else {
+                            $resolvedMatchMethod = 'RETRO_UNRESOLVED'
+                        }
+                    } elseif (-not $resolvedInsertedBy) {
+                        $resolvedInsertedBy = $localIdentity
                     }
                     if ($sourcePath) { $matchedCount++ }
                     $resultRow = [pscustomobject]([ordered]@{
@@ -2811,18 +3194,18 @@ function Get-ScanWorkerScript {
                         Index = $index; Total = $total; MediaId = $row.MediaId; MediaFile = $row.MediaFile
                         SourcePath = $sourcePath; Backend = $backend; SourceExists = [bool]$sourceExists
                         Shapes = $row.Shapes; EmbeddedPath = $row.EmbeddedPath
+                        MatchMethod = $resolvedMatchMethod; InsertedBy = $resolvedInsertedBy
                     }
                     continue
                 }
 
-                $externalPath = $row.ExternalPath
-                $volatile = Test-ExcludedPath -Path $externalPath -ExcludeDirs $excludeDirs
-                $resolvedPath = if ($volatile) { $null } else { $externalPath }
-                $backend = if ($volatile) { $null } else { 'external_link' }
-                $sourceExists = ($resolvedPath -and (Test-Path -LiteralPath $resolvedPath -PathType Leaf))
+                $externalPath = ($row.ExternalPath + '')
+                $resolvedPath = ($row.SourcePath + '')
+                $backend = ($row.Backend + '')
+                $sourceExists = [bool]$row.SourceExists
                 if ($resolvedPath) { $matchedCount++ }
                 Update-StatusState -State $status -StatusPath $Spec.StatusPath -Changes @{
-                    message = if ($volatile) { '揮発パスの外部リンクを未解決として扱いました。' } else { '外部リンク確認が完了しました。' }
+                    message = if ($backend -eq 'external_link') { '外部リンク確認が完了しました。' } else { '揮発パスの外部リンクを未解決として扱いました。' }
                     backend = 'External Link'; matched_count = $matchedCount
                 }
                 $resultRow = [pscustomobject]([ordered]@{
@@ -2830,10 +3213,12 @@ function Get-ScanWorkerScript {
                         search_backend = $backend; source_exists = [bool]$sourceExists; shapes = @($row.Shapes)
                     })
                 $resolvedRows.Add($resultRow)
+                $resolvedMatchMethod = if (($row.MatchMethod + '')) { ($row.MatchMethod + '') } else { 'EXTERNAL' }
                 Emit-Ui -Type 'resolved' -Payload @{
                     Index = $index; Total = $total; MediaId = $row.MediaId; MediaFile = $null
                     SourcePath = $resolvedPath; Backend = $backend; SourceExists = [bool]$sourceExists
                     Shapes = $row.Shapes; EmbeddedPath = ''; ExternalPath = $externalPath
+                    MatchMethod = $resolvedMatchMethod; InsertedBy = ''
                 }
             }
 
@@ -3145,41 +3530,51 @@ function Apply-ResolvedUiRow {
     $verifiedAt = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'
     $messageExternalPath = if ($Message.PSObject.Properties['ExternalPath']) { ($Message.ExternalPath + '') } else { '' }
     $messageEmbeddedPath = if ($Message.PSObject.Properties['EmbeddedPath']) { ($Message.EmbeddedPath + '') } else { '' }
-    if (($index + 1) -lt $AppState.Rows.Count -and $AppState.Rows[$index + 1].StatusKind -eq 'pending') {
-        $AppState.Rows[$index + 1].StatusKind = 'running'
-        $AppState.Rows[$index + 1].StatusDisplay = 'Running'
-    }
+    $messageMatchMethod = if ($Message.PSObject.Properties['MatchMethod']) { ($Message.MatchMethod + '') } else { '' }
+    $messageInsertedBy = if ($Message.PSObject.Properties['InsertedBy']) { ($Message.InsertedBy + '') } else { '' }
     $row = $AppState.Rows[$index]
     $row.SourcePath = ($Message.SourcePath + '')
     $row.SourceDisplay = if ($Message.SourcePath) { $Message.SourcePath } else { '未解決' }
     $row.Backend = ($Message.Backend + '')
-    $row.BackendDisplay = if ($Message.Backend -eq 'external_link') { 'External' } else { ($Message.Backend + '') }
+    $row.BackendDisplay = Get-BackendDisplayLabel -Backend ($Message.Backend + '')
     $row.SourceExists = [bool]$Message.SourceExists
     $row.EmbeddedPath = $messageEmbeddedPath
     $row.ExternalPath = $messageExternalPath
-    $row.InsertedBy = $localIdentity
+    if ($Message.PSObject.Properties['InsertedBy']) {
+        $row.InsertedBy = $messageInsertedBy
+    } else {
+        $row.InsertedBy = $localIdentity
+    }
     $row.LastVerifiedAt = $verifiedAt
-    $row.IsForeign = $false
+    $row.IsForeign = [bool](($row.InsertedBy + '') -and (($row.InsertedBy + '') -ne $localIdentity))
     if ($Message.Backend -eq 'external_link') {
-        $row.MatchMethod = 'EXTERNAL'
+        $row.MatchMethod = if ($messageMatchMethod) { $messageMatchMethod } else { 'EXTERNAL' }
         if ($Message.SourceExists) { $row.StatusDisplay = '→'; $row.StatusKind = 'external' } else { $row.StatusDisplay = '✗→'; $row.StatusKind = 'external_missing' }
     } elseif ($Message.SourcePath) {
         $row.StatusDisplay = if ($Message.SourceExists) { '✓' } else { '✓?' }
         $row.StatusKind = if ($Message.SourceExists) { 'matched' } else { 'missing' }
         $row.PreviewPath = $Message.SourcePath
-        $row.MatchMethod = 'RETRO_SCAN'
+        $row.MatchMethod = if ($messageMatchMethod) { $messageMatchMethod } else { 'RETRO_SCAN' }
     } else {
         $row.StatusDisplay = '✗'
         $row.StatusKind = 'unresolved'
         if (-not $row.PreviewPath) { $row.PreviewPath = $row.EmbeddedPath }
-        $row.MatchMethod = 'RETRO_UNRESOLVED'
+        $row.MatchMethod = if ($messageMatchMethod) { $messageMatchMethod } else { 'RETRO_UNRESOLVED' }
+    }
+    if ($row.PSObject.Properties['NeedsResolve']) {
+        $row.NeedsResolve = $false
+    }
+    $nextResolveIndex = Get-NextResolvableRowIndex -Rows @($AppState.Rows) -StartIndex ($index + 1)
+    if ($nextResolveIndex -ge 0) {
+        $AppState.Rows[$nextResolveIndex].StatusKind = 'running'
+        $AppState.Rows[$nextResolveIndex].StatusDisplay = 'Running'
     }
     $WindowRefs.ProgressBar.IsIndeterminate = $false
     $WindowRefs.ProgressBar.Maximum = [int]$Message.Total
     $WindowRefs.ProgressBar.Value = [int]$Message.Index
     $WindowRefs.ProgressLabel.Text = ('{0} / {1}' -f $Message.Index, $Message.Total)
     $WindowRefs.StageLabel.Text = ('Scanning {0} / {1}' -f $Message.Index, $Message.Total)
-    $WindowRefs.ResultsList.Items.Refresh()
+    Refresh-ResultsListPreservingState -WindowRefs $WindowRefs
     $mediaName = if ($row.MediaFile) { $row.MediaFile } else { '(external)' }
     $logText = if ($row.SourcePath) {
         '[{0}/{1}] {2} -> {3}' -f $Message.Index, $Message.Total, $mediaName, [System.IO.Path]::GetFileName(($row.SourcePath + ''))
@@ -3191,6 +3586,7 @@ function Apply-ResolvedUiRow {
 
 $windowRefs.ResultsList.Add_SelectionChanged({
     try {
+        Ensure-RowPreviewReady -AppState $appState -Row $windowRefs.ResultsList.SelectedItem
         Set-PreviewFromRow -WindowRefs $windowRefs -Row $windowRefs.ResultsList.SelectedItem
         $windowRefs.ManualButton.IsEnabled = ($windowRefs.ResultsList.SelectedItem -ne $null)
     } catch {
@@ -3213,7 +3609,7 @@ $windowRefs.ResultsList.Add_PreviewMouseRightButtonDown({
 $windowRefs.CloseButton.Add_Click({ $window.Close() })
 $windowRefs.HelpMenuItem.Add_Click({
     [System.Windows.MessageBox]::Show(
-        "Status column:`n  ✓   Matched`n  ✓?  Path resolved but file missing`n  →   External link`n  ✗→ Broken external link`n  ✗   Unresolved`n`nBackend:`n  Tag      Existing PowerPoint tags`n  Manifest Persistent JSON supplement`n  External Current external link path`n`nMatchMethod:`n  PASTE / RETRO_SCAN / RETRO_MANUAL / RETRO_UNRESOLVED / EXTERNAL`n`nExportStatus:`n  none / copied / manual / unresolved`n`nForeign:`n  InsertedBy が現在の user@PC と異なる row`n`nShortcuts:`n  Ctrl+Alt+E  Open source manager`n  Ctrl+Alt+Q  Show current tag info`n  Ctrl+Alt+F1 Open this help",
+        "ステータス列:`n  ✓   一致`n  ✓?  パスは解決済みだがファイルが見つからない`n  →   外部リンク`n  ✗→ リンク切れの外部リンク`n  ✗   未解決`n`nバックエンド:`n  Tag       PowerPoint の既存タグ`n  Manifest  補助 JSON (sources_list.json)`n  External  現在の外部リンク先`n`nMatchMethod（判定方法）:`n  PASTE            貼り付け時に記録`n  RETRO_SCAN       Re-scan で解決`n  RETRO_MANUAL     Manual Pick で指定`n  RETRO_UNRESOLVED Re-scan 後も未解決`n  EXTERNAL         外部リンク`n`nExportStatus（書き出し状態）:`n  none        未書き出し`n  copied      sources フォルダへコピー済み`n  manual      Manual Pick 由来`n  unresolved  未解決として書き出し`n`nForeign（外部更新行）:`n  InsertedBy が現在の user@PC と異なる row`n`nショートカット:`n  Ctrl+Alt+E  ソースマネージャーを開く`n  Ctrl+Alt+Q  現在のタグ情報を表示`n  Ctrl+Alt+F1 このヘルプを開く",
         'Source Manager Help',
         [System.Windows.MessageBoxButton]::OK,
         [System.Windows.MessageBoxImage]::Information
@@ -3304,21 +3700,49 @@ $queueTimer.Add_Tick({
             Write-TraceLog -Logger $appState.Logger -Message ('queue event begin: type={0} media_id={1} rows={2} ui_rows={3}' -f $itemType, $itemMediaId, $itemRowCount, $appState.Rows.Count)
             switch ($item.Type) {
                 'map_built' {
+                    $localIdentity = Get-LocalIdentityTag
                     foreach ($rawRow in $item.Rows) {
                         $rawExternalPath = if ($rawRow.PSObject.Properties['ExternalPath']) { ($rawRow.ExternalPath + '') } else { '' }
                         $rawMediaFile = ($rawRow.MediaFile + '')
                         $rawMediaFullName = if ($rawMediaFile) { $rawMediaFile } else { '(external)' }
+                        $rawSourcePath = if ($rawRow.PSObject.Properties['SourcePath']) { ($rawRow.SourcePath + '') } else { '' }
+                        $rawBackend = if ($rawRow.PSObject.Properties['Backend']) { ($rawRow.Backend + '') } else { '' }
+                        $rawStatusKind = if ($rawRow.PSObject.Properties['StatusKind']) { ($rawRow.StatusKind + '') } else { '' }
+                        $rawStatusDisplay = if ($rawRow.PSObject.Properties['StatusDisplay']) { ($rawRow.StatusDisplay + '') } else { '' }
+                        $rawPreviewPath = if ($rawRow.PSObject.Properties['PreviewPath']) { ($rawRow.PreviewPath + '') } else { '' }
+                        $rawMatchMethod = if ($rawRow.PSObject.Properties['MatchMethod']) { ($rawRow.MatchMethod + '') } else { '' }
+                        $rawInsertedBy = if ($rawRow.PSObject.Properties['InsertedBy']) { ($rawRow.InsertedBy + '') } else { '' }
+                        $rawLastVerifiedAt = if ($rawRow.PSObject.Properties['LastVerifiedAt']) { ($rawRow.LastVerifiedAt + '') } else { '' }
+                        $rawNeedsResolve = if ($rawRow.PSObject.Properties['NeedsResolve']) { [bool]$rawRow.NeedsResolve } else { $true }
+                        $rawSourceExists = if ($rawRow.PSObject.Properties['SourceExists']) { [bool]$rawRow.SourceExists } else { $false }
+                        $statusKind = if ($rawStatusKind) { $rawStatusKind } else { 'pending' }
+                        $statusDisplay = if ($rawStatusDisplay) { $rawStatusDisplay } else { Get-StatusDisplayForKind -Kind $statusKind }
                         $appState.Rows.Add([pscustomobject]@{
                                 MediaId = ($rawRow.MediaId + ''); Slide = [int]$rawRow.Slide; MediaFile = $rawMediaFile
                                 MediaDisplay = (Get-MediaDisplayLabel -MediaFile $rawMediaFile)
                                 MediaFullName = $rawMediaFullName
-                                SourcePath = ''; SourceDisplay = ''; Backend = ''; BackendDisplay = ''; StatusDisplay = 'Pending'; StatusKind = 'pending'
-                                SourceExists = $false; PreviewPath = ''; EmbeddedPath = ($rawRow.EmbeddedPath + ''); ExternalPath = $rawExternalPath; ExportStatus = ''
+                                SourcePath = $rawSourcePath
+                                SourceDisplay = if ($rawSourcePath) { $rawSourcePath } else { '未解決' }
+                                Backend = $rawBackend
+                                BackendDisplay = (Get-BackendDisplayLabel -Backend $rawBackend)
+                                StatusDisplay = $statusDisplay
+                                StatusKind = $statusKind
+                                SourceExists = $rawSourceExists
+                                PreviewPath = if ($rawPreviewPath) { $rawPreviewPath } elseif ($rawSourceExists) { $rawSourcePath } else { '' }
+                                EmbeddedPath = ($rawRow.EmbeddedPath + ''); ExternalPath = $rawExternalPath; ExportStatus = ''
                                 Shapes = @($rawRow.Shapes); DestinationPath = ''
-                                MatchMethod = ''; InsertedBy = ''; LastVerifiedAt = ''; IsForeign = $false
+                                MatchMethod = $rawMatchMethod
+                                InsertedBy = $rawInsertedBy
+                                LastVerifiedAt = $rawLastVerifiedAt
+                                IsForeign = [bool]($rawInsertedBy -and $rawInsertedBy -ne $localIdentity)
+                                NeedsResolve = $rawNeedsResolve
                             })
                     }
-                    if ($appState.Rows.Count -gt 0) { $appState.Rows[0].StatusKind = 'running'; $appState.Rows[0].StatusDisplay = 'Running' }
+                    $runningIndex = Get-NextResolvableRowIndex -Rows @($appState.Rows) -StartIndex 0
+                    if ($runningIndex -ge 0) {
+                        $appState.Rows[$runningIndex].StatusKind = 'running'
+                        $appState.Rows[$runningIndex].StatusDisplay = 'Running'
+                    }
                     $windowRefs.ResultsList.Items.Refresh()
                     Add-LogLine -WindowRefs $windowRefs -Text ('Media map: {0} items' -f $appState.Rows.Count)
                 }
@@ -3506,14 +3930,18 @@ $window.Add_ContentRendered({
     }
 
     try {
+        Set-StaticProgressState -WindowRefs $windowRefs -Stage 'Opening' -Message 'マニフェストを確認しています...'
         $appState.ManifestMeta = Get-ManifestMetadata -ManifestPath $appState.ManifestPath
+        Set-StaticProgressState -WindowRefs $windowRefs -Stage 'Opening' -Message 'PowerPoint の保存状態を確認しています...'
         $appState.HasUnsavedChanges = Get-PresentationDirtyState -PptPath $appState.PptPath -Logger $appState.Logger
+        Set-StaticProgressState -WindowRefs $windowRefs -Stage 'Opening' -Message '既存の source row を復元しています...'
         foreach ($row in (New-StartupRows -PptPath $appState.PptPath -ManifestPath $appState.ManifestPath -Logger $appState.Logger)) {
             $appState.Rows.Add($row)
         }
         $appState.IsStale = Test-StartupStale -PptPath $appState.PptPath -ManifestMeta $appState.ManifestMeta -HasUnsavedChanges $appState.HasUnsavedChanges -Rows @($appState.Rows)
         Verify-StartupRows -AppState $appState -WindowRefs $windowRefs
         $appState.LastCommittedRows = Copy-ManagerRows -Rows @($appState.Rows)
+        Initialize-StartupPreviewSelection -AppState $appState -WindowRefs $windowRefs
         if ($appState.Rows.Count -gt 0) {
             Add-LogLine -WindowRefs $windowRefs -Text ('Startup rows loaded: {0}' -f $appState.Rows.Count)
         } else {
