@@ -120,6 +120,29 @@ MoveWindowMaxHeightKeepWidth(targetTitle := "A", gapEdge := "Top") {
     MoveWindowPixel(hwnd, finalX, finalY, finalW, finalH)
 }
 
+MoveWindowFullscreen(targetTitle := "A") {
+    if (targetTitle != "A") {
+        WinWaitActive, %targetTitle%, , 2
+        if (ErrorLevel)
+            return
+    }
+
+    WinGet, hwnd, ID, %targetTitle%
+    if !hwnd
+        return
+
+    WinGet, minMaxState, MinMax, ahk_id %hwnd%
+    if (minMaxState = 1)
+        WinRestore, ahk_id %hwnd%
+
+    monitor := GetMonitorWorkAreaInfoFromWindow(hwnd)
+    if !IsObject(monitor)
+        return
+    placement := GetWindowPlacementArea(monitor)
+
+    MoveWindowPixel(hwnd, placement.Left, placement.Top, placement.Width, placement.Height)
+}
+
 GetMonitorToolbarGap(monitorHeight) {
     return Round(monitorHeight * 0.03)
 }

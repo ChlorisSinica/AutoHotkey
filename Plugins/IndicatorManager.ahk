@@ -1775,6 +1775,7 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Win+Ctrl+8", "高さ最大化 (※タイトルバー分下寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Top"")", winWhen, "", "^#8::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+8", "高さ最大化(※タイトルバー分上寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Bottom"")", winWhen, "", "^+#8::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+9", "横幅最大化 (※タイトルバー分下寄せ)", "MoveWindowRatio(...)", winWhen, "", "^#9::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+0", "全画面化", "MoveWindowFullscreen(""A"")", winWhen, "Window Island が ON の場合は外周余白を維持", "^#0::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+G", "Gridモード切替", "Grid_ToggleMode()", winWhen, "", "^#g::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+G", "Window Island 切替", "WindowIsland_Toggle()", winWhen, "", "^+#g::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+N", "テキストエディタ切替", "TextEditor_ToggleProvider()", winWhen, "vk1C + N / Ctrl + N で開くエディタを切替", "^+#n::", 1, 1, mainFile))
