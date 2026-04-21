@@ -1229,6 +1229,17 @@ function Get-MediaDisplayLabel {
     return $MediaFile
 }
 
+function Test-EmbeddedMediaAutoTrackable {
+    param([string]$MediaFile, [bool]$HasExistingTracking = $false)
+    if ($HasExistingTracking) { return $true }
+    if (-not $MediaFile) { return $true }
+    $ext = ([System.IO.Path]::GetExtension($MediaFile) + '').TrimStart('.').ToLowerInvariant()
+    if ($ext -in @('emf', 'wmf')) {
+        return $false
+    }
+    return $true
+}
+
 function Get-LocalIdentityTag {
     return ('{0}@{1}' -f $env:USERNAME, $env:COMPUTERNAME)
 }
@@ -1616,6 +1627,10 @@ function New-StartupRows {
         $exactKey = Get-ShapeRefsExactKey -ShapeRefs $shapeRefs
         $manifestRow = if ($exactKey -and $manifestRowByExactKey.ContainsKey($exactKey)) { $manifestRowByExactKey[$exactKey] } else { $null }
         $tagSummary = Get-TagSummaryForShapeRefs -ShapeRefs $shapeRefs -TagMap $tagMap
+        $hasExistingTracking = [bool]$manifestRow -or [bool](($tagSummary.SourcePath + '') -or ($tagSummary.MatchMethod + '') -or (($tagSummary.MediaId + '') -and -not [bool]$tagSummary.HasMediaIdConflict))
+        if (-not (Test-EmbeddedMediaAutoTrackable -MediaFile $mediaName -HasExistingTracking $hasExistingTracking)) {
+            continue
+        }
         $mediaId = ''
         if (($tagSummary.MediaId + '') -and -not [bool]$tagSummary.HasMediaIdConflict) {
             $mediaId = ($tagSummary.MediaId + '')
@@ -2617,6 +2632,25 @@ function Get-SourcesLayout {
     }
 }
 
+function Remove-StaleExportedFile {
+    param([string]$PreviousPath, [string]$NewPath, [string]$SourcesRoot, [object]$WindowRefs)
+    if (-not $PreviousPath) { return }
+    if (-not (Test-Path -LiteralPath $PreviousPath -PathType Leaf)) { return }
+    try {
+        $normalizedPrev = [System.IO.Path]::GetFullPath($PreviousPath)
+        $normalizedNew = if ($NewPath) { [System.IO.Path]::GetFullPath($NewPath) } else { '' }
+        $normalizedRoot = [System.IO.Path]::GetFullPath($SourcesRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    } catch { return }
+    if ($normalizedNew -and ($normalizedPrev -ieq $normalizedNew)) { return }
+    $rootPrefix = $normalizedRoot + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $normalizedPrev.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) { return }
+    try {
+        Remove-Item -LiteralPath $PreviousPath -Force -ErrorAction Stop
+    } catch {
+        Add-LogLine -WindowRefs $WindowRefs -Text ('WARN: stale export cleanup failed for {0}: {1}' -f $PreviousPath, (Format-ExceptionDetail -ExceptionRecord $_))
+    }
+}
+
 function Export-RowsToSources {
     param([object]$AppState, [object]$WindowRefs, [switch]$OnlySelected)
     $layout = Get-SourcesLayout -PptPath $AppState.PptPath
@@ -2662,51 +2696,86 @@ function Export-RowsToSources {
         }
         Flush-UiRender -WindowRefs $WindowRefs
 
-        for ($index = 0; $index -lt $targetRows.Count; $index++) {
-            $row = $targetRows[$index]
-            $displayName = if (($row.MediaFile + '')) { ($row.MediaFile + '') } elseif (($row.ExternalPath + '')) { [System.IO.Path]::GetFileName(($row.ExternalPath + '')) } else { ('item-{0}' -f ($index + 1)) }
-            Update-ProgressLabels -WindowRefs $WindowRefs -Status @{
-                stage = 'Exporting'
-                current_index = $index
-                total_items = $targetRows.Count
-                message = ('Exporting {0} ({1} / {2})' -f $displayName, $index, $targetRows.Count)
-            }
-            Flush-UiRender -WindowRefs $WindowRefs
+        $pptZip = $null
+        try {
+            for ($index = 0; $index -lt $targetRows.Count; $index++) {
+                $row = $targetRows[$index]
+                $previousDest = ($row.DestinationPath + '')
+                $displayName = if (($row.MediaFile + '')) { ($row.MediaFile + '') } elseif (($row.ExternalPath + '')) { [System.IO.Path]::GetFileName(($row.ExternalPath + '')) } else { ('item-{0}' -f ($index + 1)) }
+                Update-ProgressLabels -WindowRefs $WindowRefs -Status @{
+                    stage = 'Exporting'
+                    current_index = $index
+                    total_items = $targetRows.Count
+                    message = ('Exporting {0} ({1} / {2})' -f $displayName, $index, $targetRows.Count)
+                }
+                Flush-UiRender -WindowRefs $WindowRefs
 
-            if ($row.SourcePath -and (Test-Path -LiteralPath $row.SourcePath -PathType Leaf)) {
-                $destPath = Join-Path $resolvedDir ($row.MediaId + '_' + [System.IO.Path]::GetFileName($row.SourcePath))
-                try {
-                    Copy-Item -LiteralPath $row.SourcePath -Destination $destPath -Force -ErrorAction Stop
-                    $row.DestinationPath = $destPath
-                    $row.ExportStatus = if ($row.Backend -eq 'Manual') { 'manual' } else { 'copied' }
-                    $row.StatusDisplay = '✓'
-                    $row.StatusKind = 'matched'
-                } catch {
-                    $errors.Add(('Export copy failed for {0}: {1}' -f ($row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)))
-                    continue
+                if ($row.SourcePath -and (Test-Path -LiteralPath $row.SourcePath -PathType Leaf)) {
+                    $destPath = Join-Path $resolvedDir ($row.MediaId + '_' + [System.IO.Path]::GetFileName($row.SourcePath))
+                    try {
+                        Copy-Item -LiteralPath $row.SourcePath -Destination $destPath -Force -ErrorAction Stop
+                        $row.DestinationPath = $destPath
+                        $row.ExportStatus = if ($row.Backend -eq 'Manual') { 'manual' } else { 'copied' }
+                        $row.StatusDisplay = '✓'
+                        $row.StatusKind = 'matched'
+                    } catch {
+                        $errors.Add(('Export copy failed for {0}: {1}' -f ($row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)))
+                        continue
+                    }
+                    Remove-StaleExportedFile -PreviousPath $previousDest -NewPath $destPath -SourcesRoot $sourcesRoot -WindowRefs $WindowRefs
+                } elseif ($row.EmbeddedPath -and (Test-Path -LiteralPath $row.EmbeddedPath -PathType Leaf)) {
+                    $destPath = Join-Path $unresolvedDir ($row.MediaId + '_' + [System.IO.Path]::GetFileName($row.EmbeddedPath))
+                    try {
+                        Copy-Item -LiteralPath $row.EmbeddedPath -Destination $destPath -Force -ErrorAction Stop
+                        $row.DestinationPath = $destPath
+                        $row.ExportStatus = 'unresolved'
+                        $row.StatusDisplay = '✗'
+                        $row.StatusKind = 'unresolved'
+                    } catch {
+                        $errors.Add(('Export copy failed for {0}: {1}' -f ($row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)))
+                        continue
+                    }
+                    Remove-StaleExportedFile -PreviousPath $previousDest -NewPath $destPath -SourcesRoot $sourcesRoot -WindowRefs $WindowRefs
+                } elseif (($row.MediaFile + '') -and -not ($row.ExternalPath + '')) {
+                    if (-not $pptZip) {
+                        try {
+                            $pptZip = [System.IO.Compression.ZipFile]::OpenRead($AppState.PptPath)
+                        } catch {
+                            $errors.Add(('Export open pptx failed: {0}' -f (Format-ExceptionDetail -ExceptionRecord $_)))
+                            continue
+                        }
+                    }
+                    $mediaFileName = [System.IO.Path]::GetFileName(($row.MediaFile + ''))
+                    $destPath = Join-Path $unresolvedDir ($row.MediaId + '_' + $mediaFileName)
+                    try {
+                        if (Copy-ZipEntryToFile -Zip $pptZip -EntryName ('ppt/media/' + $mediaFileName) -DestinationPath $destPath) {
+                            $row.DestinationPath = $destPath
+                            $row.EmbeddedPath = $destPath
+                            $row.ExportStatus = 'unresolved'
+                            $row.StatusDisplay = '✗'
+                            $row.StatusKind = 'unresolved'
+                        } else {
+                            $errors.Add(('Embedded media not found in pptx: {0}' -f ($row.MediaFile + '')))
+                            continue
+                        }
+                    } catch {
+                        $errors.Add(('Export copy failed for {0}: {1}' -f ($row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)))
+                        continue
+                    }
+                    Remove-StaleExportedFile -PreviousPath $previousDest -NewPath $destPath -SourcesRoot $sourcesRoot -WindowRefs $WindowRefs
+                } elseif (-not $row.ExportStatus) {
+                    $row.ExportStatus = 'skipped'
                 }
-            } elseif ($row.EmbeddedPath -and (Test-Path -LiteralPath $row.EmbeddedPath -PathType Leaf)) {
-                $destPath = Join-Path $unresolvedDir ($row.MediaId + '_' + [System.IO.Path]::GetFileName($row.EmbeddedPath))
-                try {
-                    Copy-Item -LiteralPath $row.EmbeddedPath -Destination $destPath -Force -ErrorAction Stop
-                    $row.DestinationPath = $destPath
-                    $row.ExportStatus = 'unresolved'
-                    $row.StatusDisplay = '✗'
-                    $row.StatusKind = 'unresolved'
-                } catch {
-                    $errors.Add(('Export copy failed for {0}: {1}' -f ($row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)))
-                    continue
+                Update-ProgressLabels -WindowRefs $WindowRefs -Status @{
+                    stage = 'Exporting'
+                    current_index = ($index + 1)
+                    total_items = $targetRows.Count
+                    message = ('Exporting {0} ({1} / {2})' -f $displayName, ($index + 1), $targetRows.Count)
                 }
-            } elseif (-not $row.ExportStatus) {
-                $row.ExportStatus = 'skipped'
+                Flush-UiRender -WindowRefs $WindowRefs
             }
-            Update-ProgressLabels -WindowRefs $WindowRefs -Status @{
-                stage = 'Exporting'
-                current_index = ($index + 1)
-                total_items = $targetRows.Count
-                message = ('Exporting {0} ({1} / {2})' -f $displayName, ($index + 1), $targetRows.Count)
-            }
-            Flush-UiRender -WindowRefs $WindowRefs
+        } finally {
+            if ($pptZip) { try { $pptZip.Dispose() } catch {} }
         }
 
         $WindowRefs.ResultsList.Items.Refresh()
@@ -2959,8 +3028,6 @@ function Get-ScanWorkerScript {
             $hintBackend = ($rowHint.Backend + '')
             $hintPreviewPath = ($rowHint.PreviewPath + '')
             $hintVerifiedAt = ($rowHint.LastVerifiedAt + '')
-            $isMine = (-not $hintBy -or $hintBy -eq $LocalIdentity)
-
             $state.MatchMethod = $hintMethod
             $state.InsertedBy = $hintBy
             $state.LastVerifiedAt = $hintVerifiedAt
@@ -2978,7 +3045,7 @@ function Get-ScanWorkerScript {
                 } elseif ($state.SourceExists) {
                     $state.Backend = if ($hintBackend) { $hintBackend } else { 'Tag' }
                     $state.NeedsResolve = $false
-                } elseif ($isMine -and ($hintMethod -eq 'PASTE' -or $hintMethod -eq 'RETRO_SCAN')) {
+                } elseif ($hintMethod -eq 'PASTE' -or $hintMethod -eq 'RETRO_SCAN' -or -not $hintMethod) {
                     if ($hintBackend) {
                         $state.Backend = $hintBackend
                     } elseif ($hintMethod) {
@@ -3088,7 +3155,13 @@ function Get-ScanWorkerScript {
             $localIdentity = ('{0}@{1}' -f $env:USERNAME, $env:COMPUTERNAME)
             foreach ($mediaName in $mapResult.MediaMap.Keys) {
                 $shapeRefs = @($mapResult.MediaMap[$mediaName].shapes.ToArray())
+                $rowExactKey = Get-ShapeRefsExactKey -ShapeRefs $shapeRefs
                 $existingMediaId = Get-ExistingMediaIdForShapeRefs -ShapeRefs $shapeRefs -MediaIdByShapeKey $Spec.MediaIdByShapeKey
+                $rowHint = if ($Spec.RowHints -and $rowExactKey -and $Spec.RowHints.ContainsKey($rowExactKey)) { $Spec.RowHints[$rowExactKey] } else { $null }
+                $hasExistingTracking = [bool]$existingMediaId -or [bool]$rowHint
+                if (-not (Test-EmbeddedMediaAutoTrackable -MediaFile $mediaName -HasExistingTracking $hasExistingTracking)) {
+                    continue
+                }
                 $row = [pscustomobject]@{
                     MediaId = if ($existingMediaId) { $existingMediaId } else { (New-MediaId -Counter $counter) }
                     MediaFile = $mediaName
