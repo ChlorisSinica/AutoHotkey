@@ -335,7 +335,14 @@ function Invoke-HiddenProcess {
 }
 
 function Find-EverythingExe {
-    foreach ($candidate in @('C:\Program Files\Everything\es.exe', 'C:\Program Files (x86)\Everything\es.exe')) {
+    $candidates = @(
+        'C:\Program Files\Everything\es.exe',
+        'C:\Program Files (x86)\Everything\es.exe'
+    )
+    if ($env:LOCALAPPDATA) {
+        $candidates += (Join-Path $env:LOCALAPPDATA 'AutoHotkey\es\es.exe')
+    }
+    foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
     }
     foreach ($dir in ($env:PATH -split ';')) {
@@ -2701,6 +2708,7 @@ function Export-RowsToSources {
             for ($index = 0; $index -lt $targetRows.Count; $index++) {
                 $row = $targetRows[$index]
                 $previousDest = ($row.DestinationPath + '')
+                $didWrite = $false
                 $displayName = if (($row.MediaFile + '')) { ($row.MediaFile + '') } elseif (($row.ExternalPath + '')) { [System.IO.Path]::GetFileName(($row.ExternalPath + '')) } else { ('item-{0}' -f ($index + 1)) }
                 Update-ProgressLabels -WindowRefs $WindowRefs -Status @{
                     stage = 'Exporting'
@@ -2718,6 +2726,7 @@ function Export-RowsToSources {
                         $row.ExportStatus = if ($row.Backend -eq 'Manual') { 'manual' } else { 'copied' }
                         $row.StatusDisplay = '✓'
                         $row.StatusKind = 'matched'
+                        $didWrite = $true
                     } catch {
                         $errors.Add(('Export copy failed for {0}: {1}' -f ($row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)))
                         continue
@@ -2731,6 +2740,7 @@ function Export-RowsToSources {
                         $row.ExportStatus = 'unresolved'
                         $row.StatusDisplay = '✗'
                         $row.StatusKind = 'unresolved'
+                        $didWrite = $true
                     } catch {
                         $errors.Add(('Export copy failed for {0}: {1}' -f ($row.MediaFile + ''), (Format-ExceptionDetail -ExceptionRecord $_)))
                         continue
@@ -2754,6 +2764,7 @@ function Export-RowsToSources {
                             $row.ExportStatus = 'unresolved'
                             $row.StatusDisplay = '✗'
                             $row.StatusKind = 'unresolved'
+                            $didWrite = $true
                         } else {
                             $errors.Add(('Embedded media not found in pptx: {0}' -f ($row.MediaFile + '')))
                             continue
@@ -2765,6 +2776,13 @@ function Export-RowsToSources {
                     Remove-StaleExportedFile -PreviousPath $previousDest -NewPath $destPath -SourcesRoot $sourcesRoot -WindowRefs $WindowRefs
                 } elseif (-not $row.ExportStatus) {
                     $row.ExportStatus = 'skipped'
+                }
+                if (-not $didWrite -and $previousDest -and ($row.DestinationPath -eq $previousDest)) {
+                    $sourceStillValid = if ($row.SourcePath) { Test-Path -LiteralPath $row.SourcePath -PathType Leaf } else { $false }
+                    if (-not $sourceStillValid) {
+                        Remove-StaleExportedFile -PreviousPath $previousDest -NewPath '' -SourcesRoot $sourcesRoot -WindowRefs $WindowRefs
+                        $row.DestinationPath = ''
+                    }
                 }
                 Update-ProgressLabels -WindowRefs $WindowRefs -Status @{
                     stage = 'Exporting'
@@ -2957,7 +2975,8 @@ function New-WorkerSessionState {
             'Search-Directories', 'Filter-HashMatches', 'Resolve-Source', 'Save-PowerPointPresentation', 'Get-ZipEntryText',
             'Copy-ZipEntryToFile', 'Get-OpenXmlNamespaceMap', 'New-NamespaceManager', 'Select-XmlNodes', 'Select-XmlNode', 'Build-MediaShapeMap',
             'Export-ScanJson', 'New-MediaId', 'New-Logger', 'Write-TraceLog', 'Format-ExceptionDetail',
-            'Get-ShapeRefIdentityKeys', 'Get-ShapeRefIdentityKey', 'Get-ShapeRefsExactKey', 'Get-ExistingMediaIdForShapeRefs'
+            'Get-ShapeRefIdentityKeys', 'Get-ShapeRefIdentityKey', 'Get-ShapeRefsExactKey', 'Get-ExistingMediaIdForShapeRefs',
+            'Test-EmbeddedMediaAutoTrackable'
         )) {
         $definition = (Get-Item -LiteralPath ("Function:\" + $name)).Definition
         $iss.Commands.Add(([System.Management.Automation.Runspaces.SessionStateFunctionEntry]::new($name, $definition)))
@@ -3521,6 +3540,15 @@ function Start-ScanWorker {
         Write-TraceLog -Logger $AppState.Logger -Message ('snapshot created: {0}' -f ($snapshotInfo.SnapshotPath + ''))
     } catch {
         Write-TraceLog -Logger $AppState.Logger -Message ('snapshot preparation error: {0}' -f (Format-ExceptionDetail -ExceptionRecord $_)) -Error
+        Replace-ManagerRows -AppState $AppState -WindowRefs $WindowRefs -Rows (Copy-ManagerRows -Rows @($AppState.LastCommittedRows))
+        $WindowRefs.StageLabel.Text = 'Error'
+        $WindowRefs.CancelButton.Visibility = 'Collapsed'
+        $WindowRefs.CancelButton.IsEnabled = $true
+        $WindowRefs.CancelButton.Content = 'Cancel'
+        $WindowRefs.RescanButton.IsEnabled = $true
+        $WindowRefs.ExportButton.IsEnabled = ($AppState.Rows.Count -gt 0)
+        Update-IdleSummary -AppState $AppState -WindowRefs $WindowRefs
+        $WindowRefs.SummaryLabel.Text = ('Scan preparation failed: {0}' -f $_.Exception.Message)
         [System.Windows.MessageBox]::Show(
             ('PowerShell ソースマネージャーが失敗しました。`r`nJSON が生成されませんでした。`r`n`r`n{0}' -f $_.Exception.Message),
             'エラー',

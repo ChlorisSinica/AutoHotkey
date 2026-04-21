@@ -21,14 +21,24 @@ manager 内の `Scan` / `Re-scan` から、プレゼンテーション内に埋�
 
 ### インストール
 
-1. <https://www.voidtools.com/downloads/> から **Everything** をダウンロード
-2. 基本的には既定設定のままインストール
-3. 同じページから **Everything Command-line Interface (ES)** もダウンロード
-4. `es.exe` を次のいずれかに配置
-   - `C:\Program Files\Everything\es.exe`
-   - `C:\Program Files (x86)\Everything\es.exe`
-   - または `PATH` が通っている任意のディレクトリ
-5. ターミナルで `es.exe --version` を実行して確認
+1. 次のいずれかの方法で **Everything** 本体をインストール
+   - **winget**: `winget install voidtools.Everything`
+   - **手動**: <https://www.voidtools.com/downloads/> から取得、既定設定でインストール
+2. `es.exe` の配置は次のいずれか
+   - **推奨 (自動)**: 管理者 PowerShell で以下を実行
+     ```
+     powershell -NoProfile -ExecutionPolicy Bypass -File Plugins\PowerPoint\install_everything_cli.ps1
+     ```
+     voidtools 公式 GitHub release から固定バージョンの ES CLI を取得し、SHA256 検証後に
+     `C:\Program Files\Everything\es.exe` に配置します
+   - **admin を使わない場合**:
+     ```
+     powershell -NoProfile -ExecutionPolicy Bypass -File Plugins\PowerPoint\install_everything_cli.ps1 -InstallDir "$env:LOCALAPPDATA\AutoHotkey\es"
+     ```
+   - **手動配置**: <https://github.com/voidtools/ES/releases> から zip を取得し、
+     `C:\Program Files\Everything\es.exe` / `C:\Program Files (x86)\Everything\es.exe` /
+     `%LOCALAPPDATA%\AutoHotkey\es\es.exe` / `PATH` 上 のいずれかに置く
+3. ターミナルで `es.exe --version` を実行して確認
 
 ### インデックス確認
 
