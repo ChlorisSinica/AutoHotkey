@@ -67,16 +67,16 @@ vk1c(変換キー) + F1の設定欄でON/OFFが可能です．
 - Plugins/PowerPoint.ahkでは.pptx内の画像のソース管理を行っています．エクスプローラーでコピーした画像をCtrl+Vでペーストするとメタデータを挿入するホットキーが発火します．
 - source manager の正式入口は `Ctrl+Alt+E` です。scan / re-scan / export / manual pick は manager 内から行います。
 - 現行の source manager 本体は PowerShell 版です。旧 `ppt_scan.py` / `ppt_scan_gui.py` は `_tmp/` に退避しています。
-- `Plugins/ppt_extract_media.ps1` にも置き換えたため，PowerPoint source manager の Python 依存は外れました。[Everything](./docs/ppt_scan_setup.md) は引き続き有効です。
+- `Plugins/PowerPoint/ppt_extract_media.ps1` にも置き換えたため，PowerPoint source manager の Python 依存は外れました。[Everything](./docs/ppt_scan_setup.md) は引き続き有効です。
 
 ## UiaMonitor
 
-BracketWrap 廃止に伴い、`lib/UiaMonitor/` は repo から削除しました。
-現行構成で使っている UI Automation 依存は `lib/UIA_Interface.ahk` と `lib/UIA_Browser.ahk` のみです。
+BracketWrap 廃止に伴い、`Lib/UiaMonitor/` は repo から削除しました。
+現行構成で使っている UI Automation 依存は `Lib/UIA_Interface.ahk` と `Lib/UIA_Browser.ahk` のみです。
 
 ## Appendix
 
-- `lib\UIA_Interface.ahk` and `lib\UIA_Browser.ahk` are UI Automation dependency libraries.
+- `Lib\UIA_Interface.ahk` and `Lib\UIA_Browser.ahk` are UI Automation dependency libraries.
 - In `#Include` files, avoid top-level labels followed by a bare `return`.
 - Included files are effectively inlined into `main.ahk`, so auto-execute can fall into that label body and stop early at `return`.
 - Also avoid top-level hotkeys, hotstrings, and `#If` hotkey blocks in `#Include` files when later startup lines in `main.ahk` still need to run.

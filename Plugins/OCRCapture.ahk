@@ -211,7 +211,7 @@ OCR_NormalizeText(ByRef text) {
 ; --- 内部: PowerShell OCR 呼び出し ---
 ; ==========================================================
 OCR_RunEngine(outputPath) {
-    scriptPath := A_ScriptDir . "\scripts\ocr_clipboard.ps1"
+    scriptPath := A_ScriptDir . "\Plugins\OCRCapture\ocr_clipboard.ps1"
     if !FileExist(scriptPath) {
         Debug_Log("OCR", "script_not_found", "path=" . scriptPath)
         return -1

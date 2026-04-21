@@ -48,7 +48,7 @@ App_Init() {
 App_StartRuntimeDialogWatcher() {
     global App_RuntimeWatcherPid
 
-    watcherPath := A_ScriptDir . "\scripts\runtime_dialog_watcher.ahk"
+    watcherPath := A_ScriptDir . "\Plugins\AppInit\runtime_dialog_watcher.ahk"
     if !FileExist(watcherPath)
         return false
 

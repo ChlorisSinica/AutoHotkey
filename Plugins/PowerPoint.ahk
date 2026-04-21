@@ -2857,7 +2857,7 @@ PPT_CleanupUnresolvedExports(destDir, mediaId) {
 }
 
 PPT_ExportEmbeddedMedia(pptPath, mediaFile, destPath) {
-    scriptPath := A_ScriptDir . "\Plugins\ppt_extract_media.ps1"
+    scriptPath := A_ScriptDir . "\Plugins\PowerPoint\ppt_extract_media.ps1"
     if (pptPath = "" || mediaFile = "" || destPath = "" || !FileExist(scriptPath))
         return false
 
@@ -3334,7 +3334,7 @@ PPT_OpenSourceManager(mode := "view") {
     if FileExist(PPT_ScanStderrLogPath)
         FileDelete, %PPT_ScanStderrLogPath%
 
-    scriptPath := A_ScriptDir . "\Plugins\ppt_scan_gui.ps1"
+    scriptPath := A_ScriptDir . "\Plugins\PowerPoint\ppt_scan_gui.ps1"
     if !FileExist(scriptPath) {
         PPT_DeleteFileIfExists(jsonPath)
         PPT_DeleteFileIfExists(statusPath)

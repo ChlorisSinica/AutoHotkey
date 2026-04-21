@@ -18,11 +18,11 @@
 _*/
 
 # UiaMonitor: ソースとビルド成果物のみ管理、中間ファイルは除外
-lib/UiaMonitor/bin/
-lib/UiaMonitor/obj/
+Lib/UiaMonitor/bin/
+Lib/UiaMonitor/obj/
 
 # UiaMonitor ビルド成果物は全て除外 (exe=147MB, pdb=デバッグシンボル)
-lib/UiaMonitor/UiaMonitor/
+Lib/UiaMonitor/UiaMonitor/
 
 # Zips
 __zip__/
@@ -36,6 +36,6 @@ temp/
 
 auth.json
 config/
-lib/MGLahk141/
+Lib/MGLahk141/
 archive/v2/
 .agents/

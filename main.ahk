@@ -7,12 +7,12 @@ SetBatchLines, -1
 ; ==========================================================
 ; --- https://github.com/Descolada/UIAutomation ---
 ; ==========================================================
-#Include %A_ScriptDir%\lib\UIA_Interface.ahk
-#Include %A_ScriptDir%\lib\UIA_Browser.ahk
-#Include %A_ScriptDir%\lib\DebugUtil.ahk
-#Include %A_ScriptDir%\lib\FeatureState.ahk
-#Include %A_ScriptDir%\lib\HotkeyRegistry.ahk
-#Include %A_ScriptDir%\lib\OCRCapture.ahk
+#Include %A_ScriptDir%\Lib\UIA_Interface.ahk
+#Include %A_ScriptDir%\Lib\UIA_Browser.ahk
+#Include %A_ScriptDir%\Lib\DebugUtil.ahk
+#Include %A_ScriptDir%\Lib\FeatureState.ahk
+#Include %A_ScriptDir%\Lib\HotkeyRegistry.ahk
+#Include %A_ScriptDir%\Plugins\OCRCapture.ahk
 
 ; ==========================================================
 ; --- Pluginsファイルの読み込み ---
