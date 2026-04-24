@@ -10,6 +10,8 @@ global Browser_PDFZoomDebugLogDir     := A_ScriptDir . "\.claude"
 global Browser_PDFZoomDebugLogPath    := Browser_PDFZoomDebugLogDir . "\pdf_zoom_debug.log"
 global Browser_PDFZoomDebugMaxBytes   := 262144
 global Browser_PDFZoomTryShortcutFirst := false
+global Browser_PDFZoomNativeShortcutSpec := "vkDDsc02B"
+global Browser_PDFZoomNativeShortcutLabel := "Ctrl+vkDDsc02B"
 global Browser_URLExportPath          := "C:\myApp\__temp__\urls.txt"
 
 ; ==========================================================
@@ -75,6 +77,51 @@ Browser_DebugSanitize(text) {
 
 Browser_PDFZoomLog(event, extra := "") {
     Debug_Log("BrowserPDF", event, extra)
+}
+
+Browser_LogCtrlSc073Probe() {
+    global Browser_PDFZoomDebugEnabled
+
+    if (!Browser_PDFZoomDebugEnabled)
+        return
+
+    thisHotkey := Browser_DebugSanitize(A_ThisHotkey)
+    priorHotkey := Browser_DebugSanitize(A_PriorHotkey)
+    ctrlState := GetKeyState("Ctrl", "P") ? 1 : 0
+    shiftState := GetKeyState("Shift", "P") ? 1 : 0
+    browserActive := WinActive("ahk_group BrowserGroup") ? 1 : 0
+    activeHwnd := WinExist("A")
+
+    if (!activeHwnd) {
+        Browser_PDFZoomLog("pdf_zoom_hotkey_probe"
+            , "thisHotkey=" . thisHotkey
+            . " priorHotkey=" . priorHotkey
+            . " timeSincePrior=" . A_TimeSincePriorHotkey
+            . " ctrl=" . ctrlState
+            . " shift=" . shiftState
+            . " browserActive=" . browserActive
+            . " active=missing")
+        return
+    }
+
+    pdfInfo := Browser_GetPDFContextInfo(activeHwnd, cBrowser)
+    Browser_PDFZoomLog("pdf_zoom_hotkey_probe"
+        , "thisHotkey=" . thisHotkey
+        . " priorHotkey=" . priorHotkey
+        . " timeSincePrior=" . A_TimeSincePriorHotkey
+        . " ctrl=" . ctrlState
+        . " shift=" . shiftState
+        . " browserActive=" . browserActive
+        . " state=" . pdfInfo.State
+        . " reasons=" . pdfInfo.Reasons
+        . " exe=" . pdfInfo.Exe
+        . " class=" . pdfInfo.Class
+        . " title=" . pdfInfo.Title
+        . " url=" . pdfInfo.Url
+        . " zoomButton=" . pdfInfo.ZoomButton
+        . " focus=" . Browser_GetFocusedElementSummary()
+        . " " . Browser_GetFocusedControlSummary(activeHwnd)
+        . (pdfInfo.Error != "" ? " error=" . pdfInfo.Error : ""))
 }
 
 Browser_IsPdfUrl(url) {
@@ -167,17 +214,23 @@ Browser_FocusBrowserControl(activeHwnd, ByRef focusMethod := "") {
             targetCtl := ctl
     }
 
-    if (targetCtl = "")
+    if (targetCtl = "") {
+        Browser_LogPDFFocusTrace(activeHwnd, "BrowserControlFocus", "fail", "target=missing")
         return false
+    }
 
+    Browser_LogPDFFocusTrace(activeHwnd, "BrowserControlFocus", "attempt", "target=" . targetCtl)
     ControlFocus, %targetCtl%, ahk_id %activeHwnd%
     Sleep, 40
     ControlGetFocus, focusedCtl, ahk_id %activeHwnd%
     if (focusedCtl = targetCtl) {
         focusMethod := "ControlFocus:" . targetCtl
+        Browser_LogPDFFocusTrace(activeHwnd, "BrowserControlFocus", "success", focusMethod)
         return true
     }
 
+    Browser_LogPDFFocusTrace(activeHwnd, "BrowserControlFocus", "fail"
+        , "target=" . targetCtl . " focusedCtl=" . focusedCtl)
     return false
 }
 
@@ -299,6 +352,24 @@ Browser_DescribePDFFocusCandidates(candidates) {
     return (text != "") ? text : "none"
 }
 
+Browser_LogPDFFocusTrace(activeHwnd, step, result, detail := "") {
+    text := "step=" . Browser_DebugSanitize(step)
+        . " result=" . Browser_DebugSanitize(result)
+    if (detail != "")
+        text .= " detail=" . Browser_DebugSanitize(detail)
+
+    if (activeHwnd) {
+        focusedSummary := Browser_GetFocusedElementSummary()
+        controlSummary := Browser_GetFocusedControlSummary(activeHwnd)
+        if (focusedSummary != "")
+            text .= " focus=" . focusedSummary
+        if (controlSummary != "")
+            text .= " " . controlSummary
+    }
+
+    Browser_PDFZoomLog("pdf_zoom_focus_trace", text)
+}
+
 Browser_ShouldRestorePDFFocus() {
     try {
         UIA := UIA_Interface()
@@ -319,6 +390,7 @@ Browser_FocusWebContentPane(activeHwnd, ByRef focusMethod := "") {
     WinActivate, ahk_id %activeHwnd%
     WinWaitActive, ahk_id %activeHwnd%, , 1
 
+    Browser_LogPDFFocusTrace(activeHwnd, "WebContentCtrlF6", "attempt")
     Send, ^{F6}
     Sleep, 40
     focusMethod := "Ctrl+F6"
@@ -327,9 +399,12 @@ Browser_FocusWebContentPane(activeHwnd, ByRef focusMethod := "") {
         . " focus=" . Browser_GetFocusedElementSummary()
         . " " . Browser_GetFocusedControlSummary(activeHwnd))
 
-    if !Browser_ShouldRestorePDFFocus()
+    if !Browser_ShouldRestorePDFFocus() {
+        Browser_LogPDFFocusTrace(activeHwnd, "WebContentCtrlF6", "ready", focusMethod)
         return true
+    }
 
+    Browser_LogPDFFocusTrace(activeHwnd, "WebContentEscCtrlF6", "attempt", focusMethod)
     SendInput, {Esc}
     Sleep, 20
     Send, ^{F6}
@@ -340,13 +415,18 @@ Browser_FocusWebContentPane(activeHwnd, ByRef focusMethod := "") {
         . " focus=" . Browser_GetFocusedElementSummary()
         . " " . Browser_GetFocusedControlSummary(activeHwnd))
 
-    return !Browser_ShouldRestorePDFFocus()
+    focusReady := !Browser_ShouldRestorePDFFocus()
+    Browser_LogPDFFocusTrace(activeHwnd, "WebContentEscCtrlF6"
+        , focusReady ? "ready" : "continue"
+        , focusMethod)
+    return focusReady
 }
 
 Browser_TryRefocusViaMousePoint(activeHwnd, ByRef focusMethod := "") {
     MouseGetPos, mouseX, mouseY, mouseHwnd
     if (mouseHwnd != activeHwnd) {
         focusMethod := "mouse_outside_active_window"
+        Browser_LogPDFFocusTrace(activeHwnd, "MousePointControlClick", "fail", focusMethod)
         return false
     }
 
@@ -357,6 +437,7 @@ Browser_TryRefocusViaMousePoint(activeHwnd, ByRef focusMethod := "") {
         mouseElSummary := Browser_DescribeElement(mouseEl)
         if Browser_IsPDFToolbarElement(mouseEl) {
             focusMethod := "mouse_over_toolbar " . mouseElSummary
+            Browser_LogPDFFocusTrace(activeHwnd, "MousePointControlClick", "fail", focusMethod)
             return false
         }
     }
@@ -364,14 +445,18 @@ Browser_TryRefocusViaMousePoint(activeHwnd, ByRef focusMethod := "") {
     clientPt := Browser_ScreenToClient(activeHwnd, mouseX, mouseY)
     if !IsObject(clientPt) {
         focusMethod := "screen_to_client_failed"
+        Browser_LogPDFFocusTrace(activeHwnd, "MousePointControlClick", "fail", focusMethod)
         return false
     }
 
     clickPos := "X" . clientPt.x . " Y" . clientPt.y
+    Browser_LogPDFFocusTrace(activeHwnd, "MousePointControlClick", "attempt"
+        , "x=" . clientPt.x . " y=" . clientPt.y)
     ControlClick, %clickPos%, ahk_id %activeHwnd%,, Left, 1, NA
     Sleep, 30
     focusMethod := "ControlClickCurrentMousePoint x=" . clientPt.x . " y=" . clientPt.y
         . " mouseEl=" . mouseElSummary
+    Browser_LogPDFFocusTrace(activeHwnd, "MousePointControlClick", "success", focusMethod)
     return true
 }
 
@@ -425,10 +510,13 @@ Browser_TryRefocusViaDocumentControlClick(activeHwnd, cBrowser, ByRef focusMetho
     clickPt := Browser_GetPDFDocumentPoint(cBrowser, "window")
     if !IsObject(clickPt) {
         focusMethod := "document_control_click=no_point"
+        Browser_LogPDFFocusTrace(activeHwnd, "DocumentControlClick", "fail", focusMethod)
         return false
     }
 
     clickPos := "X" . clickPt.x . " Y" . clickPt.y
+    Browser_LogPDFFocusTrace(activeHwnd, "DocumentControlClick", "attempt"
+        , "x=" . clickPt.x . " y=" . clickPt.y)
     ControlClick, %clickPos%, ahk_id %activeHwnd%,, Left, 1, NA
     Sleep, 40
     focusMethod := "ControlClickDocumentPoint x=" . clickPt.x . " y=" . clickPt.y
@@ -436,6 +524,7 @@ Browser_TryRefocusViaDocumentControlClick(activeHwnd, cBrowser, ByRef focusMetho
         , "step=" . focusMethod
         . " focus=" . Browser_GetFocusedElementSummary()
         . " " . Browser_GetFocusedControlSummary(activeHwnd))
+    Browser_LogPDFFocusTrace(activeHwnd, "DocumentControlClick", "success", focusMethod)
     return true
 }
 
@@ -443,9 +532,12 @@ Browser_TryRefocusViaDocumentPhysicalClick(activeHwnd, cBrowser, ByRef focusMeth
     clickPt := Browser_GetPDFDocumentPoint(cBrowser, "screen")
     if !IsObject(clickPt) {
         focusMethod := "document_physical_click=no_point"
+        Browser_LogPDFFocusTrace(activeHwnd, "DocumentPhysicalClick", "fail", focusMethod)
         return false
     }
 
+    Browser_LogPDFFocusTrace(activeHwnd, "DocumentPhysicalClick", "attempt"
+        , "x=" . clickPt.x . " y=" . clickPt.y)
     MouseGetPos, origX, origY
     MouseMove, % clickPt.x, % clickPt.y, 0
     Sleep, 10
@@ -459,6 +551,7 @@ Browser_TryRefocusViaDocumentPhysicalClick(activeHwnd, cBrowser, ByRef focusMeth
         , "step=" . focusMethod
         . " focus=" . Browser_GetFocusedElementSummary()
         . " " . Browser_GetFocusedControlSummary(activeHwnd))
+    Browser_LogPDFFocusTrace(activeHwnd, "DocumentPhysicalClick", "success", focusMethod)
     return true
 }
 
@@ -617,7 +710,16 @@ Browser_DescribePDFZoomButton(cBrowser) {
         . (buttonHelp != "" ? " help=" . Browser_DebugSanitize(buttonHelp) : "")
 }
 
+Browser_SendPDFZoomNativeShortcut() {
+    global Browser_PDFZoomNativeShortcutSpec
+
+    sendSpec := "{Blind}^{" . Browser_PDFZoomNativeShortcutSpec . "}"
+    SendInput, %sendSpec%
+}
+
 Browser_TogglePDFZoomViaShortcut(cBrowser, ByRef detail := "", preButtonState := "") {
+    global Browser_PDFZoomNativeShortcutLabel
+
     if !IsObject(cBrowser) {
         detail := "shortcut=no_browser"
         return false
@@ -626,11 +728,21 @@ Browser_TogglePDFZoomViaShortcut(cBrowser, ByRef detail := "", preButtonState :=
     if (preButtonState = "")
         preButtonState := Browser_DescribePDFZoomButton(cBrowser)
 
-    SendInput, ^{sc073}
-    Sleep, 100
+    if (preButtonState = "missing") {
+        detail := "shortcut=" . Browser_PDFZoomNativeShortcutLabel . " preButton=missing"
+        return false
+    }
 
-    postButtonState := Browser_DescribePDFZoomButton(cBrowser)
-    detail := "shortcut=Ctrl+sc073"
+    Browser_SendPDFZoomNativeShortcut()
+    postButtonState := preButtonState
+    Loop, 8 {
+        Sleep, 20
+        postButtonState := Browser_DescribePDFZoomButton(cBrowser)
+        if (postButtonState != "missing" && preButtonState != postButtonState)
+            break
+    }
+
+    detail := "shortcut=" . Browser_PDFZoomNativeShortcutLabel
         . " preButton=" . preButtonState
         . " postButton=" . postButtonState
 
@@ -693,19 +805,25 @@ Browser_FocusPDFDocument(activeHwnd, cBrowser := "", ByRef focusMethod := "") {
 
     WinActivate, ahk_id %activeHwnd%
     WinWaitActive, ahk_id %activeHwnd%, , 1
+    Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument", "begin")
 
     if Browser_TryRefocusViaDocumentControlClick(activeHwnd, cBrowser, documentClickMethod) {
         focusMethod := documentClickMethod
+        Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument", "success", focusMethod)
         return true
     }
 
-    Browser_FocusWebContentPane(activeHwnd, webContentFocusMethod)
+    webContentReady := Browser_FocusWebContentPane(activeHwnd, webContentFocusMethod)
+    Browser_LogPDFFocusTrace(activeHwnd, "FocusWebContentPane"
+        , webContentReady ? "ready" : "continue"
+        , webContentFocusMethod)
 
     if Browser_TryRefocusViaDocumentControlClick(activeHwnd, cBrowser, documentClickMethod) {
         focusMethod := webContentFocusMethod
         if (focusMethod != "")
             focusMethod .= " + "
         focusMethod .= documentClickMethod
+        Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument", "success", focusMethod)
         return true
     }
 
@@ -714,6 +832,7 @@ Browser_FocusPDFDocument(activeHwnd, cBrowser := "", ByRef focusMethod := "") {
         if (focusMethod != "")
             focusMethod .= " + "
         focusMethod .= mouseClickFocusMethod
+        Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument", "success", focusMethod)
         return true
     }
 
@@ -722,6 +841,7 @@ Browser_FocusPDFDocument(activeHwnd, cBrowser := "", ByRef focusMethod := "") {
         if (focusMethod != "")
             focusMethod .= " + "
         focusMethod .= physicalClickMethod
+        Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument", "success", focusMethod)
         return true
     }
 
@@ -747,12 +867,16 @@ Browser_FocusPDFDocument(activeHwnd, cBrowser := "", ByRef focusMethod := "") {
     logicalFocusOk := false
     logicalFocusMethod := ""
     for _, candidate in candidates {
-        if Browser_TryFocusPDFElement(candidate.Element, candidateMethod)
+        Browser_LogPDFFocusTrace(activeHwnd, "LogicalFocusCandidate", "attempt"
+            , candidate.Label . " " . candidate.Summary)
+        if Browser_TryFocusPDFElement(candidate.Element, candidateMethod, activeHwnd, candidate.Label)
         {
             logicalFocusOk := true
             logicalFocusMethod := candidate.Label . ":" . candidateMethod
+            Browser_LogPDFFocusTrace(activeHwnd, "LogicalFocusCandidate", "success", logicalFocusMethod)
             break
         }
+        Browser_LogPDFFocusTrace(activeHwnd, "LogicalFocusCandidate", "fail", candidate.Label)
     }
 
     if Browser_FocusBrowserControl(activeHwnd, controlFocusMethod) {
@@ -760,10 +884,12 @@ Browser_FocusPDFDocument(activeHwnd, cBrowser := "", ByRef focusMethod := "") {
         if (focusMethod != "")
             focusMethod .= " + "
         focusMethod .= controlFocusMethod
+        Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument", "success", focusMethod)
         return true
     }
 
     ; Chromium の PDF viewer は Esc でツールバー由来の疑似フォーカスが外れることがある。
+    Browser_LogPDFFocusTrace(activeHwnd, "EscBeforeBrowserControlFocus", "attempt")
     SendInput, {Esc}
     Sleep, 40
     if Browser_FocusBrowserControl(activeHwnd, controlFocusMethodAfterEsc) {
@@ -771,26 +897,35 @@ Browser_FocusPDFDocument(activeHwnd, cBrowser := "", ByRef focusMethod := "") {
         if (focusMethod != "")
             focusMethod .= " + "
         focusMethod .= "Esc + " . controlFocusMethodAfterEsc
+        Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument", "success", focusMethod)
         return true
     }
 
     focusMethod := logicalFocusMethod
+    Browser_LogPDFFocusTrace(activeHwnd, "FocusPDFDocument"
+        , logicalFocusOk ? "logical_only" : "fail"
+        , focusMethod)
     return logicalFocusOk
 }
 
-Browser_TryFocusPDFElement(el, ByRef focusMethod := "") {
+Browser_TryFocusPDFElement(el, ByRef focusMethod := "", activeHwnd := "", candidateLabel := "") {
     if (!el)
         return false
 
+    labelPrefix := (candidateLabel != "") ? candidateLabel . ":" : ""
+    Browser_LogPDFFocusTrace(activeHwnd, "LogicalSetFocus", "attempt", labelPrefix . Browser_DescribeElement(el))
     try {
         el.SetFocus()
         Sleep, 40
         if (el.CurrentHasKeyboardFocus) {
             focusMethod := "SetFocus"
+            Browser_LogPDFFocusTrace(activeHwnd, "LogicalSetFocus", "success", labelPrefix . focusMethod)
             return true
         }
     }
+    Browser_LogPDFFocusTrace(activeHwnd, "LogicalSetFocus", "fail", labelPrefix . "no_keyboard_focus")
 
+    Browser_LogPDFFocusTrace(activeHwnd, "LogicalLegacySelect", "attempt", labelPrefix . Browser_DescribeElement(el))
     try {
         legacy := el.GetCurrentPatternAs("LegacyIAccessible")
         if (legacy) {
@@ -798,25 +933,42 @@ Browser_TryFocusPDFElement(el, ByRef focusMethod := "") {
             Sleep, 40
             if (el.CurrentHasKeyboardFocus) {
                 focusMethod := "LegacyIAccessible.Select"
+                Browser_LogPDFFocusTrace(activeHwnd, "LogicalLegacySelect", "success", labelPrefix . focusMethod)
                 return true
             }
         }
     }
+    Browser_LogPDFFocusTrace(activeHwnd, "LogicalLegacySelect", "fail", labelPrefix . "no_keyboard_focus")
 
+    Browser_LogPDFFocusTrace(activeHwnd, "LogicalControlClick", "attempt", labelPrefix . Browser_DescribeElement(el))
     try {
         el.ControlClick()
         Sleep, 40
         if (el.CurrentHasKeyboardFocus) {
             focusMethod := "ControlClick"
+            Browser_LogPDFFocusTrace(activeHwnd, "LogicalControlClick", "success", labelPrefix . focusMethod)
             return true
         }
     }
+    Browser_LogPDFFocusTrace(activeHwnd, "LogicalControlClick", "fail", labelPrefix . "no_keyboard_focus")
 
     return false
 }
 
 TogglePDFZoom() {
+    global Browser_PDFZoomNativeShortcutLabel
+
+    Browser_PDFZoomLog("pdf_zoom_toggle_raw"
+        , "method=shortcut=" . Browser_PDFZoomNativeShortcutLabel)
+    Browser_SendPDFZoomNativeShortcut()
+    return true
+}
+
+; Legacy UIA/button-based implementation kept for environments where the
+; native Edge shortcut is unavailable or needs deeper debugging.
+TogglePDFZoomLegacy() {
     global Browser_PDFZoomTryShortcutFirst
+    global Browser_PDFZoomNativeShortcutLabel
 
     activeHwnd := WinExist("A")
     if (!activeHwnd)
@@ -869,10 +1021,10 @@ TogglePDFZoom() {
             . " focus=" . Browser_GetFocusedElementSummary()
             . " " . Browser_GetFocusedControlSummary(activeHwnd))
     } else {
-        zoomMethod := "shortcut=Ctrl+sc073"
+        zoomMethod := "shortcut=" . Browser_PDFZoomNativeShortcutLabel
         Browser_PDFZoomLog("pdf_zoom_toggle_fallback"
             , zoomMethod . " preButton=" . preButtonState)
-        SendInput, ^{sc073}
+        Browser_SendPDFZoomNativeShortcut()
         Sleep, 40
         postButtonState := IsObject(cBrowser) ? Browser_DescribePDFZoomButton(cBrowser) : "no_browser"
         Browser_PDFZoomLog("pdf_zoom_toggle"

@@ -210,6 +210,10 @@ vk1C & F6::OCR_ReadClipboard()
     vk1C & x::      WoWs_StopNHold()
 #If
 
+#If (EnableBrowser)
+    ~$^sc073 Up::  Browser_LogCtrlSc073Probe()
+#If
+
 ; ==========================================================
 ; ----- Browser -----
 ; ==========================================================
