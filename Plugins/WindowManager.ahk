@@ -2,6 +2,8 @@
 ; 関数群
 ; ========================================================
 
+global MoveWindowPixelCallSeqByHwnd := {}
+
 MoveWindow(targetTitle, x, y, w, h) {
     if (targetTitle != "A") {
         WinWaitActive, %targetTitle%, , 2
@@ -14,10 +16,28 @@ MoveWindow(targetTitle, x, y, w, h) {
 
 ; ピクセル指定移動 (見た目のズレ補正付き)
 MoveWindowPixel(hwnd, x, y, w, h) {
+    global MoveWindowPixelCallSeqByHwnd
+
+    if !IsObject(MoveWindowPixelCallSeqByHwnd)
+        MoveWindowPixelCallSeqByHwnd := {}
+
+    callSeq := MoveWindowPixelCallSeqByHwnd.HasKey(hwnd)
+        ? (MoveWindowPixelCallSeqByHwnd[hwnd] + 1)
+        : 1
+    MoveWindowPixelCallSeqByHwnd[hwnd] := callSeq
+
     MoveWindowPixelOnce(hwnd, x, y, w, h)
+
+    ; A newer move request for the same window may arrive before this correction
+    ; pass runs. Skip the stale second move so rapid hotkeys do not revert.
+    if (MoveWindowPixelCallSeqByHwnd[hwnd] != callSeq)
+        return
 
     ; On DPI/frame changes between monitors the first correction can still miss.
     GetVisibleWindowPos(actualX, actualY, actualW, actualH, "ahk_id " . hwnd)
+    if (MoveWindowPixelCallSeqByHwnd[hwnd] != callSeq)
+        return
+
     if (Abs(actualX - x) > 1 || Abs(actualY - y) > 1 || Abs(actualW - w) > 1 || Abs(actualH - h) > 1)
         MoveWindowPixelOnce(hwnd, x, y, w, h)
 }
