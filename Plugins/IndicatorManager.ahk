@@ -504,11 +504,6 @@ SUI_LoadConfig() {
     WinIsland_OuterRatioY := SUI_NormalizeFloat(islandOutYRaw, WinIsland_OuterRatioY, 0, 0.1, 4)
     WinIsland_InnerRatioX := SUI_NormalizeFloat(islandInXRaw, WinIsland_InnerRatioX, 0, 0.1, 4)
     WinIsland_InnerRatioY := SUI_NormalizeFloat(islandInYRaw, WinIsland_InnerRatioY, 0, 0.1, 4)
-    ; Migrate the old default a=b gap to the current a=2b island spacing.
-    if (WinIsland_OuterRatioX = WinIsland_InnerRatioX)
-        WinIsland_OuterRatioX := SUI_NormalizeFloat(WinIsland_InnerRatioX * 2, WinIsland_OuterRatioX, 0, 0.1, 4)
-    if (WinIsland_OuterRatioY = WinIsland_InnerRatioY)
-        WinIsland_OuterRatioY := SUI_NormalizeFloat(WinIsland_InnerRatioY * 2, WinIsland_OuterRatioY, 0, 0.1, 4)
 
     IniRead, cursorBaseSpeedRaw,    %SUI_ConfigPath%, Cursor, BaseSpeed, % CursorConfig.BaseSpeed
     IniRead, cursorMaxSpeedRaw,     %SUI_ConfigPath%, Cursor, MaxSpeed, % CursorConfig.MaxSpeed
