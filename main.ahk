@@ -203,10 +203,18 @@ vk1C & F6::OCR_ReadClipboard()
     $+sc073::       Send, {sc073}  ; _ → \
     $sc056::        Send, +{sc073}  ; Moonlight backslash key -> underscore
     $+sc056::       Send, {sc073}  ; Moonlight Shift+backslash key -> backslash
-    $sc07D::        SendInput, {Text}\  ; JIS yen/backslash key -> backslash
-    $+sc07D::       SendInput, {Text}|  ; JIS Shift+yen/backslash key -> pipe
     ^!#Backspace::  CapsLock_SetState(false)
     ^!#Delete::     CapsLock_SetState(true)
+#If
+
+#If (EnableOthers && !WinActive("ahk_exe Moonlight.exe"))
+    $F18::          SendInput, {Text}\  ; Moonlight JIS yen/backslash bridge -> backslash
+    $F19::          SendInput, {Text}|  ; Moonlight JIS yen/backslash bridge -> pipe
+#If
+
+#If (EnableOthers && WinActive("ahk_exe Moonlight.exe"))
+    $sc07D::        SendInput, {F18}  ; Send JIS yen/backslash through Moonlight
+    $+sc07D::       SendInput, {F19}  ; Send JIS Shift+yen/backslash through Moonlight
 #If
 
 #If WoWs_CanUseManageNHold()
