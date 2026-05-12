@@ -20,7 +20,7 @@ App_Init() {
 
     ; インジケータと基本通知を先に立ち上げる。
     Indicator_Init()
-    TrayTip, AutoHotkey, Script Reloaded, 2
+    App_ShowReloadNotification()
 
     ; 設定値を読み込んでから feature 依存の初期化へ進む。
     SUI_LoadConfig()
@@ -43,6 +43,15 @@ App_Init() {
     Cursor_RegisterHotkeys(Cursor_GetHotkeyConfig())
     ; PowerPoint のキャプション監視を開始する。
     PPT_CaptionInit()
+}
+
+App_ShowReloadNotification() {
+    FormatTime, stamp,, HH:mm:ss
+    message := "Script Reloaded " . stamp
+    TrayTip, AutoHotkey, %message%, 2
+    ToolTip, % "AutoHotkey " . message
+    closeToolTipFn := Func("CloseToolTip")
+    SetTimer, %closeToolTipFn%, -2200
 }
 
 App_StartRuntimeDialogWatcher() {
