@@ -201,8 +201,8 @@ vk1C & F6::OCR_ReadClipboard()
     scrolllock::    Return
     $sc073::        Send, +{sc073}  ; \ → _
     $+sc073::       Send, {sc073}  ; _ → \
-    $vkFFsc056::    Send, +{sc073}  ; Moonlight backslash key -> underscore
-    $+vkFFsc056::   Send, {sc073}  ; Moonlight Shift+backslash key -> backslash
+    $sc056::        Send, +{sc073}  ; Moonlight backslash key -> underscore
+    $+sc056::       Send, {sc073}  ; Moonlight Shift+backslash key -> backslash
     ^!#Backspace::  CapsLock_SetState(false)
     ^!#Delete::     CapsLock_SetState(true)
 #If
