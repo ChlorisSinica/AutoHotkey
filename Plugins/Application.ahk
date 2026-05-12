@@ -15,7 +15,8 @@ GroupAdd, ExplorerGroup, ahk_class CabinetWClass
 GroupAdd, ExplorerGroup, ahk_class ExploreWClass
 GroupAdd, JetBrainsGroup, ahk_class pycharm64.exe
 
-global TextEditorProvider     := "Notepad"
+global TextEditorProvider     := "VSCode"
+; global TextEditorProvider     := "Notepad"
 global TextEditorCustomPath   := ""
 global TextEditorArgsTemplate := ""
 
@@ -80,7 +81,8 @@ IsNotepadsAvailable() {
 TextEditor_GetProviderCycle() {
     global TextEditorCustomPath
 
-    providers := ["Notepad"]
+    providers := []
+    ; providers.Push("Notepad")
     if IsNotepadsAvailable()
         providers.Push("Notepads")
     providers.Push("VSCode")
@@ -139,10 +141,10 @@ TextEditor_CollectTargetArgs(withFile := 1) {
 TextEditor_RunProvider(provider, targetArgs := "", customPath := "", argsTemplate := "") {
     provider := Trim(provider)
     if (provider = "")
-        provider := "Notepad"
+        provider := "VSCode"
 
     if (provider = "Notepads" && !IsNotepadsAvailable())
-        provider := "Notepad"
+        provider := "VSCode"
 
     if (provider = "VSCode") {
         if (targetArgs != "") {
@@ -210,11 +212,11 @@ OpenWithNotePad(withFile = 1, editorType = 2) {
         if (editorType = 1 && IsNotepadsAvailable())
             TextEditorProvider := "Notepads"
         else
-            TextEditorProvider := "Notepad"
+            TextEditorProvider := "VSCode"
     }
 
     if (TextEditorProvider = "Notepads" && !IsNotepadsAvailable())
-        TextEditorProvider := "Notepad"
+        TextEditorProvider := "VSCode"
 
     OpenTextEditor(withFile)
 }

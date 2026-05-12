@@ -287,39 +287,42 @@ SUI_NormalizeEditorType(value, defaultValue := 2) {
     return (defaultValue = 2) ? 2 : 1
 }
 
-SUI_NormalizeTextEditorProvider(value, defaultValue := "Notepad") {
+SUI_NormalizeTextEditorProvider(value, defaultValue := "VSCode") {
     value := Trim(value)
     if (value = "Notepads" || value = "Notepad" || value = "VSCode" || value = "Custom")
         return value
     return defaultValue
 }
 
-SUI_CanonicalizeTextEditorProvider(value, defaultValue := "Notepad") {
+SUI_CanonicalizeTextEditorProvider(value, defaultValue := "VSCode") {
     provider := SUI_NormalizeTextEditorProvider(value, defaultValue)
     if (provider = "Notepads" && !SUI_IsNotepadsAvailable())
-        return "Notepad"
+        return "VSCode"
+    if (provider = "Notepad")
+        return "VSCode"
     return provider
 }
 
 SUI_GetTextEditorProviderChoices() {
-    providers := "Notepad"
+    providers := ""
+    ; providers := "Notepad"
     if (SUI_IsNotepadsAvailable())
-        providers .= "|Notepads"
-    providers .= "|VSCode|Custom"
+        providers .= (providers = "" ? "" : "|") . "Notepads"
+    providers .= (providers = "" ? "" : "|") . "VSCode|Custom"
     return providers
 }
 
 SUI_GetTextEditorProviderChoiceIndex(provider) {
-    provider := SUI_CanonicalizeTextEditorProvider(provider, "Notepad")
+    provider := SUI_CanonicalizeTextEditorProvider(provider, "VSCode")
 
-    if (provider = "Notepad")
-        return 1
+    ; if (provider = "Notepad")
+    ;     return 1
     if (provider = "Notepads")
-        return 2
+        return 1
     if (provider = "VSCode")
-        return SUI_IsNotepadsAvailable() ? 3 : 2
+        return SUI_IsNotepadsAvailable() ? 2 : 1
     if (provider = "Custom")
-        return SUI_IsNotepadsAvailable() ? 4 : 3
+        return SUI_IsNotepadsAvailable() ? 3 : 2
     return 1
 }
 
@@ -457,8 +460,8 @@ SUI_LoadConfig() {
     if (Trim(editorProviderRaw) = "") {
         IniRead, editorTypeRaw, %SUI_ConfigPath%, SettingsUI, EditorType, % SettingsUI.EditorType
         SettingsUI.EditorType := SUI_NormalizeEditorType(editorTypeRaw, SettingsUI.EditorType)
-        legacyProvider := (SettingsUI.EditorType = 1) ? "Notepads" : "Notepad"
-        TextEditorProvider := SUI_CanonicalizeTextEditorProvider(legacyProvider, "Notepad")
+        legacyProvider := (SettingsUI.EditorType = 1) ? "Notepads" : "VSCode"
+        TextEditorProvider := SUI_CanonicalizeTextEditorProvider(legacyProvider, "VSCode")
     } else {
         TextEditorProvider := SUI_CanonicalizeTextEditorProvider(editorProviderRaw, TextEditorProvider)
         SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
@@ -501,6 +504,11 @@ SUI_LoadConfig() {
     WinIsland_OuterRatioY := SUI_NormalizeFloat(islandOutYRaw, WinIsland_OuterRatioY, 0, 0.1, 4)
     WinIsland_InnerRatioX := SUI_NormalizeFloat(islandInXRaw, WinIsland_InnerRatioX, 0, 0.1, 4)
     WinIsland_InnerRatioY := SUI_NormalizeFloat(islandInYRaw, WinIsland_InnerRatioY, 0, 0.1, 4)
+    ; Migrate the old default a=b gap to the current a=2b island spacing.
+    if (WinIsland_OuterRatioX = WinIsland_InnerRatioX)
+        WinIsland_OuterRatioX := SUI_NormalizeFloat(WinIsland_InnerRatioX * 2, WinIsland_OuterRatioX, 0, 0.1, 4)
+    if (WinIsland_OuterRatioY = WinIsland_InnerRatioY)
+        WinIsland_OuterRatioY := SUI_NormalizeFloat(WinIsland_InnerRatioY * 2, WinIsland_OuterRatioY, 0, 0.1, 4)
 
     IniRead, cursorBaseSpeedRaw,    %SUI_ConfigPath%, Cursor, BaseSpeed, % CursorConfig.BaseSpeed
     IniRead, cursorMaxSpeedRaw,     %SUI_ConfigPath%, Cursor, MaxSpeed, % CursorConfig.MaxSpeed
