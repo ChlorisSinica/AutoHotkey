@@ -203,6 +203,8 @@ vk1C & F6::OCR_ReadClipboard()
     $+sc073::       Send, {sc073}  ; _ → \
     $sc056::        Send, +{sc073}  ; Moonlight backslash key -> underscore
     $+sc056::       Send, {sc073}  ; Moonlight Shift+backslash key -> backslash
+    $sc07D::        SendInput, {Text}\  ; JIS yen/backslash key -> backslash
+    $+sc07D::       SendInput, {Text}|  ; JIS Shift+yen/backslash key -> pipe
     ^!#Backspace::  CapsLock_SetState(false)
     ^!#Delete::     CapsLock_SetState(true)
 #If
