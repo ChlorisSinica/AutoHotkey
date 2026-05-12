@@ -5,9 +5,9 @@
 ; ==============================================================================
 
 global GridModes := []
+GridModes.Push({Rows: 2, Cols: 2})
 GridModes.Push({Rows: 3, Cols: 2})
-GridModes.Push({Rows: 2, Cols: 4})
-; GridModes.Push({Rows: 2, Cols: 2})
+; GridModes.Push({Rows: 2, Cols: 4})
 ; GridModes.Push({Cols: 3, Rows: 3})
 ; GridModes.Push({Rows: 2, Cols: 3})
 
