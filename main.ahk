@@ -50,9 +50,13 @@ global EnableBrowser              := 0
 global EnablePPT                  := 0
 global EnableExcel                := 0
 global EnableChatterGuard         := 0
-global CG_SameEventThreshold      := 50
-global CG_CrossEventThreshold     := 30
+global CG_SameEventThreshold      := 120
+global CG_CrossEventThreshold     := 50
+global CG_MinPressThreshold       := 30
 global EnableMouseCursorMode      := 0
+global MouseBtn_XB1SuppressSingle := false
+global MouseBtn_XB2SuppressSingle := false
+global MouseBtn_ReleaseSettleMs   := 80
 
 ; ==========================================================
 ; --- 初期化処理 ---
@@ -68,6 +72,7 @@ vk1C & F3::MG_DebugSnapshot("manual-hotkey")
 vk1C & F4::Debug_DumpToClipboard()
 vk1C & F5::OCR_CaptureAndRead()
 vk1C & F6::OCR_ReadClipboard()
+*^+!Esc::Emergency_ReleaseAllInputs()
 #If WinActive("機能設定")
     Escape::Settings_Close()
 #If
@@ -129,21 +134,66 @@ vk1C & F6::OCR_ReadClipboard()
 #If (EnableMouseBtn && !WinActive("ahk_exe POWERPNT.EXE"))
     F15::                   Send ^v                         ; 　　（手前側）
 #If (EnableMouseBtn)
-    XButton1::              XButton1                        ; 戻る（手前側）
-    XButton2::              XButton2                        ; 進む（　奥側）
+    $XButton1 Up::          MouseBtn_SendSingleOnRelease("XButton1") ; 戻る（手前側）
+    $XButton2 Up::          MouseBtn_SendSingleOnRelease("XButton2") ; 進む（　奥側）
     F16::                   Send ^c                         ; 　　（　奥側）
     F17::                   Send ^w                         ; タブを閉じる
     F15 & MButton::         SendInput {Media_Play_Pause}    ;
-    XButton1 & WheelUp::    MouseWheel_HScroll("Left")      ; 左スクロール
-    XButton1 & WheelDown::  MouseWheel_HScroll("Right")     ; 右スクロール
-    XButton2 & WheelUp::    MouseWheel_Zoom("In")           ; ウィンドウ拡大
-    XButton2 & WheelDown::  MouseWheel_Zoom("Out")          ; ウィンドウ縮小
+    XButton1 & WheelUp::    MouseBtn_XButtonWheel("XButton1", "Left")  ; 左スクロール
+    XButton1 & WheelDown::  MouseBtn_XButtonWheel("XButton1", "Right") ; 右スクロール
+    XButton2 & WheelUp::    MouseBtn_XButtonWheel("XButton2", "In")    ; ウィンドウ拡大
+    XButton2 & WheelDown::  MouseBtn_XButtonWheel("XButton2", "Out")   ; ウィンドウ縮小
     F15 & WheelUp::         Send, {Volume_Up}               ; 音量アップ
     F15 & WheelDown::       Send, {Volume_Down}             ; 音量ダウン
     F16 & WheelDown::       AltTabAction("Next")
     F16 & WheelUp::         AltTabAction("Prev")
     *F16 Up::               CloseAltTabMenu()
 #If
+
+MouseBtn_SendSingleOnRelease(button) {
+    global MouseBtn_XB1SuppressSingle, MouseBtn_XB2SuppressSingle
+    global MouseBtn_ReleaseSettleMs
+
+    Sleep, %MouseBtn_ReleaseSettleMs%
+    if GetKeyState(button)
+        return
+
+    if (button = "XButton1") {
+        if (MouseBtn_XB1SuppressSingle) {
+            MouseBtn_XB1SuppressSingle := false
+            return
+        }
+    } else if (button = "XButton2") {
+        if (MouseBtn_XB2SuppressSingle) {
+            MouseBtn_XB2SuppressSingle := false
+            return
+        }
+    }
+
+    SendInput % "{" . button . "}"
+}
+
+MouseBtn_XButtonWheel(button, action) {
+    global MouseBtn_XB1SuppressSingle, MouseBtn_XB2SuppressSingle
+
+    if (button = "XButton1") {
+        MouseBtn_XB1SuppressSingle := true
+        MouseWheel_HScroll(action)
+        return
+    }
+
+    if (button = "XButton2") {
+        MouseBtn_XB2SuppressSingle := true
+        MouseWheel_Zoom(action)
+        return
+    }
+}
+
+MouseBtn_ResetState() {
+    global MouseBtn_XB1SuppressSingle, MouseBtn_XB2SuppressSingle
+    MouseBtn_XB1SuppressSingle := false
+    MouseBtn_XB2SuppressSingle := false
+}
 
 ; ==========================================================
 ; ----- Virtual Desktop -----

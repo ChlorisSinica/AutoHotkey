@@ -30,6 +30,118 @@ CloseAltTabMenu() {
     }
 }
 
+Emergency_ReleaseAllInputs() {
+    Critical
+
+    beforePressed := Emergency_GetPressedInputNames()
+    actions := []
+
+    if IsFunc("MouseBtn_ResetState") {
+        MouseBtn_ResetState()
+        actions.Push("MouseBtn")
+    }
+    if IsFunc("CG_ResetState") {
+        CG_ResetState()
+        actions.Push("ChatterGuard")
+    }
+    if IsFunc("Cursor_StopContinuous") {
+        Cursor_StopContinuous()
+        actions.Push("CursorMove")
+    }
+    if IsFunc("Cursor_ScrollStop") {
+        Cursor_ScrollStop()
+        actions.Push("CursorScroll")
+    }
+    if IsFunc("Cursor_ReleaseHeldClicks") {
+        Cursor_ReleaseHeldClicks()
+        actions.Push("HeldClicks")
+    }
+    if IsFunc("PPT_SpacingRepeatStop") {
+        PPT_SpacingRepeatStop()
+        actions.Push("PPTSpacing")
+    }
+    if IsFunc("PPT_GridRepeatStop") {
+        PPT_GridRepeatStop()
+        actions.Push("PPTGrid")
+    }
+    if IsFunc("Manage_N_Hold") {
+        Manage_N_Hold("Off", 0, "Emergency")
+        actions.Push("NHold")
+    }
+
+    CloseAltTabMenu()
+    upCount := Emergency_SendAllInputUps()
+    Sleep, 50
+    afterPressed := Emergency_GetPressedInputNames()
+
+    msg := "全入力解除`n"
+        . "処理: " . Emergency_Join(actions, ", ") . "`n"
+        . "Up送信: " . upCount . " keys`n"
+        . "解除前: " . Emergency_Join(beforePressed, ", ", "なし") . "`n"
+        . "解除後: " . Emergency_Join(afterPressed, ", ", "なし")
+    ToolTip, %msg%
+    SetTimer, CloseToolTip, -4000
+}
+
+Emergency_SendAllInputUps() {
+    keys := []
+
+    for _, keyName in ["LButton", "RButton", "MButton", "XButton1", "XButton2"]
+        keys.Push(keyName)
+    for _, keyName in ["Shift", "LShift", "RShift", "Ctrl", "LCtrl", "RCtrl", "Alt", "LAlt", "RAlt", "LWin", "RWin"]
+        keys.Push(keyName)
+    for _, keyName in ["vk1C", "AppsKey", "Space", "Tab", "Enter", "Esc", "Backspace", "Delete", "Insert"]
+        keys.Push(keyName)
+    for _, keyName in ["Up", "Down", "Left", "Right", "Home", "End", "PgUp", "PgDn"]
+        keys.Push(keyName)
+
+    Loop, 26 {
+        keyName := Chr(Asc("A") + A_Index - 1)
+        keys.Push(keyName)
+    }
+    Loop, 10
+        keys.Push(A_Index - 1)
+    Loop, 24
+        keys.Push("F" . A_Index)
+
+    for _, keyName in keys
+        SendInput % "{" . keyName . " Up}"
+    return keys.Length()
+}
+
+Emergency_GetPressedInputNames() {
+    keys := []
+    pressed := []
+
+    for _, keyName in ["LButton", "RButton", "MButton", "XButton1", "XButton2"]
+        keys.Push(keyName)
+    for _, keyName in ["Shift", "LShift", "RShift", "Ctrl", "LCtrl", "RCtrl", "Alt", "LAlt", "RAlt", "LWin", "RWin"]
+        keys.Push(keyName)
+    for _, keyName in ["vk1C", "AppsKey", "Space", "Tab", "Enter", "Esc", "Backspace", "Delete", "Insert"]
+        keys.Push(keyName)
+    for _, keyName in ["Up", "Down", "Left", "Right", "Home", "End", "PgUp", "PgDn"]
+        keys.Push(keyName)
+
+    for _, keyName in keys {
+        if GetKeyState(keyName)
+            pressed.Push(keyName)
+    }
+    return pressed
+}
+
+Emergency_Join(items, separator := ", ", emptyText := "") {
+    if (!IsObject(items) || items.Length() = 0)
+        return emptyText
+
+    text := ""
+    for _, item in items {
+        if (text != "")
+            text .= separator
+        text .= item
+    }
+    return text
+}
+
 AltTabAction(Dir) {
     ; まだAltが押されていなければ（メニューが出ていなければ）Altを押す
     if !GetKeyState("Alt") {
