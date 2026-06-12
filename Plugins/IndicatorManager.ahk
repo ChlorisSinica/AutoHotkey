@@ -49,6 +49,9 @@ global SettingsBrowserPdfZoomDebug         := ""
 global SettingsPPTSpacingDebug             := ""
 global SettingsPPTCaptionDebug             := ""
 global SettingsValidationHint              := ""
+global SettingsSameEvent                   := ""
+global SettingsCrossEvent                  := ""
+global SettingsMinPress                    := ""
 global _SUI_CodePreviewCachePath           := ""
 global _SUI_CodePreviewCacheLines          := ""
 global SUI_IsInitializing                  := false
@@ -422,7 +425,7 @@ SUI_LoadConfig() {
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
-    global CG_SameEventThreshold, CG_CrossEventThreshold
+    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
 
     SUI_EnsureConfigPath()
 
@@ -538,8 +541,10 @@ SUI_LoadConfig() {
     ; [ChatterGuard] 閾値読込み
     IniRead, sameThreshRaw, %SUI_ConfigPath%, ChatterGuard, SameEventThreshold, %CG_SameEventThreshold%
     IniRead, crossThreshRaw, %SUI_ConfigPath%, ChatterGuard, CrossEventThreshold, %CG_CrossEventThreshold%
-    CG_SameEventThreshold := SUI_NormalizeInt(sameThreshRaw, 50, 10, 200)
-    CG_CrossEventThreshold := SUI_NormalizeInt(crossThreshRaw, 30, 5, 100)
+    IniRead, minPressRaw, %SUI_ConfigPath%, ChatterGuard, MinPressThreshold, %CG_MinPressThreshold%
+    CG_SameEventThreshold := SUI_NormalizeInt(sameThreshRaw, 120, 10, 200)
+    CG_CrossEventThreshold := SUI_NormalizeInt(crossThreshRaw, 50, 5, 100)
+    CG_MinPressThreshold := SUI_NormalizeInt(minPressRaw, 30, 5, 100)
 
     if IsFunc("Cursor_ResolveModeForFlags")
         Cursor_ResolveModeForFlags("config_load")
@@ -863,8 +868,8 @@ class SettingsUI {
         Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorJumpDistance, SettingsCursorEdgeInset
         Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
         Global SettingsBrowserPdfZoomDebug, SettingsPPTSpacingDebug, SettingsPPTCaptionDebug, SettingsValidationHint
-        Global SettingsSameEvent, SettingsCrossEvent
-        Global CG_SameEventThreshold, CG_CrossEventThreshold
+        Global SettingsSameEvent, SettingsCrossEvent, SettingsMinPress
+        Global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
         Global SUI_IsInitializing, SUI_SelectedItemID, _SUI_LastHelpRow
         SUI_IsInitializing := true
         SUI_SelectedItemID := 0
@@ -961,23 +966,26 @@ class SettingsUI {
         Gui, Settings:Add, CheckBox, x548 y301 w145 h20 vSettingsPPTCaptionDebug, PPT caption
 
         ; ChatterGuard
-        Gui, Settings:Add, GroupBox, x370 y340 w370 h52, ChatterGuard
+        Gui, Settings:Add, GroupBox, x370 y340 w370 h78, ChatterGuard
         Gui, Settings:Add, Text, x388 y360 w36 h20 +0x200, 同種
         Gui, Settings:Add, Edit, x426 y359 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
         Gui, Settings:Add, Text, x470 y360 w18 h20 +0x200, ms
         Gui, Settings:Add, Text, x500 y360 w36 h20 +0x200, 交差
         Gui, Settings:Add, Edit, x538 y359 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
         Gui, Settings:Add, Text, x582 y360 w18 h20 +0x200, ms
+        Gui, Settings:Add, Text, x388 y386 w70 h20 +0x200, 最短押下
+        Gui, Settings:Add, Edit, x462 y385 w40 h21 vSettingsMinPress, %CG_MinPressThreshold%
+        Gui, Settings:Add, Text, x506 y386 w18 h20 +0x200, ms
 
-        Gui, Settings:Add, GroupBox, x370 y398 w370 h82, Window Island
-        Gui, Settings:Add, Text, x388 y422 w36 h20 +0x200, OutX
-        Gui, Settings:Add, Edit, x426 y420 w60 h21 vSettingsIslandOuterX gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x500 y422 w36 h20 +0x200, OutY
-        Gui, Settings:Add, Edit, x538 y420 w60 h21 vSettingsIslandOuterY gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x388 y450 w36 h20 +0x200, InX
-        Gui, Settings:Add, Edit, x426 y448 w60 h21 vSettingsIslandInnerX gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x500 y450 w36 h20 +0x200, InY
-        Gui, Settings:Add, Edit, x538 y448 w60 h21 vSettingsIslandInnerY gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, GroupBox, x370 y424 w370 h82, Window Island
+        Gui, Settings:Add, Text, x388 y448 w36 h20 +0x200, OutX
+        Gui, Settings:Add, Edit, x426 y446 w60 h21 vSettingsIslandOuterX gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x500 y448 w36 h20 +0x200, OutY
+        Gui, Settings:Add, Edit, x538 y446 w60 h21 vSettingsIslandOuterY gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x388 y474 w36 h20 +0x200, InX
+        Gui, Settings:Add, Edit, x426 y472 w60 h21 vSettingsIslandInnerX gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x500 y474 w36 h20 +0x200, InY
+        Gui, Settings:Add, Edit, x538 y472 w60 h21 vSettingsIslandInnerY gSUI_PositiveFloatEditChanged
 
         Gui, Settings:Add, Button, x20 y393 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
         Gui, Settings:Add, Button, x150 y393 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
@@ -1028,7 +1036,7 @@ SUI_LoadAdvancedSettingsIntoGui() {
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
-    global CG_SameEventThreshold, CG_CrossEventThreshold
+    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
 
     GuiControl, Settings:Choose, SettingsEditorProvider, % SUI_GetTextEditorProviderChoiceIndex(TextEditorProvider)
     GuiControl, Settings:, SettingsEditorCustomPath, %TextEditorCustomPath%
@@ -1066,6 +1074,7 @@ SUI_LoadAdvancedSettingsIntoGui() {
     GuiControl, Settings:, SettingsPPTCaptionDebug, % PPT_CaptionLogEnabled ? 1 : 0
     GuiControl, Settings:, SettingsSameEvent, %CG_SameEventThreshold%
     GuiControl, Settings:, SettingsCrossEvent, %CG_CrossEventThreshold%
+    GuiControl, Settings:, SettingsMinPress, %CG_MinPressThreshold%
     GuiControl, Settings:, SettingsValidationHint,
 
     SUI_RefreshEditorProviderControls()
@@ -1270,7 +1279,7 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
-    global CG_SameEventThreshold, CG_CrossEventThreshold
+    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
 
     if (SUI_IsInitializing || !SUI_SettingsGuiHwnd)
         return false
@@ -1350,10 +1359,13 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     ; ChatterGuard 閾値
     GuiControlGet, sameThresh, Settings:, SettingsSameEvent
     GuiControlGet, crossThresh, Settings:, SettingsCrossEvent
-    CG_SameEventThreshold := SUI_NormalizeInt(sameThresh, 50, 10, 200)
-    CG_CrossEventThreshold := SUI_NormalizeInt(crossThresh, 30, 5, 100)
+    GuiControlGet, minPress, Settings:, SettingsMinPress
+    CG_SameEventThreshold := SUI_NormalizeInt(sameThresh, 120, 10, 200)
+    CG_CrossEventThreshold := SUI_NormalizeInt(crossThresh, 50, 5, 100)
+    CG_MinPressThreshold := SUI_NormalizeInt(minPress, 30, 5, 100)
     IniWrite, %CG_SameEventThreshold%, %SUI_ConfigPath%, ChatterGuard, SameEventThreshold
     IniWrite, %CG_CrossEventThreshold%, %SUI_ConfigPath%, ChatterGuard, CrossEventThreshold
+    IniWrite, %CG_MinPressThreshold%, %SUI_ConfigPath%, ChatterGuard, MinPressThreshold
 
     SUI_SaveConfig()
     SUI_LoadAdvancedSettingsIntoGui()
@@ -1722,6 +1734,7 @@ SUI_IsHelpListFocused() {
 
 SUI_InitHelpData() {
     global _SUI_HelpData
+    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
     mainFile := A_ScriptDir . "\main.ahk"
     browserFile := A_ScriptDir . "\Plugins\Browser.ahk"
     gestureMapFile := A_ScriptDir . "\Plugins\MouseGestureMap.ahk"
@@ -1799,11 +1812,11 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("F15", "Ctrl+V (貼り付け)", "Send ^v", mouseBtnExceptPptWhen, "", "F15::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("F16", "Ctrl+C (コピー)", "Send ^c", mouseBtnWhen, "", "F16::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("F17", "Ctrl+W (タブ閉じ)", "Send ^w", mouseBtnWhen, "", "F17::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("XButton1", "戻る", "XButton1", mouseBtnWhen, "", "XButton1::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("XButton2", "進む", "XButton2", mouseBtnWhen, "", "XButton2::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton1", "戻る", "MouseBtn_SendSingleOnRelease(""XButton1"")", mouseBtnWhen, "Wheel 併用時は単体動作をキャンセル", "$XButton1 Up::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton2", "進む", "MouseBtn_SendSingleOnRelease(""XButton2"")", mouseBtnWhen, "Wheel 併用時は単体動作をキャンセル", "$XButton2 Up::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("F15 + MButton", "メディア再生/一時停止", "SendInput {Media_Play_Pause}", mouseBtnWhen, "", "F15 & MButton::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("XButton1 + Wheel", "横スクロール", "MouseWheel_HScroll(""Left/Right"")", mouseBtnWhen, "", "XButton1 & WheelUp::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("XButton2 + Wheel", "ズーム (拡大/縮小)", "MouseWheel_Zoom(""In/Out"")", mouseBtnWhen, "", "XButton2 & WheelUp::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton1 + Wheel", "横スクロール", "MouseBtn_XButtonWheel(""XButton1"", ""Left/Right"")", mouseBtnWhen, "単体の戻るをキャンセル", "XButton1 & WheelUp::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("XButton2 + Wheel", "ズーム (拡大/縮小)", "MouseBtn_XButtonWheel(""XButton2"", ""In/Out"")", mouseBtnWhen, "単体の進むをキャンセル", "XButton2 & WheelUp::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("F15 + Wheel", "音量 (上げ/下げ)", "Send {Volume_Up/Volume_Down}", mouseBtnWhen, "", "F15 & WheelUp::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("F16 + Wheel", "Alt+Tab (前/次)", "AltTabAction(""Prev/Next"")", mouseBtnWhen, "", "F16 & WheelDown::", 1, 2, mainFile))
     d["EnableMouseBtn"] := h
@@ -1861,8 +1874,8 @@ SUI_InitHelpData() {
     cgFile := A_ScriptDir . "\Plugins\ChatterGuard.ahk"
     h := []
     h.Push(SUI_HelpSection("【チャタリング防止】", "WH_MOUSE_LL フックで XButton1/XButton2 の誤連打を抑制します。閾値は設定画面の ChatterGuard セクションで調整可能。", cgWhen, "CG_LowLevelMouseProc()", 0, 0, cgFile))
-    h.Push(SUI_HelpItem("XButton1", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
-    h.Push(SUI_HelpItem("XButton2", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
+    h.Push(SUI_HelpItem("XButton1", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms / MinPress=" . CG_MinPressThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
+    h.Push(SUI_HelpItem("XButton2", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms / MinPress=" . CG_MinPressThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
     d["EnableChatterGuard"] := h
 
     h := []
@@ -1873,6 +1886,7 @@ SUI_InitHelpData() {
 
     h := []
     h.Push(SUI_HelpItem("ScrollLock", "無効化", "Return", othersWhen, "", "scrolllock::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+Esc", "全入力解除", "Emergency_ReleaseAllInputs()", "常時", "押しっぱなし状態の復旧用", "*^+!Esc::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("\", "_ を入力", "Send +{sc073}", othersWhen, "", "$sc073::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Shift+\", "\ を入力", "Send {sc073}", othersWhen, "", "$+sc073::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("変換 + Z", "WoWs 用 N 長押しトグル", "WoWs_ToggleNHold()", othersWhen . " かつ World of Warships がアクティブ", "最大20分で自動停止", "vk1C & z::WoWs_ToggleNHold()", 1, 1, mainFile))

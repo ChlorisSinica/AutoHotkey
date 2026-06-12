@@ -9,6 +9,7 @@
 ; DOWN/UP を独立かつクロスでデバウンス:
 ;   DOWN: 前回DOWN・前回UPの両方から閾値未満ならブロック
 ;   UP:   前回UP・前回DOWNの両方から閾値未満ならブロック
+;   DOWN直後すぎるUPは偽解放としてブロックし、物理的に離れていれば遅延UPで復旧
 ; ==============================================================================
 
 global CG_HookHandle            := 0
@@ -17,8 +18,14 @@ global CG_EnableXB1             := 0
 global CG_EnableXB2             := 0
 global CG_XB1_lastDown          := 0
 global CG_XB1_lastUp            := 0
+global CG_XB1_isDown            := 0
+global CG_XB1_deferredUpTimer   := ""
+global CG_XB1_deferredDownTick  := 0
 global CG_XB2_lastDown          := 0
 global CG_XB2_lastUp            := 0
+global CG_XB2_isDown            := 0
+global CG_XB2_deferredUpTimer   := ""
+global CG_XB2_deferredDownTick  := 0
 ; デバッグ用
 global CG_DebugBlockCount       := 0
 ; フック生存監視用
@@ -35,8 +42,11 @@ global CG_WatchdogLastCursorY   := 0
 
 CG_Init(keys := "") {
     global CG_EnableXB1, CG_EnableXB2
+    global CG_XB1_isDown, CG_XB2_isDown
     CG_EnableXB1 := 0
     CG_EnableXB2 := 0
+    CG_XB1_isDown := 0
+    CG_XB2_isDown := 0
 
     if !IsObject(keys)
         return
@@ -55,8 +65,27 @@ CG_Init(keys := "") {
 }
 
 CG_Cleanup(ExitReason := "", ExitCode := 0) {
+    global CG_XB1_deferredUpTimer, CG_XB2_deferredUpTimer
+    CG_CancelDeferredUp(CG_XB1_deferredUpTimer)
+    CG_CancelDeferredUp(CG_XB2_deferredUpTimer)
     CG_StopWatchdog()
     CG_RemoveHook()
+}
+
+CG_ResetState() {
+    global CG_XB1_lastDown, CG_XB1_lastUp, CG_XB1_isDown, CG_XB1_deferredUpTimer, CG_XB1_deferredDownTick
+    global CG_XB2_lastDown, CG_XB2_lastUp, CG_XB2_isDown, CG_XB2_deferredUpTimer, CG_XB2_deferredDownTick
+
+    CG_CancelDeferredUp(CG_XB1_deferredUpTimer)
+    CG_CancelDeferredUp(CG_XB2_deferredUpTimer)
+    CG_XB1_lastDown := 0
+    CG_XB1_lastUp := 0
+    CG_XB1_isDown := 0
+    CG_XB1_deferredDownTick := 0
+    CG_XB2_lastDown := 0
+    CG_XB2_lastUp := 0
+    CG_XB2_isDown := 0
+    CG_XB2_deferredDownTick := 0
 }
 
 ; ==============================================================================
@@ -96,7 +125,8 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     Critical
 
     global CG_EnableXB1, CG_EnableXB2
-    global CG_XB1_lastDown, CG_XB1_lastUp, CG_XB2_lastDown, CG_XB2_lastUp
+    global CG_XB1_lastDown, CG_XB1_lastUp, CG_XB1_isDown, CG_XB1_deferredUpTimer, CG_XB1_deferredDownTick
+    global CG_XB2_lastDown, CG_XB2_lastUp, CG_XB2_isDown, CG_XB2_deferredUpTimer, CG_XB2_deferredDownTick
     global CG_HookEventCount, CG_LastEventTick
 
     if (nCode < 0)
@@ -106,10 +136,6 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     CG_LastEventTick := A_TickCount
 
     if (wParam != 0x20B && wParam != 0x20C)
-        return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
-
-    flags := NumGet(lParam + 0, 12, "UInt")
-    if (flags & 0x01)
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
 
     mouseData := NumGet(lParam + 0, 8, "UInt")
@@ -122,65 +148,150 @@ CG_LowLevelMouseProc(nCode, wParam, lParam) {
     if (xButton != 1 && xButton != 2)
         return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
 
+    flags := NumGet(lParam + 0, 12, "UInt")
     eventTime := NumGet(lParam + 0, 16, "UInt")
 
+    if (flags & 0x01)
+        return CG_HandleInjectedXButton(xButton, eventTime, nCode, wParam, lParam)
+
     ; === XButton1 DOWN ===
-    if (wParam = 0x20B && xButton = 1) {
-        elapsed := eventTime - CG_XB1_lastDown
-        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
-            CG_DebugBlockCount += 1
-            return 1
-        }
-        sinceUp := eventTime - CG_XB1_lastUp
-        if (sinceUp >= 0 && sinceUp < CG_CrossEventThreshold) {
-            CG_DebugBlockCount += 1
-            return 1
-        }
-        CG_XB1_lastDown := eventTime
-        return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
-    }
+    if (wParam = 0x20B && xButton = 1)
+        return CG_HandleXButtonDown(CG_XB1_lastDown, CG_XB1_lastUp, CG_XB1_isDown
+            , CG_XB1_deferredUpTimer, CG_XB1_deferredDownTick
+            , 1, eventTime, nCode, wParam, lParam)
 
     ; === XButton1 UP ===
-    if (wParam = 0x20C && xButton = 1) {
-        elapsed := eventTime - CG_XB1_lastUp
-        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
-            CG_DebugBlockCount += 1
-            return 1
-        }
-        ; sinceDown cross-check 削除: DOWN→UP 間隔は正常クリック持続時間 (30-80ms)
-        CG_XB1_lastUp := eventTime
-        return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
-    }
+    if (wParam = 0x20C && xButton = 1)
+        return CG_HandleXButtonUp(CG_XB1_lastDown, CG_XB1_lastUp, CG_XB1_isDown
+            , CG_XB1_deferredUpTimer, CG_XB1_deferredDownTick
+            , 1, eventTime, nCode, wParam, lParam)
 
     ; === XButton2 DOWN ===
-    if (wParam = 0x20B && xButton = 2) {
-        elapsed := eventTime - CG_XB2_lastDown
-        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
-            CG_DebugBlockCount += 1
-            return 1
-        }
-        sinceUp := eventTime - CG_XB2_lastUp
-        if (sinceUp >= 0 && sinceUp < CG_CrossEventThreshold) {
-            CG_DebugBlockCount += 1
-            return 1
-        }
-        CG_XB2_lastDown := eventTime
-        return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
-    }
+    if (wParam = 0x20B && xButton = 2)
+        return CG_HandleXButtonDown(CG_XB2_lastDown, CG_XB2_lastUp, CG_XB2_isDown
+            , CG_XB2_deferredUpTimer, CG_XB2_deferredDownTick
+            , 2, eventTime, nCode, wParam, lParam)
 
     ; === XButton2 UP ===
-    if (wParam = 0x20C && xButton = 2) {
-        elapsed := eventTime - CG_XB2_lastUp
-        if (elapsed >= 0 && elapsed < CG_SameEventThreshold) {
-            CG_DebugBlockCount += 1
-            return 1
-        }
-        ; sinceDown cross-check 削除: DOWN→UP 間隔は正常クリック持続時間 (30-80ms)
-        CG_XB2_lastUp := eventTime
-        return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
-    }
+    if (wParam = 0x20C && xButton = 2)
+        return CG_HandleXButtonUp(CG_XB2_lastDown, CG_XB2_lastUp, CG_XB2_isDown
+            , CG_XB2_deferredUpTimer, CG_XB2_deferredDownTick
+            , 2, eventTime, nCode, wParam, lParam)
 
     return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
+}
+
+CG_HandleInjectedXButton(button, eventTime, nCode, wParam, lParam) {
+    global CG_XB1_isDown, CG_XB2_isDown
+
+    if (button = 1 && CG_XB1_isDown)
+        return CG_BlockEvent()
+    if (button = 2 && CG_XB2_isDown)
+        return CG_BlockEvent()
+
+    return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
+}
+
+CG_HandleXButtonDown(ByRef lastDown, ByRef lastUp, ByRef isDown, ByRef deferredUpTimer, ByRef deferredDownTick, button, eventTime, nCode, wParam, lParam) {
+    global CG_SameEventThreshold, CG_CrossEventThreshold
+
+    if (isDown)
+        return CG_BlockEvent()
+
+    elapsed := eventTime - lastDown
+    if (elapsed >= 0 && elapsed < CG_SameEventThreshold)
+        return CG_BlockEvent()
+
+    sinceUp := eventTime - lastUp
+    if (sinceUp >= 0 && sinceUp < CG_CrossEventThreshold)
+        return CG_BlockEvent()
+
+    CG_CancelDeferredUp(deferredUpTimer)
+    deferredDownTick := 0
+    isDown := 1
+    lastDown := eventTime
+    return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
+}
+
+CG_HandleXButtonUp(ByRef lastDown, ByRef lastUp, ByRef isDown, ByRef deferredUpTimer, ByRef deferredDownTick, button, eventTime, nCode, wParam, lParam) {
+    global CG_SameEventThreshold
+
+    if (!isDown) {
+        if (!lastDown) {
+            lastUp := eventTime
+            return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
+        }
+        return CG_BlockEvent()
+    }
+
+    elapsed := eventTime - lastUp
+    if (elapsed >= 0 && elapsed < CG_SameEventThreshold)
+        return CG_BlockEvent()
+
+    CG_CancelDeferredUp(deferredUpTimer)
+    deferredDownTick := 0
+    isDown := 0
+    lastUp := eventTime
+    return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "UInt", wParam, "Ptr", lParam)
+}
+
+CG_BlockEvent() {
+    global CG_DebugBlockCount
+    CG_DebugBlockCount += 1
+    return 1
+}
+
+CG_ScheduleDeferredUp(ByRef deferredUpTimer, ByRef deferredDownTick, button, downTick) {
+    global CG_MinPressThreshold
+
+    CG_CancelDeferredUp(deferredUpTimer)
+    deferredDownTick := downTick
+    delay := CG_MinPressThreshold + 5
+    deferredUpTimer := Func("CG_DeferredUp").Bind(button, downTick)
+    SetTimer, % deferredUpTimer, % -delay
+}
+
+CG_CancelDeferredUp(ByRef deferredUpTimer) {
+    if (deferredUpTimer) {
+        SetTimer, % deferredUpTimer, Off
+        deferredUpTimer := ""
+    }
+}
+
+CG_DeferredUp(button, downTick) {
+    global CG_XB1_lastDown, CG_XB1_lastUp, CG_XB1_isDown, CG_XB1_deferredUpTimer, CG_XB1_deferredDownTick
+    global CG_XB2_lastDown, CG_XB2_lastUp, CG_XB2_isDown, CG_XB2_deferredUpTimer, CG_XB2_deferredDownTick
+
+    if (button = 1) {
+        CG_XB1_deferredUpTimer := ""
+        if (CG_XB1_deferredDownTick != downTick || !CG_XB1_isDown || CG_XB1_lastDown != downTick)
+            return
+        CG_XB1_deferredDownTick := 0
+        if (CG_IsXButtonPhysicallyDown(1))
+            return
+        CG_XB1_isDown := 0
+        CG_XB1_lastUp := A_TickCount
+        SendInput % "{XButton1 Up}"
+        return
+    }
+
+    if (button = 2) {
+        CG_XB2_deferredUpTimer := ""
+        if (CG_XB2_deferredDownTick != downTick || !CG_XB2_isDown || CG_XB2_lastDown != downTick)
+            return
+        CG_XB2_deferredDownTick := 0
+        if (CG_IsXButtonPhysicallyDown(2))
+            return
+        CG_XB2_isDown := 0
+        CG_XB2_lastUp := A_TickCount
+        SendInput % "{XButton2 Up}"
+        return
+    }
+}
+
+CG_IsXButtonPhysicallyDown(button) {
+    vk := (button = 1) ? 0x05 : 0x06
+    return (DllCall("GetAsyncKeyState", "Int", vk, "Short") & 0x8000) ? 1 : 0
 }
 
 ; ==============================================================================
