@@ -5,6 +5,7 @@ SetTitleMatchMode, 2
 GroupAdd, OfficeGroup, ahk_exe POWERPNT.EXE
 GroupAdd, OfficeGroup, ahk_exe EXCEL.EXE
 GroupAdd, EditorGroup, Notepads
+GroupAdd, EditorGroup, ahk_exe devenv.exe
 GroupAdd, EditorGroup, ahk_exe Code.exe
 GroupAdd, EditorGroup, ahk_exe notepad.exe
 GroupAdd, BrowserGroup, ahk_exe msedge.exe

@@ -2226,6 +2226,11 @@ PPT_GetShapeTextOrientation(shapeRef) {
     return orientation
 }
 
+PPT_IsLegacyCaptionText(textValue) {
+    textValue := Trim(textValue, " `t`r`n")
+    return (textValue = "Caption")
+}
+
 PPT_IsLegacyCaptionCandidate(shapeRef, rect, edge, epsilon := 0.75) {
     expectedOrientation := PPT_GetCaptionOrientation(edge)
     legacyOrientation := ""
@@ -2241,6 +2246,9 @@ PPT_IsLegacyCaptionCandidate(shapeRef, rect, edge, epsilon := 0.75) {
         Debug_LogCatch("PPT_Caption", "legacy_caption_text_error", e)
         return false
     }
+
+    if !PPT_IsLegacyCaptionText(textValue)
+        return false
 
     if !PPT_SpacingNearlyEqual(shapeRef.Left, rect.x, epsilon)
         return false
@@ -2348,6 +2356,11 @@ PPT_TagCaption(textBox, edge, targetId) {
     PPT_TagCaptionStyle(textBox)
 }
 
+PPT_ApplyCaptionParagraphSpacing(paragraphFormat) {
+    try paragraphFormat.SpaceBefore := 0
+    try paragraphFormat.SpaceAfter := 0
+}
+
 PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := false) {
     preset := PPT_GetCaptionPreset()
     anchor := PPT_GetCaptionVerticalAnchor(edge)
@@ -2376,6 +2389,7 @@ PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := f
     try textBox.TextFrame.TextRange.Font.Name := "Arial"
     try textBox.TextFrame.TextRange.ParagraphFormat.Alignment := 2
     try textBox.TextFrame.TextRange.ParagraphFormat.Bullet.Type := 0  ; ppBulletNone
+    try PPT_ApplyCaptionParagraphSpacing(textBox.TextFrame.TextRange.ParagraphFormat)
 
     try {
         textBox.TextFrame2.AutoSize := 0
@@ -2390,6 +2404,7 @@ PPT_StyleCaptionTextBox(textBox, edge, labelText := "Caption", preserveText := f
         font2.Size := preset.FontSize
         font2.NameAscii := "Arial"
         font2.NameFarEast := "Meiryo"
+        PPT_ApplyCaptionParagraphSpacing(textBox.TextFrame2.TextRange.ParagraphFormat)
     } catch e {
         Debug_LogCatch("PPT_Caption", "caption_style_textframe2_error", e)
     }
