@@ -132,12 +132,12 @@ vk1C & F6::OCR_ReadClipboard()
 ; ----- Function-Key (for Mouse) -----
 ; ==========================================================
 #If (EnableMouseBtn && !WinActive("ahk_exe POWERPNT.EXE"))
-    F15::                   Send ^v                         ; 　　（手前側）
+    F15::                   MouseBtn_SendCtrlChord("v")    ; 　　（手前側）
 #If (EnableMouseBtn)
     $XButton1 Up::          MouseBtn_SendSingleOnRelease("XButton1") ; 戻る（手前側）
     $XButton2 Up::          MouseBtn_SendSingleOnRelease("XButton2") ; 進む（　奥側）
-    F16::                   Send ^c                         ; 　　（　奥側）
-    F17::                   Send ^w                         ; タブを閉じる
+    F16::                   MouseBtn_SendCtrlChord("c")    ; 　　（　奥側）
+    F17::                   MouseBtn_SendCtrlChord("w")    ; タブを閉じる
     F15 & MButton::         SendInput {Media_Play_Pause}    ;
     XButton1 & WheelUp::    MouseBtn_XButtonWheel("XButton1", "Left")  ; 左スクロール
     XButton1 & WheelDown::  MouseBtn_XButtonWheel("XButton1", "Right") ; 右スクロール
@@ -149,6 +149,15 @@ vk1C & F6::OCR_ReadClipboard()
     F16 & WheelUp::         AltTabAction("Prev")
     *F16 Up::               CloseAltTabMenu()
 #If
+
+MouseBtn_SendCtrlChord(key) {
+    ; KDE Connectが短すぎる修飾キーイベントを取りこぼさないよう、
+    ; Ctrlと対象キーのdown/upを明示し、最後にCtrl upを再送する。
+    SetKeyDelay, 20, 30
+    SendEvent, % "{LCtrl down}{" . key . " down}{" . key . " up}{LCtrl up}"
+    Sleep, 50
+    SendEvent, {LCtrl up}{RCtrl up}
+}
 
 MouseBtn_SendSingleOnRelease(button) {
     global MouseBtn_XB1SuppressSingle, MouseBtn_XB2SuppressSingle

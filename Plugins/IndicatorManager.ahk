@@ -1809,9 +1809,9 @@ SUI_InitHelpData() {
     d["EnableVDesk"] := h
 
     h := []
-    h.Push(SUI_HelpItem("F15", "Ctrl+V (貼り付け)", "Send ^v", mouseBtnExceptPptWhen, "", "F15::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("F16", "Ctrl+C (コピー)", "Send ^c", mouseBtnWhen, "", "F16::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("F17", "Ctrl+W (タブ閉じ)", "Send ^w", mouseBtnWhen, "", "F17::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F15", "Ctrl+V (貼り付け)", "MouseBtn_SendCtrlChord(""v"")", mouseBtnExceptPptWhen, "KDE Connect向けにCtrl解放を再送", "F15::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F16", "Ctrl+C (コピー)", "MouseBtn_SendCtrlChord(""c"")", mouseBtnWhen, "KDE Connect向けにCtrl解放を再送", "F16::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("F17", "Ctrl+W (タブ閉じ)", "MouseBtn_SendCtrlChord(""w"")", mouseBtnWhen, "KDE Connect向けにCtrl解放を再送", "F17::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("XButton1", "戻る", "MouseBtn_SendSingleOnRelease(""XButton1"")", mouseBtnWhen, "Wheel 併用時は単体動作をキャンセル", "$XButton1 Up::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("XButton2", "進む", "MouseBtn_SendSingleOnRelease(""XButton2"")", mouseBtnWhen, "Wheel 併用時は単体動作をキャンセル", "$XButton2 Up::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("F15 + MButton", "メディア再生/一時停止", "SendInput {Media_Play_Pause}", mouseBtnWhen, "", "F15 & MButton::", 1, 1, mainFile))
