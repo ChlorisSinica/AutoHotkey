@@ -41,6 +41,10 @@ Emergency_ReleaseAllInputs() {
         MouseBtn_ResetState()
         actions.Push("MouseBtn")
     }
+    if IsFunc("MG_ResetState") {
+        MG_ResetState()
+        actions.Push("MouseGesture")
+    }
     if IsFunc("Cursor_StopContinuous") {
         Cursor_StopContinuous()
         actions.Push("CursorMove")

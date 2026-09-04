@@ -8,6 +8,7 @@ GroupAdd, GestureTargetGroup, ahk_group OfficeGroup
 GroupAdd, GestureTargetGroup, ahk_exe pycharm64.exe
 
 global MG_IsActive       := false    ; ジェスチャ認識中フラグ
+global MG_RButtonDown    := false    ; Moonlight 等の注入入力にも対応する押下追跡
 global MG_CancelMenu     := false    ; 右クリックメニュー無効化フラグ
 global MG_WheelUsed      := false    ; 右クリック中にホイール入力されたフラグ
 global MG_DebugEnabled   := true
@@ -24,7 +25,7 @@ MG_DebugInit() {
 }
 
 MG_DebugStateText() {
-    global EnableGestures, MG_IsActive, MG_CancelMenu, MG_WheelUsed
+    global EnableGestures, MG_IsActive, MG_RButtonDown, MG_CancelMenu, MG_WheelUsed
 
     MouseGetPos, mx, my, mouseHwnd, mouseCtrl
     activeHwnd := WinExist("A")
@@ -52,6 +53,7 @@ MG_DebugStateText() {
 
     return "EnableGestures=" . EnableGestures
         . " MG_IsActive=" . MG_IsActive
+        . " MG_RButtonDown=" . MG_RButtonDown
         . " MG_CancelMenu=" . MG_CancelMenu
         . " MG_WheelUsed=" . MG_WheelUsed
         . " MouseTarget=" . overTarget
@@ -101,17 +103,8 @@ MouseIsOverTarget() {
 ; ==========================================================
 MG_RecognizeGesture() {
     static Threshold := 30
-    static Interval  := 10
-    global MG_IsActive, MG_CancelMenu, MG_WheelUsed
+    global MG_IsActive, MG_RButtonDown, MG_CancelMenu, MG_WheelUsed
     wheelLogged := false
-
-    ; 既存の論理的な押しっぱなし状態をリセットするために物理的な状態をチェック
-    if !GetKeyState("RButton", "P") {
-        MG_IsActive := false
-        MG_WheelUsed := false
-        MG_DebugLog("recognize_exit_no_physical_button")
-        return ""
-    }
 
     CoordMode, Mouse, Screen
     MouseGetPos, startX, startY
@@ -124,7 +117,9 @@ MG_RecognizeGesture() {
     MG_WheelUsed := false
     MG_DebugLog("recognize_start", "startX=" . startX . " startY=" . startY)
 
-    While GetKeyState("RButton", "P")
+    ; Sunshine/Moonlight 経由の入力は GetKeyState(..., "P") では押下と見なされない。
+    ; RButton Down/Up ホットキーで追跡した状態を使う。
+    While (MG_RButtonDown)
     {
         ; 処理の隙間を作り、他のホットキー(ホイール)の割り込みを許容する
         Sleep, 15
@@ -172,6 +167,17 @@ MG_RecognizeGesture() {
     }
     MG_DebugLog("recognize_finish", "result=" . gestureStr)
     return gestureStr
+}
+
+MG_ResetState() {
+    global MG_IsActive, MG_RButtonDown, MG_CancelMenu, MG_WheelUsed
+
+    MG_IsActive := false
+    MG_RButtonDown := false
+    MG_CancelMenu := false
+    MG_WheelUsed := false
+    ToolTip
+    MG_DebugLog("state_reset")
 }
 
 ; ==========================================================

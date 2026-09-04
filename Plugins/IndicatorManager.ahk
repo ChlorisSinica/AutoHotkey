@@ -1776,7 +1776,7 @@ SUI_InitHelpData() {
 
     h := []
     h.Push(SUI_HelpSection("【基本】", "右ボタン押下中に 8 方向ジェスチャを認識します。対象: Browser / Explorer / Editor / Office / Pycharm。", gestureWhen, "$RButton::", 1, 5, mainFile))
-    h.Push(SUI_HelpItem("右ドラッグ", "8 方向ジェスチャー", "MG_RecognizeGesture() -> MG_ExecuteAction()", gestureWhen, "", "$RButton::", 1, 5, mainFile))
+    h.Push(SUI_HelpItem("右ドラッグ", "8 方向ジェスチャー", "MG_RecognizeGesture() -> MG_ExecuteAction()", gestureWhen, "Moonlight入力対応: Down/Upイベントを内部追跡", "$RButton::", 1, 5, mainFile))
     h.Push(SUI_HelpItem("右 + WheelUp", "Ctrl+Home (先頭へ)", "MG_ScrollAction(""Up"")", gestureWhen, "右ボタン押下中のホイールで実行", "WheelUp::MG_ScrollAction(""Up"")", 1, 1, mainFile))
     h.Push(SUI_HelpItem("右 + WheelDown", "Ctrl+End (末尾へ)", "MG_ScrollAction(""Down"")", gestureWhen, "右ボタン押下中のホイールで実行", "WheelDown::MG_ScrollAction(""Down"")", 1, 1, mainFile))
     h.Push(SUI_HelpSpacer())

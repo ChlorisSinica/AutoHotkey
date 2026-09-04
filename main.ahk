@@ -351,11 +351,21 @@ MouseBtn_ResetState() {
 ; ==========================================================
 #If (EnableGestures && MouseIsOverTarget())
     $RButton::
+        if (MG_RButtonDown)
+            return
+        MG_RButtonDown := true
         MouseGetPos, , , startWinID
         MG_DebugLog("RButton_hotkey_start", "startWinID=" . startWinID)
         gesture := MG_RecognizeGesture()
         MG_DebugLog("RButton_hotkey_end", "startWinID=" . startWinID . " gesture=" . gesture)
         MG_ExecuteAction(gesture, startWinID)
+    return
+#If
+
+#If (MG_RButtonDown)
+    $RButton Up::
+        MG_RButtonDown := false
+        MG_DebugLog("RButton_hotkey_up")
     return
 #If
 
