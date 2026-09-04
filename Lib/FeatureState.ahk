@@ -14,7 +14,6 @@ FeatureState_CreateSpecs() {
     specs.Push({Var: "EnableMouseEmu",     Name: "キーボードマウス"})
     specs.Push({Var: "EnableMouseBtn",     Name: "ボタン・ホイール"})
     specs.Push({Var: "EnableGestures",     Name: "マウスジェスチャー"})
-    specs.Push({Var: "EnableChatterGuard", Name: "チャタリング防止"})
     specs.Push({Var: "EnableAlt",          Name: "Alt"})
     specs.Push({Var: "EnableOthers",       Name: "その他"})
     specs.Push({Var: "EnableBrowser",      Name: "ブラウザ"})
@@ -52,12 +51,6 @@ FeatureState_SetFlag(varName, value) {
     value := value ? 1 : 0
     %varName% := value
 
-    if (varName = "EnableChatterGuard") {
-        if (value)
-            CG_Init(["XButton1", "XButton2"])
-        else
-            CG_Cleanup()
-    }
     return true
 }
 

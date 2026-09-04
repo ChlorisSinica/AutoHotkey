@@ -193,7 +193,7 @@ Debug_DumpState(outputPath := "") {
     global _Debug_Channels, EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableChatterGuard, EnableMouseCursorMode
+    global EnableMouseCursorMode
 
     if (outputPath = "")
         outputPath := A_ScriptDir . "\.claude\debug_dump.txt"
@@ -257,8 +257,7 @@ Debug_DumpState(outputPath := "") {
         . " Others=" . EnableOthers
         . " Browser=" . EnableBrowser
         . " PPT=" . EnablePPT
-        . " Excel=" . EnableExcel . "`n"
-    out .= "ChatterGuard=" . EnableChatterGuard . "`n`n"
+        . " Excel=" . EnableExcel . "`n`n"
 
     ; --- UIA フォーカス要素 ---
     out .= "--- UIA Focused Element ---`n"

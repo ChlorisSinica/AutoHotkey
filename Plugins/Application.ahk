@@ -41,10 +41,6 @@ Emergency_ReleaseAllInputs() {
         MouseBtn_ResetState()
         actions.Push("MouseBtn")
     }
-    if IsFunc("CG_ResetState") {
-        CG_ResetState()
-        actions.Push("ChatterGuard")
-    }
     if IsFunc("Cursor_StopContinuous") {
         Cursor_StopContinuous()
         actions.Push("CursorMove")

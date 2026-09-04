@@ -24,12 +24,6 @@ App_Init() {
 
     ; 設定値を読み込んでから feature 依存の初期化へ進む。
     SUI_LoadConfig()
-    ; ChatterGuard はホットキーではなく低レベルマウスフック。
-    ; 設定で ON の場合のみ起動時に XButton1/XButton2 監視を開始する。
-    if (EnableChatterGuard)
-        CG_Init(["XButton1", "XButton2"])
-    ; 終了時は設定状態にかかわらずフック解放を保証する。
-    OnExit("CG_Cleanup")
     OnExit("App_StopRuntimeDialogWatcher")
 
     ; デバッグ出力先と各 feature の補助状態を初期化する。
@@ -136,9 +130,7 @@ App_DebugStatus() {
     hTarget := IME_GetTargetHwnd(activeHwnd)
     imeOn := IME_GetVerifiedOpenStatus(hTarget, activeHwnd)
     WinGet, procName, ProcessName, A
-    debugMsg := "ChatterGuard: Blocks=" . CG_DebugBlockCount
-        . " DD/UU=50ms UD=30ms DU=removed"
-        . "`nIME=" . imeOn . " hTarget=" . hTarget
+    debugMsg := "IME=" . imeOn . " hTarget=" . hTarget
         . " activeHwnd=" . activeHwnd
         . "`nproc=" . procName
     FileAppend, % A_Now . " " . debugMsg . "`n", %A_ScriptDir%\.claude\debug_f4.log

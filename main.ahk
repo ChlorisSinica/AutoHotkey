@@ -32,7 +32,6 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\WoWsProfile.ahk
 #Include %A_ScriptDir%\Plugins\WindowManager.ahk
 #Include %A_ScriptDir%\Plugins\WindowGrid.ahk
-#Include %A_ScriptDir%\Plugins\ChatterGuard.ahk
 
 ; ==========================================================
 ; ----- Indicator用変数 -----
@@ -49,10 +48,6 @@ global EnableOthers               := 0
 global EnableBrowser              := 0
 global EnablePPT                  := 0
 global EnableExcel                := 0
-global EnableChatterGuard         := 0
-global CG_SameEventThreshold      := 120
-global CG_CrossEventThreshold     := 50
-global CG_MinPressThreshold       := 30
 global EnableMouseCursorMode      := 0
 global MouseBtn_XB1SuppressSingle := false
 global MouseBtn_XB2SuppressSingle := false

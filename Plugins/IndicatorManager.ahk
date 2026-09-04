@@ -118,7 +118,6 @@ SUI_DebugFlagsText() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableChatterGuard
 
     return "EnableNavLayer="  . EnableNavLayer
         . " EnableWinPlace="  . EnableWinPlace
@@ -132,7 +131,6 @@ SUI_DebugFlagsText() {
         . " EnableBrowser="   . EnableBrowser
         . " EnablePPT="       . EnablePPT
         . " EnableExcel="     . EnableExcel
-        . " EnableChatterGuard=" . EnableChatterGuard
 }
 
 SUI_DebugDescribeItem(itemID) {
@@ -415,7 +413,6 @@ SUI_LoadConfig() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableChatterGuard
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
@@ -425,7 +422,6 @@ SUI_LoadConfig() {
     global CursorConfig, CursorGridConfig
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
-    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
 
     SUI_EnsureConfigPath()
 
@@ -441,7 +437,6 @@ SUI_LoadConfig() {
     IniRead, browserRaw,        %SUI_ConfigPath%, Indicators, EnableBrowser,       %EnableBrowser%
     IniRead, pptRaw,            %SUI_ConfigPath%, Indicators, EnablePPT,           %EnablePPT%
     IniRead, excelRaw,          %SUI_ConfigPath%, Indicators, EnableExcel,         %EnableExcel%
-    IniRead, chatterGuardRaw,   %SUI_ConfigPath%, Indicators, EnableChatterGuard,  %EnableChatterGuard%
 
     EnableNavLayer    := SUI_NormalizeBool(navLayerRaw, EnableNavLayer)
     EnableWinPlace    := SUI_NormalizeBool(winPlaceRaw, EnableWinPlace)
@@ -455,7 +450,6 @@ SUI_LoadConfig() {
     EnableBrowser     := SUI_NormalizeBool(browserRaw, EnableBrowser)
     EnablePPT         := SUI_NormalizeBool(pptRaw, EnablePPT)
     EnableExcel       := SUI_NormalizeBool(excelRaw, EnableExcel)
-    EnableChatterGuard := SUI_NormalizeBool(chatterGuardRaw, EnableChatterGuard)
 
     IniRead, editorProviderRaw,    %SUI_ConfigPath%, TextEditor, Provider, %TextEditorProvider%
     IniRead, editorCustomPathRaw,  %SUI_ConfigPath%, TextEditor, CustomPath, __EMPTY__
@@ -538,14 +532,6 @@ SUI_LoadConfig() {
     PPT_SpacingLogEnabled := SUI_NormalizeBool(pptSpacingDebugRaw, PPT_SpacingLogEnabled)
     PPT_CaptionLogEnabled := SUI_NormalizeBool(pptCaptionDebugRaw, PPT_CaptionLogEnabled)
 
-    ; [ChatterGuard] 閾値読込み
-    IniRead, sameThreshRaw, %SUI_ConfigPath%, ChatterGuard, SameEventThreshold, %CG_SameEventThreshold%
-    IniRead, crossThreshRaw, %SUI_ConfigPath%, ChatterGuard, CrossEventThreshold, %CG_CrossEventThreshold%
-    IniRead, minPressRaw, %SUI_ConfigPath%, ChatterGuard, MinPressThreshold, %CG_MinPressThreshold%
-    CG_SameEventThreshold := SUI_NormalizeInt(sameThreshRaw, 120, 10, 200)
-    CG_CrossEventThreshold := SUI_NormalizeInt(crossThreshRaw, 50, 5, 100)
-    CG_MinPressThreshold := SUI_NormalizeInt(minPressRaw, 30, 5, 100)
-
     if IsFunc("Cursor_ResolveModeForFlags")
         Cursor_ResolveModeForFlags("config_load")
     SUI_DebugLog("config_load", "path=" . SUI_ConfigPath)
@@ -556,7 +542,6 @@ SUI_SaveConfig() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
-    global EnableChatterGuard
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
@@ -581,7 +566,6 @@ SUI_SaveConfig() {
     IniWrite, % EnableOthers        ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableOthers
     IniWrite, % EnableBrowser       ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
     IniWrite, % EnablePPT           ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
-    IniWrite, % EnableChatterGuard  ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableChatterGuard
     IniWrite, % EnableExcel         ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
     SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
     IniWrite, % SettingsUI.EditorType, %SUI_ConfigPath%, SettingsUI, EditorType
@@ -868,8 +852,6 @@ class SettingsUI {
         Global SettingsCursorGridCols, SettingsCursorGridRows, SettingsCursorJumpDistance, SettingsCursorEdgeInset
         Global SettingsIndicatorDebug, SettingsMouseGestureDebug, SettingsMouseWheelDebug
         Global SettingsBrowserPdfZoomDebug, SettingsPPTSpacingDebug, SettingsPPTCaptionDebug, SettingsValidationHint
-        Global SettingsSameEvent, SettingsCrossEvent, SettingsMinPress
-        Global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
         Global SUI_IsInitializing, SUI_SelectedItemID, _SUI_LastHelpRow
         SUI_IsInitializing := true
         SUI_SelectedItemID := 0
@@ -965,27 +947,15 @@ class SettingsUI {
         Gui, Settings:Add, CheckBox, x388 y301 w145 h20 vSettingsPPTSpacingDebug, PPT spacing
         Gui, Settings:Add, CheckBox, x548 y301 w145 h20 vSettingsPPTCaptionDebug, PPT caption
 
-        ; ChatterGuard
-        Gui, Settings:Add, GroupBox, x370 y340 w370 h78, ChatterGuard
-        Gui, Settings:Add, Text, x388 y360 w36 h20 +0x200, 同種
-        Gui, Settings:Add, Edit, x426 y359 w40 h21 vSettingsSameEvent, %CG_SameEventThreshold%
-        Gui, Settings:Add, Text, x470 y360 w18 h20 +0x200, ms
-        Gui, Settings:Add, Text, x500 y360 w36 h20 +0x200, 交差
-        Gui, Settings:Add, Edit, x538 y359 w40 h21 vSettingsCrossEvent, %CG_CrossEventThreshold%
-        Gui, Settings:Add, Text, x582 y360 w18 h20 +0x200, ms
-        Gui, Settings:Add, Text, x388 y386 w70 h20 +0x200, 最短押下
-        Gui, Settings:Add, Edit, x462 y385 w40 h21 vSettingsMinPress, %CG_MinPressThreshold%
-        Gui, Settings:Add, Text, x506 y386 w18 h20 +0x200, ms
-
-        Gui, Settings:Add, GroupBox, x370 y424 w370 h82, Window Island
-        Gui, Settings:Add, Text, x388 y448 w36 h20 +0x200, OutX
-        Gui, Settings:Add, Edit, x426 y446 w60 h21 vSettingsIslandOuterX gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x500 y448 w36 h20 +0x200, OutY
-        Gui, Settings:Add, Edit, x538 y446 w60 h21 vSettingsIslandOuterY gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x388 y474 w36 h20 +0x200, InX
-        Gui, Settings:Add, Edit, x426 y472 w60 h21 vSettingsIslandInnerX gSUI_PositiveFloatEditChanged
-        Gui, Settings:Add, Text, x500 y474 w36 h20 +0x200, InY
-        Gui, Settings:Add, Edit, x538 y472 w60 h21 vSettingsIslandInnerY gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, GroupBox, x370 y340 w370 h82, Window Island
+        Gui, Settings:Add, Text, x388 y364 w36 h20 +0x200, OutX
+        Gui, Settings:Add, Edit, x426 y362 w60 h21 vSettingsIslandOuterX gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x500 y364 w36 h20 +0x200, OutY
+        Gui, Settings:Add, Edit, x538 y362 w60 h21 vSettingsIslandOuterY gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x388 y390 w36 h20 +0x200, InX
+        Gui, Settings:Add, Edit, x426 y388 w60 h21 vSettingsIslandInnerX gSUI_PositiveFloatEditChanged
+        Gui, Settings:Add, Text, x500 y390 w36 h20 +0x200, InY
+        Gui, Settings:Add, Edit, x538 y388 w60 h21 vSettingsIslandInnerY gSUI_PositiveFloatEditChanged
 
         Gui, Settings:Add, Button, x20 y393 w120 h27 gSUI_SaveAdvancedSettings, 詳細設定を保存
         Gui, Settings:Add, Button, x150 y393 w120 h27 gSUI_ResetAdvancedSettings, 保存済みを再読込
@@ -1036,7 +1006,6 @@ SUI_LoadAdvancedSettingsIntoGui() {
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
-    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
 
     GuiControl, Settings:Choose, SettingsEditorProvider, % SUI_GetTextEditorProviderChoiceIndex(TextEditorProvider)
     GuiControl, Settings:, SettingsEditorCustomPath, %TextEditorCustomPath%
@@ -1072,9 +1041,6 @@ SUI_LoadAdvancedSettingsIntoGui() {
     GuiControl, Settings:, SettingsBrowserPdfZoomDebug, % Browser_PDFZoomDebugEnabled ? 1 : 0
     GuiControl, Settings:, SettingsPPTSpacingDebug, % PPT_SpacingLogEnabled ? 1 : 0
     GuiControl, Settings:, SettingsPPTCaptionDebug, % PPT_CaptionLogEnabled ? 1 : 0
-    GuiControl, Settings:, SettingsSameEvent, %CG_SameEventThreshold%
-    GuiControl, Settings:, SettingsCrossEvent, %CG_CrossEventThreshold%
-    GuiControl, Settings:, SettingsMinPress, %CG_MinPressThreshold%
     GuiControl, Settings:, SettingsValidationHint,
 
     SUI_RefreshEditorProviderControls()
@@ -1279,7 +1245,6 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     global SUI_DebugEnabled, MG_DebugEnabled, MouseWheel_DebugEnabled
     global Browser_PDFZoomDebugEnabled, PPT_SpacingLogEnabled, PPT_CaptionLogEnabled
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
-    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
 
     if (SUI_IsInitializing || !SUI_SettingsGuiHwnd)
         return false
@@ -1355,17 +1320,6 @@ SUI_SaveAdvancedSettingsFromGui(reason := "manual") {
     Debug_SetEnabled("BrowserPDF", Browser_PDFZoomDebugEnabled)
     Debug_SetEnabled("PPT_Spacing", PPT_SpacingLogEnabled)
     Debug_SetEnabled("PPT_Caption", PPT_CaptionLogEnabled)
-
-    ; ChatterGuard 閾値
-    GuiControlGet, sameThresh, Settings:, SettingsSameEvent
-    GuiControlGet, crossThresh, Settings:, SettingsCrossEvent
-    GuiControlGet, minPress, Settings:, SettingsMinPress
-    CG_SameEventThreshold := SUI_NormalizeInt(sameThresh, 120, 10, 200)
-    CG_CrossEventThreshold := SUI_NormalizeInt(crossThresh, 50, 5, 100)
-    CG_MinPressThreshold := SUI_NormalizeInt(minPress, 30, 5, 100)
-    IniWrite, %CG_SameEventThreshold%, %SUI_ConfigPath%, ChatterGuard, SameEventThreshold
-    IniWrite, %CG_CrossEventThreshold%, %SUI_ConfigPath%, ChatterGuard, CrossEventThreshold
-    IniWrite, %CG_MinPressThreshold%, %SUI_ConfigPath%, ChatterGuard, MinPressThreshold
 
     SUI_SaveConfig()
     SUI_LoadAdvancedSettingsIntoGui()
@@ -1734,7 +1688,6 @@ SUI_IsHelpListFocused() {
 
 SUI_InitHelpData() {
     global _SUI_HelpData
-    global CG_SameEventThreshold, CG_CrossEventThreshold, CG_MinPressThreshold
     mainFile := A_ScriptDir . "\main.ahk"
     browserFile := A_ScriptDir . "\Plugins\Browser.ahk"
     gestureMapFile := A_ScriptDir . "\Plugins\MouseGestureMap.ahk"
@@ -1869,14 +1822,6 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpSection("【Default】", "共通フォールバックのジェスチャ割当です。", "個別マップで未定義のとき", "Map_Default(g) {", 0, 5, gestureMapFile))
     h.Push(SUI_HelpItem("↗", "WinMinimize, A", "WinMinimize, A", "個別マップで未定義のとき", "", "Map_Default(g) {", 0, 5, gestureMapFile))
     d["EnableGestures"] := h
-
-    cgWhen := "EnableChatterGuard = ON"
-    cgFile := A_ScriptDir . "\Plugins\ChatterGuard.ahk"
-    h := []
-    h.Push(SUI_HelpSection("【チャタリング防止】", "WH_MOUSE_LL フックで XButton1/XButton2 の誤連打を抑制します。閾値は設定画面の ChatterGuard セクションで調整可能。", cgWhen, "CG_LowLevelMouseProc()", 0, 0, cgFile))
-    h.Push(SUI_HelpItem("XButton1", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms / MinPress=" . CG_MinPressThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
-    h.Push(SUI_HelpItem("XButton2", "DOWN/UP デバウンス", "CG_LowLevelMouseProc()", cgWhen, "SameEvent=" . CG_SameEventThreshold . "ms / CrossEvent=" . CG_CrossEventThreshold . "ms / MinPress=" . CG_MinPressThreshold . "ms", "WH_MOUSE_LL", 0, 0, cgFile))
-    d["EnableChatterGuard"] := h
 
     h := []
     h.Push(SUI_HelpItem("Ctrl+Alt+C", "選択内の \\ を / に置換", "ReplaceEscapeToSlash()", altWhen, "", "^!c::", 1, 1, mainFile))
