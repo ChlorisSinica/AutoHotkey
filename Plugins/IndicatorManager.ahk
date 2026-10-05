@@ -425,6 +425,8 @@ SUI_LoadConfig() {
 
     SUI_EnsureConfigPath()
 
+    Grid_LoadConfig(SUI_ConfigPath)
+
     IniRead, navLayerRaw,       %SUI_ConfigPath%, Indicators, EnableNavLayer,      %EnableNavLayer%
     IniRead, winPlaceRaw,       %SUI_ConfigPath%, Indicators, EnableWinPlace,      %EnableWinPlace%
     IniRead, winIslandRaw,      %SUI_ConfigPath%, Indicators, EnableWinIsland,     %EnableWinIsland%
@@ -554,6 +556,8 @@ SUI_SaveConfig() {
     global PPT_CaptionVisualGapHorizontal, PPT_CaptionVisualGapVertical
 
     SUI_EnsureConfigPath()
+
+    Grid_SaveConfig(SUI_ConfigPath)
 
     IniWrite, % EnableNavLayer      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableNavLayer
     IniWrite, % EnableWinPlace      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableWinPlace
@@ -1745,7 +1749,7 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+8", "高さ最大化(※タイトルバー分上寄せ)", "MoveWindowMaxHeightKeepWidth(""A"", ""Bottom"")", winWhen, "", "^+#8::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+9", "横幅最大化 (※タイトルバー分下寄せ)", "MoveWindowRatio(...)", winWhen, "", "^#9::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+0", "全画面化", "MoveWindowFullscreen(""A"")", winWhen, "Window Island が ON の場合は外周余白を維持", "^#0::", 1, 1, mainFile))
-    h.Push(SUI_HelpItem("Win+Ctrl+G", "Gridモード切替", "Grid_ToggleMode()", winWhen, "", "^#g::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Win+Ctrl+G", "Gridモード切替", "Grid_ToggleMode()", winWhen, "選択を保存し、再起動後も復元", "^#g::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+G", "Window Island 切替", "WindowIsland_Toggle()", winWhen, "", "^+#g::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+Shift+N", "テキストエディタ切替", "TextEditor_ToggleProvider()", winWhen, "vk1C + N / Ctrl + N で開くエディタを切替", "^+#n::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Win+Ctrl+J/K/I/L", "Grid移動 (←↓↑→)", "Grid_Move(dx, dy)", winWhen, "", "^#j::", 1, 3, mainFile))

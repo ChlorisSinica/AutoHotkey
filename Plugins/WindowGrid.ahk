@@ -16,6 +16,7 @@ global GRID_COLS      := GridModes[GridModeIndex].Cols
 global GRID_ROWS      := GridModes[GridModeIndex].Rows
 
 Grid_ToggleMode() {
+    global SUI_ConfigPath
     GridModeIndex += 1
 
     if (GridModeIndex > GridModes.MaxIndex()) {
@@ -26,8 +27,44 @@ Grid_ToggleMode() {
     GRID_COLS := CurrentMode.Cols
     GRID_ROWS := CurrentMode.Rows
 
-    ToolTip, Grid Mode: %GRID_ROWS%x%GRID_COLS%
+    saved := Grid_SaveConfig(SUI_ConfigPath)
+    message := "Grid Mode: " . GRID_ROWS . "x" . GRID_COLS
+    if (!saved)
+        message .= " (設定を保存できません)"
+    ToolTip, %message%
     SetTimer, CloseToolTip, -1500
+}
+
+Grid_LoadConfig(configPath) {
+    ; Persist dimensions rather than an index so reordering GridModes is safe.
+    IniRead, savedMode, %configPath%, WindowGrid, Mode, 2x2
+    GridModeIndex := 1
+    for index, mode in GridModes {
+        if (savedMode = mode.Rows . "x" . mode.Cols) {
+            GridModeIndex := index
+            break
+        }
+    }
+    GRID_ROWS := GridModes[GridModeIndex].Rows
+    GRID_COLS := GridModes[GridModeIndex].Cols
+}
+
+Grid_SaveConfig(configPath) {
+    if (configPath = "")
+        return false
+    try {
+        SplitPath, configPath,, configDir
+        if (configDir != "" && !InStr(FileExist(configDir), "D")) {
+            FileCreateDir, %configDir%
+            if (ErrorLevel)
+                return false
+        }
+        mode := GRID_ROWS . "x" . GRID_COLS
+        IniWrite, %mode%, %configPath%, WindowGrid, Mode
+        return !ErrorLevel
+    } catch e {
+        return false
+    }
 }
 
 Grid_Move(dx, dy) {
