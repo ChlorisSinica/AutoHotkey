@@ -21,6 +21,7 @@ SetBatchLines, -1
 #Include %A_ScriptDir%\Plugins\Application.ahk
 #Include %A_ScriptDir%\Plugins\AppInit.ahk
 #Include %A_ScriptDir%\Plugins\Browser.ahk
+#Include %A_ScriptDir%\Plugins\ClipDict.ahk
 #Include %A_ScriptDir%\Plugins\GetAuth.ahk
 #Include %A_ScriptDir%\Plugins\Hotstring.ahk
 #Include %A_ScriptDir%\Plugins\IndicatorManager.ahk
@@ -48,6 +49,7 @@ global EnableOthers               := 0
 global EnableBrowser              := 0
 global EnablePPT                  := 0
 global EnableExcel                := 0
+global EnableClipDict             := 1
 global EnableMouseCursorMode      := 0
 global MouseBtn_XB1SuppressSingle := false
 global MouseBtn_XB2SuppressSingle := false
@@ -344,6 +346,26 @@ MouseBtn_ResetState() {
 #If (EnableExcel && WinActive("ahk_exe EXCEL.EXE"))
     ^Tab::  Send ^{PgDn}
     ^+Tab:: Send ^{PgUp}
+#If
+
+; ==========================================================
+; ----- Clipboard Dictionary -----
+; ==========================================================
+; PPT ブロックより後に定義し、PowerPoint 上の Ctrl+Shift+Alt+5/7 は PPT 側を優先する
+#If (EnableClipDict)
+    ^+!1::  ClipDict_Open(1)
+    ^+!2::  ClipDict_Open(2)
+    ^+!3::  ClipDict_Open(3)
+    ^+!4::  ClipDict_Open(4)
+    ^+!5::  ClipDict_Open(5)
+    ^+!6::  ClipDict_Open(6)
+    ^+!7::  ClipDict_Open(7)
+    ^+!8::  ClipDict_Open(8)
+    ^+!9::  ClipDict_Open(9)
+#If
+
+#If ClipDict_IsGuiActive()
+    ^Enter::    ClipDict_ApplyAndPaste()
 #If
 
 ; ==========================================================

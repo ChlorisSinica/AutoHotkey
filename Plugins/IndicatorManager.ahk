@@ -118,6 +118,7 @@ SUI_DebugFlagsText() {
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
     global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableClipDict
 
     return "EnableNavLayer="  . EnableNavLayer
         . " EnableWinPlace="  . EnableWinPlace
@@ -131,6 +132,7 @@ SUI_DebugFlagsText() {
         . " EnableBrowser="   . EnableBrowser
         . " EnablePPT="       . EnablePPT
         . " EnableExcel="     . EnableExcel
+        . " EnableClipDict="  . EnableClipDict
 }
 
 SUI_DebugDescribeItem(itemID) {
@@ -412,7 +414,7 @@ SUI_LoadConfig() {
     global SUI_ConfigPath
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
-    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel, EnableClipDict
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
@@ -439,6 +441,7 @@ SUI_LoadConfig() {
     IniRead, browserRaw,        %SUI_ConfigPath%, Indicators, EnableBrowser,       %EnableBrowser%
     IniRead, pptRaw,            %SUI_ConfigPath%, Indicators, EnablePPT,           %EnablePPT%
     IniRead, excelRaw,          %SUI_ConfigPath%, Indicators, EnableExcel,         %EnableExcel%
+    IniRead, clipDictRaw,       %SUI_ConfigPath%, Indicators, EnableClipDict,      %EnableClipDict%
 
     EnableNavLayer    := SUI_NormalizeBool(navLayerRaw, EnableNavLayer)
     EnableWinPlace    := SUI_NormalizeBool(winPlaceRaw, EnableWinPlace)
@@ -452,6 +455,7 @@ SUI_LoadConfig() {
     EnableBrowser     := SUI_NormalizeBool(browserRaw, EnableBrowser)
     EnablePPT         := SUI_NormalizeBool(pptRaw, EnablePPT)
     EnableExcel       := SUI_NormalizeBool(excelRaw, EnableExcel)
+    EnableClipDict    := SUI_NormalizeBool(clipDictRaw, EnableClipDict)
 
     IniRead, editorProviderRaw,    %SUI_ConfigPath%, TextEditor, Provider, %TextEditorProvider%
     IniRead, editorCustomPathRaw,  %SUI_ConfigPath%, TextEditor, CustomPath, __EMPTY__
@@ -543,7 +547,7 @@ SUI_SaveConfig() {
     global SUI_ConfigPath
     global EnableNavLayer, EnableWinPlace, EnableWinIsland, EnableVDesk
     global EnableMouseEmu, EnableMouseBtn, EnableGestures
-    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel
+    global EnableAlt, EnableOthers, EnableBrowser, EnablePPT, EnableExcel, EnableClipDict
     global TextEditorProvider, TextEditorCustomPath, TextEditorArgsTemplate
     global SaveDir, OutputFileName, Browser_URLExportPath
     global Browser_PDFZoomTryShortcutFirst
@@ -571,6 +575,7 @@ SUI_SaveConfig() {
     IniWrite, % EnableBrowser       ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableBrowser
     IniWrite, % EnablePPT           ? 1 : 0, %SUI_ConfigPath%, Indicators, EnablePPT
     IniWrite, % EnableExcel         ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableExcel
+    IniWrite, % EnableClipDict      ? 1 : 0, %SUI_ConfigPath%, Indicators, EnableClipDict
     SettingsUI.EditorType := (TextEditorProvider = "Notepads") ? 1 : 2
     IniWrite, % SettingsUI.EditorType, %SUI_ConfigPath%, SettingsUI, EditorType
 
@@ -1885,6 +1890,16 @@ SUI_InitHelpData() {
     h.Push(SUI_HelpItem("Ctrl+Tab", "次のシート", "Send ^{PgDn}", excelWhen, "", "^Tab::", 1, 1, mainFile))
     h.Push(SUI_HelpItem("Ctrl+Shift+Tab", "前のシート", "Send ^{PgUp}", excelWhen, "", "^+Tab::", 1, 1, mainFile))
     d["EnableExcel"] := h
+
+    clipDictWhen := "EnableClipDict = ON"
+    clipDictGuiWhen := "辞書置換ウィンドウがアクティブ"
+    clipDictFile := A_ScriptDir . "\Plugins\ClipDict.ahk"
+    h := []
+    h.Push(SUI_HelpItem("Ctrl+Shift+Alt+1～9", "クリップボード辞書置換 (番号の辞書で開く)", "ClipDict_Open(n)", clipDictWhen, "PowerPoint 上の 5 / 7 は PPT 機能が優先。辞書は config\ClipDict\dict<N>.tsv", "^+!1::", 1, 9, mainFile))
+    h.Push(SUI_HelpItem("Enter", "置換してコピー (検索/置換欄では追加・上書き)", "ClipDict_OnDefaultButton()", clipDictGuiWhen, "", "ClipDict_OnDefaultButton() {", 0, 13, clipDictFile))
+    h.Push(SUI_HelpItem("Ctrl+Enter", "置換して元のウィンドウに貼り付け", "ClipDict_ApplyAndPaste()", clipDictGuiWhen, "", "^Enter::", 1, 1, mainFile))
+    h.Push(SUI_HelpItem("Delete", "選択行を削除", "ClipDict_DeleteSelectedEntry()", clipDictGuiWhen . " かつ一覧にフォーカス", "", "ClipDict_OnListEvent() {", 0, 13, clipDictFile))
+    d["EnableClipDict"] := h
 
     _SUI_HelpData := d
 }

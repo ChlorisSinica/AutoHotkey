@@ -19,6 +19,7 @@ FeatureState_CreateSpecs() {
     specs.Push({Var: "EnableBrowser",      Name: "ブラウザ"})
     specs.Push({Var: "EnablePPT",          Name: "PowerPoint"})
     specs.Push({Var: "EnableExcel",        Name: "Excel"})
+    specs.Push({Var: "EnableClipDict",     Name: "クリップボード辞書"})
     return specs
 }
 
