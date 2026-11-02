@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Everything Command-line Interface (es.exe) を voidtools の公式 GitHub release から取得する。
 
